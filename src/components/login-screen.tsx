@@ -43,19 +43,12 @@ export function LoginScreen() {
         </div>
         <section className="paper-panel rounded-[30px] p-7 sm:p-9">
           <div className="text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-forest-700/50">
-              Private learner space
-            </p>
-            <h1 className="mt-3 font-display text-4xl text-forest-950">
+            <h1 className="font-display text-4xl text-forest-950">
               Welcome back.
             </h1>
-            <p className="mt-3 text-sm leading-6 text-forest-900/55">
-              Sapling has no public sign-up yet. Use the learner account created
-              in this project’s Supabase Auth.
-            </p>
           </div>
 
-          <form className="mt-8 space-y-4" onSubmit={signIn}>
+          <form className="mt-7 space-y-4" onSubmit={signIn}>
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">
                 Email
@@ -95,7 +88,7 @@ export function LoginScreen() {
               type="submit"
             >
               <LockKeyhole aria-hidden="true" size={17} />
-              {isSubmitting ? "Signing in…" : "Enter Sapling"}
+              {isSubmitting ? "Signing in…" : "Sign in"}
               {!isSubmitting ? <ArrowRight aria-hidden="true" size={17} /> : null}
             </button>
           </form>
@@ -104,4 +97,3 @@ export function LoginScreen() {
     </main>
   );
 }
-

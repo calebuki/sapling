@@ -41,7 +41,7 @@ const kindLabels: Record<ConceptKind, string> = {
 };
 
 export function MyDanishView() {
-  const { concepts, states, mode, isLoading, error } = useLearningModel();
+  const { concepts, states, isLoading, error } = useLearningModel();
   const stateByConcept = new Map(
     states.map((state) => [state.conceptId, state]),
   );
@@ -77,35 +77,17 @@ export function MyDanishView() {
       <section className="paper-panel rounded-[28px] p-6 sm:p-8">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-forest-700/55">
-              Growth map · Danish
-            </p>
-            <h2 className="mt-2 font-display text-3xl text-forest-950 sm:text-4xl">
-              {observedCount} concepts have evidence so far.
+            <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
+              {observedCount} concepts tracked.
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-forest-900/58">
-              A growth label is only a summary. The dimensions below stay
-              separate so reading cannot hide a listening weakness, and exposure
-              cannot masquerade as retrieval.
-            </p>
           </div>
-          <div className="flex gap-3">
-            <div className="rounded-2xl bg-white/55 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-forest-700/45">
-                Audio gaps
-              </p>
-              <p className="mt-1 font-display text-2xl text-forest-950">
-                {audioGapCount}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white/55 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-forest-700/45">
-                Source
-              </p>
-              <p className="mt-1 text-sm font-bold capitalize text-forest-950">
-                {mode}
-              </p>
-            </div>
+          <div className="rounded-2xl bg-white/55 px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-forest-700/45">
+              Audio gaps
+            </p>
+            <p className="mt-1 font-display text-2xl text-forest-950">
+              {audioGapCount}
+            </p>
           </div>
         </div>
 
@@ -223,10 +205,8 @@ export function MyDanishView() {
 
       <p className="flex items-start gap-2 px-2 text-xs leading-5 text-forest-900/45">
         <Info className="mt-0.5 shrink-0" size={14} />
-        Numbers are model estimates from 0–100, not grades. A dash means Sapling
-        does not yet have evidence for that dimension.
+        Scores are estimates. A dash means there is not enough data yet.
       </p>
     </div>
   );
 }
-

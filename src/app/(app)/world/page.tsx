@@ -1,4 +1,4 @@
-import { Coffee, MessageCircle, TrainFront, Utensils } from "lucide-react";
+import { Coffee, TrainFront, Utensils } from "lucide-react";
 
 export const metadata = { title: "World" };
 
@@ -19,12 +19,6 @@ export default function WorldPage() {
           <h1 className="mt-2 max-w-xl font-display text-5xl leading-[0.98] text-forest-950 sm:text-6xl">
             Language with somewhere to return to.
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-7 text-forest-900/58">
-            Recurring people and unfinished situations give memory a place. World
-            will continue stories while the scheduler quietly places language
-            that needs another encounter.
-          </p>
-
           <div className="mt-8 rounded-[28px] bg-forest-900 p-6 text-cream-50 shadow-2xl shadow-forest-950/15 sm:p-8">
             <div className="flex items-start justify-between gap-5">
               <div className="grid size-14 place-items-center rounded-[20px] bg-cream-100/10 font-display text-2xl">
@@ -40,18 +34,11 @@ export default function WorldPage() {
               Emil remembers what happened yesterday—even when you need the same
               Danish again today.
             </p>
-            <div className="mt-7 flex items-center gap-2 text-xs font-semibold text-moss-300">
-              <MessageCircle aria-hidden="true" size={16} />
-              Narrative model planned for Phase 4
-            </div>
           </div>
         </section>
 
         <section className="paper-panel rounded-[28px] p-6 sm:p-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-forest-700/50">
-            A thread, not three lessons
-          </p>
-          <div className="relative mt-7 space-y-3 before:absolute before:bottom-8 before:left-[19px] before:top-8 before:w-px before:bg-forest-900/12">
+          <div className="relative space-y-3 before:absolute before:bottom-8 before:left-[19px] before:top-8 before:w-px before:bg-forest-900/12">
             {moments.map(({ icon: Icon, label, detail }, index) => (
               <div
                 className="relative flex items-center gap-4 rounded-[22px] bg-white/50 p-4"
@@ -72,13 +59,8 @@ export default function WorldPage() {
               </div>
             ))}
           </div>
-          <p className="mt-6 text-xs leading-5 text-forest-900/43">
-            Story and character tables are deliberately deferred until this first
-            continuity loop is implemented and its real data needs are known.
-          </p>
         </section>
       </div>
     </div>
   );
 }
-
