@@ -40,6 +40,9 @@
 
 - Define provider-neutral interfaces for content generation, TTS, STT, and
   pronunciation evidence
+- Process learner recordings ephemerally and persist only transcripts,
+  alignments, scores, and other derived evidence; do not store learner audio
+- Review and minimize each speech provider's own data-retention behavior
 - Store prompts, model/provider versions, and provenance where needed
 - Add evaluation and fallback paths before relying on generated material
 - Keep provider IDs and scores outside the core learner model
@@ -51,4 +54,3 @@
 - Add operational monitoring, backups, retention decisions, and privacy export
 - Defer teams, subscriptions, social features, leagues, stores, and XP systems
   until a real product requirement exists
-

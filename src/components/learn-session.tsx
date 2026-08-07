@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   CircleAlert,
+  CircleHelp,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
@@ -38,7 +39,7 @@ const exercises = [
   },
 ];
 
-type Phase = "attempt" | "compare" | "repair" | "complete";
+type Phase = "attempt" | "compare" | "reveal" | "repair" | "complete";
 
 function normalize(value: string) {
   return value
@@ -96,6 +97,43 @@ export function LearnSession() {
     );
     setSubmittedResponse(response.trim());
     setPhase("compare");
+  }
+
+  async function markNotSure(event: React.MouseEvent<HTMLButtonElement>) {
+    if (!concept || !exercise) {
+      return;
+    }
+
+    attemptLatencyMs.current = Math.max(
+      0,
+      Math.round(event.timeStamp - (startedAt.current ?? event.timeStamp)),
+    );
+    setIsSaving(true);
+    setActionError(null);
+    try {
+      await recordRetrievalAttempt({
+        conceptId: concept.id,
+        responseText: "",
+        expectedResponse: exercise.expected,
+        successful: false,
+        latencyMs: attemptLatencyMs.current,
+        context: {
+          exerciseId: exercise.id,
+          activityType: exercise.eyebrow,
+          responseMode: "not-sure",
+          source: "initial-learn-session",
+        },
+      });
+      setPhase("reveal");
+    } catch (saveError) {
+      setActionError(
+        saveError instanceof Error
+          ? saveError.message
+          : "This attempt could not be saved.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function assessAttempt(successful: boolean) {
@@ -274,15 +312,49 @@ export function LearnSession() {
                 value={response}
               />
             </label>
+            <div className="mt-5 grid gap-3 sm:flex">
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                disabled={isSaving}
+                onClick={markNotSure}
+                type="button"
+              >
+                <CircleHelp aria-hidden="true" size={17} />
+                Not sure
+              </button>
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                disabled={!response.trim() || isSaving}
+                type="submit"
+              >
+                Check answer
+                <ArrowRight aria-hidden="true" size={17} />
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {phase === "reveal" ? (
+          <div className="mt-8 soft-enter">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
+              A natural answer
+            </p>
+            <h2 className="mt-3 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
+              {exercise.expected}
+            </h2>
+            <div className="mt-4 flex items-start gap-3 rounded-2xl bg-forest-900/[0.045] p-4 text-sm leading-6 text-forest-900/62">
+              <Sparkles className="mt-0.5 shrink-0 text-moss-500" size={17} />
+              <span>{exercise.note}</span>
+            </div>
             <button
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-              disabled={!response.trim()}
-              type="submit"
+              className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800 sm:w-auto"
+              onClick={moveForward}
+              type="button"
             >
-              Check answer
+              Continue
               <ArrowRight aria-hidden="true" size={17} />
             </button>
-          </form>
+          </div>
         ) : null}
 
         {phase === "compare" ? (

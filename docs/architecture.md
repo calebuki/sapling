@@ -58,6 +58,14 @@ AI, speech-to-text, text-to-speech, and pronunciation analysis are future
 adapters. Provider outputs will become evidence events and content artifacts;
 provider-specific IDs must not become core concept or learner-state IDs.
 
+Learner speech recordings are ephemeral processing inputs, not stored content.
+The browser sends a recording to a server-side speech adapter, which returns a
+transcript, timing or alignment data, and derived pronunciation evidence. The
+application persists only that derived evidence and discards the recording when
+the scoring request completes. Sapling does not upload learner recordings to
+Supabase Storage. Any speech provider must have its own retention behavior
+reviewed and configured for the shortest available retention before use.
+
 ## Data model
 
 ### Curriculum graph
@@ -111,10 +119,12 @@ so one learner cannot attach evidence to another learner's session.
 
 ### Deferred tables
 
-Stories, characters, story events, and audio samples are important but deferred
-until their first working experience defines ownership and query patterns. The
-likely split is learner-owned narrative continuity plus reusable source audio
-and speaker metadata. Deferring them avoids encoding speculative provider and
+Stories, characters, story events, and reusable listening audio samples are
+important but deferred until their first working experience defines ownership
+and query patterns. The likely split is learner-owned narrative continuity plus
+reusable curriculum audio and speaker metadata. Reusable source audio is
+distinct from ephemeral learner speech and may be stored with explicit
+provenance and licensing. Deferring it avoids encoding speculative provider and
 licensing assumptions in the foundation migration.
 
 ## Security decisions
