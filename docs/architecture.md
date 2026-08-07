@@ -135,9 +135,9 @@ licensing assumptions in the foundation migration.
 
 ## Deployment boundary
 
-Sapling uses its existing independent GitHub repository. A new Supabase project
-and a new Vercel project must be provisioned and linked separately. The custom
-domain is attached only after the first production deployment passes database,
-auth, and route checks. Infrastructure identifiers and secrets are never copied
-from Crumbs.
-
+Sapling uses its own independent GitHub repository, Supabase project, and Vercel
+project. Production is served from `https://mysapl.ing`; GoDaddy retains DNS
+authority, the apex points to Vercel, and `www.mysapl.ing` permanently
+redirects to the apex. Supabase Auth uses the apex as its Site URL while
+localhost and scoped Vercel previews remain explicit redirect allow-list
+entries. Infrastructure identifiers and secrets are never copied from Crumbs.

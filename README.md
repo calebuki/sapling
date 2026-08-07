@@ -24,6 +24,16 @@ This follows the useful infrastructure conventions from Crumbs while keeping
 Sapling's code, data model, credentials, Supabase project, and Vercel project
 entirely independent.
 
+## Production
+
+Sapling is deployed at [https://mysapl.ing](https://mysapl.ing). Vercel serves
+the apex domain, and `www.mysapl.ing` permanently redirects to it.
+
+Production deployments follow the `main` branch. Supabase applies checked-in
+database migrations from that branch, and Supabase Auth uses the custom domain
+as its Site URL. Localhost and scoped Vercel preview URLs remain on the Auth
+redirect allow list for development and review.
+
 ## Local development
 
 ```bash
