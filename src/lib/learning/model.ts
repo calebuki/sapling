@@ -2,7 +2,9 @@ import type {
   GrowthStage,
   LearnerConceptState,
   LearningDimension,
+  ListeningAttemptInput,
   RetrievalAttemptInput,
+  SpeakingAttemptInput,
 } from "@/types/learning";
 
 export const learningDimensions: LearningDimension[] = [
@@ -30,9 +32,9 @@ export const dimensionLabels: Record<LearningDimension, string> = {
 export const growthStageLabels: Record<GrowthStage, string> = {
   seed: "Seed",
   sprout: "Sprout",
-  growing: "Growing",
-  established: "Established",
-  automatic: "Automatic",
+  growing: "Seedling",
+  established: "Sapling",
+  automatic: "Tree",
 };
 
 export function createEmptyState(conceptId: string): LearnerConceptState {
@@ -147,6 +149,51 @@ export function applyDemoRepair(
     estimateConfidence: clamp(current.estimateConfidence + 0.04),
     exposureCount: current.exposureCount + 1,
     lastExposureAt: new Date().toISOString(),
+    algorithmVersion: 1,
+  };
+}
+
+export function applyDemoListeningAttempt(
+  current: LearnerConceptState,
+  attempt: ListeningAttemptInput,
+): LearnerConceptState {
+  const now = new Date().toISOString();
+  const currentAudio = current.recognitionAudio ?? 0.15;
+
+  return {
+    ...current,
+    recognitionAudio: clamp(currentAudio * 0.7 + attempt.score * 0.3),
+    speakerDiversity: clamp(
+      (current.speakerDiversity ?? 0.08) +
+        (attempt.playbackCount <= 2 ? 0.08 : 0.04),
+    ),
+    estimateConfidence: clamp(current.estimateConfidence + 0.07),
+    exposureCount: current.exposureCount + 1,
+    lastExposureAt: now,
+    algorithmVersion: 1,
+  };
+}
+
+export function applyDemoSpeakingAttempt(
+  current: LearnerConceptState,
+  attempt: SpeakingAttemptInput,
+): LearnerConceptState {
+  const now = new Date().toISOString();
+
+  return {
+    ...current,
+    production: clamp(
+      (current.production ?? 0.12) * 0.7 + attempt.completenessScore * 0.3,
+    ),
+    pronunciation: clamp(
+      (current.pronunciation ?? 0.12) * 0.7 + attempt.pronunciationScore * 0.3,
+    ),
+    automaticity: clamp(
+      (current.automaticity ?? 0.08) * 0.8 + attempt.fluencyScore * 0.2,
+    ),
+    estimateConfidence: clamp(current.estimateConfidence + 0.09),
+    exposureCount: current.exposureCount + 1,
+    lastExposureAt: now,
     algorithmVersion: 1,
   };
 }

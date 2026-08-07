@@ -1,6 +1,16 @@
 "use client";
 
-import { Activity, AudioLines, Info, TimerReset } from "lucide-react";
+import {
+  Activity,
+  ChevronDown,
+  CircleAlert,
+  Ear,
+  Info,
+  Leaf,
+  Mic,
+  Sprout,
+  TreePine,
+} from "lucide-react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import {
@@ -10,14 +20,23 @@ import {
   growthStageLabels,
   learningDimensions,
 } from "@/lib/learning/model";
-import type { ConceptKind, GrowthStage } from "@/types/learning";
+import type {
+  Concept,
+  ConceptKind,
+  GrowthStage,
+  LearnerConceptState,
+} from "@/types/learning";
 
-const stageOrder: GrowthStage[] = [
-  "seed",
-  "sprout",
-  "growing",
-  "established",
-  "automatic",
+const growthPath: Array<{
+  stage: GrowthStage;
+  points: number;
+  Icon: typeof Sprout;
+}> = [
+  { stage: "seed", points: 0, Icon: Leaf },
+  { stage: "sprout", points: 6, Icon: Sprout },
+  { stage: "growing", points: 20, Icon: Sprout },
+  { stage: "established", points: 45, Icon: TreePine },
+  { stage: "automatic", points: 90, Icon: TreePine },
 ];
 
 const stageStyles: Record<GrowthStage, string> = {
@@ -30,183 +49,363 @@ const stageStyles: Record<GrowthStage, string> = {
 
 const kindLabels: Record<ConceptKind, string> = {
   word: "Word",
-  chunk: "Chunk",
-  construction: "Construction",
-  collocation: "Collocation",
-  phoneme: "Phoneme",
+  chunk: "Phrase",
+  construction: "Pattern",
+  collocation: "Word pair",
+  phoneme: "Sound",
   phonetic_contrast: "Sound contrast",
-  communicative_function: "Function",
-  pragmatic_convention: "Pragmatics",
-  listening_phenomenon: "Listening",
+  communicative_function: "Conversation skill",
+  pragmatic_convention: "Conversation habit",
+  listening_phenomenon: "Danish sound",
 };
+
+type ModeledConcept = {
+  concept: Concept;
+  state: LearnerConceptState;
+  stage: GrowthStage;
+};
+
+function nextAction(state: LearnerConceptState) {
+  const strongestText = Math.max(state.recognitionText ?? 0, state.recall ?? 0);
+
+  if (
+    state.recognitionAudio === null ||
+    strongestText - state.recognitionAudio >= 0.16
+  ) {
+    return { Icon: Ear, label: "Listen next" };
+  }
+
+  if (state.pronunciation === null || state.pronunciation < 0.5) {
+    return { Icon: Mic, label: "Practice saying this" };
+  }
+
+  if ((state.recall ?? 0) < 0.58) {
+    return { Icon: Activity, label: "Recall without a prompt" };
+  }
+
+  return { Icon: Sprout, label: "Use it in a new situation" };
+}
+
+function currentGrowthStage(points: number) {
+  return [...growthPath].reverse().find((step) => points >= step.points) ?? growthPath[0];
+}
 
 export function MyDanishView() {
   const { concepts, states, isLoading, error } = useLearningModel();
   const stateByConcept = new Map(
     states.map((state) => [state.conceptId, state]),
   );
-  const modeled = concepts.map((concept) => {
+  const modeled: ModeledConcept[] = concepts.map((concept) => {
     const state = stateByConcept.get(concept.id) ?? createEmptyState(concept.id);
     return { concept, state, stage: deriveGrowthStage(state) };
   });
-  const audioGapCount = modeled.filter(({ state }) => {
-    if (state.recognitionText === null || state.recognitionAudio === null) {
-      return false;
-    }
-    return state.recognitionText - state.recognitionAudio >= 0.18;
-  }).length;
-  const observedCount = modeled.filter(
-    ({ state }) => state.exposureCount > 0,
-  ).length;
+  const practiced = modeled.filter(({ state }) => state.exposureCount > 0);
+  const newConcepts = modeled.filter(({ state }) => state.exposureCount === 0);
+  const growthPoints = practiced.reduce(
+    (total, { state }) =>
+      total + state.exposureCount + state.successfulRetrievalCount * 2,
+    0,
+  );
+  const overallStage = currentGrowthStage(growthPoints);
+  const overallIndex = growthPath.findIndex(
+    ({ stage }) => stage === overallStage.stage,
+  );
+  const nextStage = growthPath[overallIndex + 1] ?? null;
+  const previousThreshold = overallStage.points;
+  const stageProgress = nextStage
+    ? ((growthPoints - previousThreshold) /
+        (nextStage.points - previousThreshold)) *
+      100
+    : 100;
+
+  const needsAttention = practiced.filter(({ state, stage }) => {
+    const audioGap =
+      state.recognitionText !== null &&
+      state.recognitionAudio !== null &&
+      state.recognitionText - state.recognitionAudio >= 0.16;
+    return stage === "seed" || stage === "sprout" || audioGap;
+  });
+  const attentionIds = new Set(needsAttention.map(({ concept }) => concept.id));
+  const strong = practiced.filter(
+    ({ concept, stage }) =>
+      !attentionIds.has(concept.id) &&
+      (stage === "established" || stage === "automatic"),
+  );
+  const strongIds = new Set(strong.map(({ concept }) => concept.id));
+  const growing = practiced.filter(
+    ({ concept }) =>
+      !attentionIds.has(concept.id) && !strongIds.has(concept.id),
+  );
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        {[0, 1, 2, 3].map((item) => (
-          <div
-            className="paper-panel h-64 animate-pulse rounded-[26px]"
-            key={item}
-          />
-        ))}
+      <div className="space-y-5">
+        <div className="paper-panel h-72 animate-pulse rounded-[28px]" />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((item) => (
+            <div
+              className="paper-panel h-48 animate-pulse rounded-[26px]"
+              key={item}
+            />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <section className="paper-panel rounded-[28px] p-6 sm:p-8">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+    <div className="space-y-7">
+      <section className="paper-panel overflow-hidden rounded-[28px] p-6 sm:p-8">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
-              {observedCount} concepts tracked.
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-forest-700/52">
+              Your growth
+            </p>
+            <h2 className="mt-2 font-display text-4xl text-forest-950 sm:text-5xl">
+              {growthStageLabels[overallStage.stage]}
             </h2>
+            <p className="mt-2 text-sm text-forest-900/55">
+              {practiced.length} ideas practiced · {growthPoints} growth points
+            </p>
           </div>
-          <div className="rounded-2xl bg-white/55 px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-forest-700/45">
-              Audio gaps
-            </p>
-            <p className="mt-1 font-display text-2xl text-forest-950">
-              {audioGapCount}
-            </p>
+          <p className="max-w-xs text-xs leading-5 text-forest-900/48">
+            Growth points mark consistent practice—not fluency. Listening and
+            speaking build the same ideas in different ways.
+          </p>
+        </div>
+
+        <div className="mt-8">
+          <div className="flex items-center justify-between text-xs font-semibold text-forest-900/55">
+            <span>
+              {nextStage
+                ? `${Math.max(0, nextStage.points - growthPoints)} points to ${growthStageLabels[nextStage.stage]}`
+                : "Your Danish tree is thriving"}
+            </span>
+            <span>{Math.min(100, Math.round(stageProgress))}%</span>
+          </div>
+          <div className="mt-2 h-3 overflow-hidden rounded-full bg-forest-900/8">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-moss-400 to-forest-700 transition-[width] duration-500"
+              style={{ width: `${Math.max(3, Math.min(100, stageProgress))}%` }}
+            />
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-5 gap-1.5">
-          {stageOrder.map((stage) => {
-            const count = modeled.filter((item) => item.stage === stage).length;
+        <ol className="mt-8 grid grid-cols-5 gap-2">
+          {growthPath.map(({ stage, points, Icon }, index) => {
+            const reached = growthPoints >= points;
+            const active = stage === overallStage.stage;
             return (
-              <div className="min-w-0" key={stage}>
-                <div
-                  className={`h-2 rounded-full ${
-                    count > 0 ? "bg-moss-500" : "bg-forest-900/8"
+              <li className="min-w-0 text-center" key={stage}>
+                <span
+                  className={`mx-auto grid size-9 place-items-center rounded-full transition sm:size-11 ${
+                    active
+                      ? "bg-forest-900 text-cream-50 shadow-lg shadow-forest-900/15"
+                      : reached
+                        ? "bg-moss-400/22 text-forest-800"
+                        : "bg-forest-900/6 text-forest-900/28"
                   }`}
-                />
-                <p className="mt-2 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-forest-800/50">
+                >
+                  <Icon aria-hidden="true" size={index >= 3 ? 19 : 17} />
+                </span>
+                <p
+                  className={`mt-2 truncate text-[9px] font-bold uppercase tracking-[0.08em] sm:text-[10px] ${
+                    active ? "text-forest-950" : "text-forest-800/45"
+                  }`}
+                >
                   {growthStageLabels[stage]}
                 </p>
-                <p className="font-display text-xl text-forest-950">{count}</p>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ol>
       </section>
 
       {error ? (
-        <p className="rounded-2xl bg-clay-400/10 p-4 text-sm text-forest-900">
+        <p className="flex items-start gap-2 rounded-2xl bg-clay-400/10 p-4 text-sm text-forest-900">
+          <CircleAlert className="mt-0.5 shrink-0 text-clay-400" size={16} />
           {error}
         </p>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        {modeled.map(({ concept, state, stage }) => (
-          <article
-            className="paper-panel rounded-[26px] p-5 sm:p-6"
-            key={concept.id}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-forest-700/48">
-                  {kindLabels[concept.kind]}
-                </p>
-                <h3 className="mt-1 font-display text-3xl leading-tight text-forest-950">
+      {practiced.length === 0 ? (
+        <section className="paper-panel rounded-[28px] p-7 sm:p-9">
+          <Sprout className="text-moss-500" size={28} />
+          <h2 className="mt-5 font-display text-3xl text-forest-950">
+            Your first seed is ready.
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-forest-900/55">
+            Finish one learning prompt or Listen &amp; Speak sentence and your
+            progress will appear here.
+          </p>
+        </section>
+      ) : null}
+
+      <ProgressGroup
+        description="These ideas will benefit most from another kind of practice."
+        items={needsAttention}
+        title="Needs attention"
+      />
+      <ProgressGroup
+        description="You have useful evidence; keep meeting these ideas in new situations."
+        items={growing}
+        title="Growing"
+      />
+      <ProgressGroup
+        description="These ideas are becoming dependable. Revisit them occasionally."
+        items={strong}
+        title="Strong"
+      />
+
+      {newConcepts.length > 0 ? (
+        <details className="paper-panel group rounded-[24px] p-5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-forest-950">
+                Coming up · {newConcepts.length} new ideas
+              </p>
+              <p className="mt-1 text-xs text-forest-900/48">
+                These appear as you work through the lessons.
+              </p>
+            </div>
+            <ChevronDown
+              className="text-forest-900/40 transition group-open:rotate-180"
+              size={18}
+            />
+          </summary>
+          <div className="mt-5 grid gap-2 border-t border-forest-900/8 pt-5 sm:grid-cols-2 lg:grid-cols-3">
+            {newConcepts.map(({ concept }) => (
+              <div className="rounded-2xl bg-white/45 p-3" key={concept.id}>
+                <p className="font-semibold text-forest-950">
                   {concept.canonicalForm}
-                </h3>
-                <p className="mt-1 text-sm text-forest-900/55">{concept.gloss}</p>
+                </p>
+                <p className="mt-0.5 text-xs text-forest-900/48">{concept.gloss}</p>
               </div>
-              <span
-                className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${stageStyles[stage]}`}
-              >
-                {growthStageLabels[stage]}
-              </span>
-            </div>
-
-            <div className="mt-6 grid gap-x-5 gap-y-3 sm:grid-cols-2">
-              {learningDimensions.map((dimension) => {
-                const value = state[dimension];
-                return (
-                  <div key={dimension}>
-                    <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
-                      <span className="font-semibold text-forest-900/58">
-                        {dimensionLabels[dimension]}
-                      </span>
-                      <span className="tabular-nums text-forest-900/40">
-                        {value === null ? "—" : `${Math.round(value * 100)}`}
-                      </span>
-                    </div>
-                    <div className="dimension-track">
-                      {value !== null ? (
-                        <div
-                          className="dimension-fill"
-                          style={{ width: `${Math.max(3, value * 100)}%` }}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 grid grid-cols-3 divide-x divide-forest-900/8 border-t border-forest-900/8 pt-4 text-center">
-              <div className="px-2">
-                <Activity className="mx-auto text-forest-700/45" size={15} />
-                <p className="mt-1 text-sm font-bold text-forest-950">
-                  {state.exposureCount}
-                </p>
-                <p className="text-[9px] uppercase tracking-[0.1em] text-forest-700/42">
-                  evidence
-                </p>
-              </div>
-              <div className="px-2">
-                <TimerReset className="mx-auto text-forest-700/45" size={15} />
-                <p className="mt-1 text-sm font-bold text-forest-950">
-                  {state.retrievalLatencyMs === null
-                    ? "—"
-                    : `${(state.retrievalLatencyMs / 1000).toFixed(1)}s`}
-                </p>
-                <p className="text-[9px] uppercase tracking-[0.1em] text-forest-700/42">
-                  retrieval
-                </p>
-              </div>
-              <div className="px-2">
-                <AudioLines className="mx-auto text-forest-700/45" size={15} />
-                <p className="mt-1 text-sm font-bold text-forest-950">
-                  {state.speakerDiversity === null
-                    ? "—"
-                    : Math.round(state.speakerDiversity * 100)}
-                </p>
-                <p className="text-[9px] uppercase tracking-[0.1em] text-forest-700/42">
-                  speakers
-                </p>
-              </div>
-            </div>
-          </article>
-        ))}
-      </section>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       <p className="flex items-start gap-2 px-2 text-xs leading-5 text-forest-900/45">
         <Info className="mt-0.5 shrink-0" size={14} />
-        Scores are estimates. A dash means there is not enough data yet.
+        Stages are evidence-based estimates. Detailed scores stay available inside
+        each practiced idea.
       </p>
     </div>
+  );
+}
+
+function ProgressGroup({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: ModeledConcept[];
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-1">
+        <div>
+          <h2 className="font-display text-3xl text-forest-950">{title}</h2>
+          <p className="mt-1 text-xs text-forest-900/48">{description}</p>
+        </div>
+        <span className="rounded-full bg-white/55 px-3 py-1 text-xs font-bold text-forest-900/50">
+          {items.length}
+        </span>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {items.map((item) => (
+          <ConceptCard item={item} key={item.concept.id} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ConceptCard({ item }: { item: ModeledConcept }) {
+  const { concept, state, stage } = item;
+  const action = nextAction(state);
+  const ActionIcon = action.Icon;
+
+  return (
+    <article className="paper-panel rounded-[26px] p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-forest-700/48">
+            {kindLabels[concept.kind]}
+          </p>
+          <h3 className="mt-1 font-display text-3xl leading-tight text-forest-950">
+            {concept.canonicalForm}
+          </h3>
+          <p className="mt-1 text-sm text-forest-900/55">{concept.gloss}</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${stageStyles[stage]}`}
+        >
+          {growthStageLabels[stage]}
+        </span>
+      </div>
+
+      <div className="mt-5 flex items-center justify-between gap-4 rounded-2xl bg-moss-400/10 p-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 place-items-center rounded-xl bg-white/60 text-forest-800">
+            <ActionIcon aria-hidden="true" size={17} />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-forest-700/45">
+              Best next step
+            </p>
+            <p className="mt-0.5 text-sm font-bold text-forest-950">
+              {action.label}
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-semibold tabular-nums text-forest-900/42">
+          {state.exposureCount} {state.exposureCount === 1 ? "practice" : "practices"}
+        </span>
+      </div>
+
+      <details className="group mt-4 border-t border-forest-900/8 pt-4">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-bold text-forest-900/52">
+          See learning evidence
+          <ChevronDown
+            className="transition group-open:rotate-180"
+            aria-hidden="true"
+            size={16}
+          />
+        </summary>
+        <div className="mt-5 grid gap-x-5 gap-y-3 sm:grid-cols-2">
+          {learningDimensions.map((dimension) => {
+            const value = state[dimension];
+            return (
+              <div key={dimension}>
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
+                  <span className="font-semibold text-forest-900/58">
+                    {dimensionLabels[dimension]}
+                  </span>
+                  <span className="tabular-nums text-forest-900/40">
+                    {value === null ? "—" : Math.round(value * 100)}
+                  </span>
+                </div>
+                <div className="dimension-track">
+                  {value !== null ? (
+                    <div
+                      className="dimension-fill"
+                      style={{ width: `${Math.max(3, value * 100)}%` }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </details>
+    </article>
   );
 }

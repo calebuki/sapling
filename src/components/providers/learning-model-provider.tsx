@@ -13,8 +13,10 @@ import { createLearningRepository } from "@/lib/repositories";
 import type {
   Concept,
   LearnerConceptState,
+  ListeningAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
+  SpeakingAttemptInput,
 } from "@/types/learning";
 
 type LearningModelContextValue = {
@@ -27,6 +29,12 @@ type LearningModelContextValue = {
     input: RetrievalAttemptInput,
   ) => Promise<LearnerConceptState>;
   recordRepair: (input: RepairInput) => Promise<LearnerConceptState>;
+  recordListeningAttempt: (
+    input: ListeningAttemptInput,
+  ) => Promise<LearnerConceptState>;
+  recordSpeakingAttempt: (
+    input: SpeakingAttemptInput,
+  ) => Promise<LearnerConceptState>;
 };
 
 const LearningModelContext = createContext<LearningModelContextValue | null>(
@@ -122,6 +130,40 @@ export function LearningModelProvider({
     [repository, upsertState],
   );
 
+  const recordListeningAttempt = useCallback(
+    async (input: ListeningAttemptInput) => {
+      setError(null);
+      try {
+        return upsertState(await repository.recordListeningAttempt(input));
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not save this listening attempt.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, upsertState],
+  );
+
+  const recordSpeakingAttempt = useCallback(
+    async (input: SpeakingAttemptInput) => {
+      setError(null);
+      try {
+        return upsertState(await repository.recordSpeakingAttempt(input));
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not save this speaking attempt.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, upsertState],
+  );
+
   return (
     <LearningModelContext.Provider
       value={{
@@ -132,6 +174,8 @@ export function LearningModelProvider({
         error,
         recordRetrievalAttempt,
         recordRepair,
+        recordListeningAttempt,
+        recordSpeakingAttempt,
       }}
     >
       {children}
@@ -146,4 +190,3 @@ export function useLearningModel() {
   }
   return value;
 }
-

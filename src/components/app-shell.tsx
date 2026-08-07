@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Ear,
+  AudioLines,
   Leaf,
   LogOut,
   MessageCircle,
@@ -16,8 +16,8 @@ import { createClient } from "@/lib/supabase/client";
 
 const destinations = [
   { href: "/learn", label: "Learn", icon: Sprout },
-  { href: "/ear", label: "Ear", icon: Ear },
-  { href: "/my-danish", label: "My Danish", icon: TreePine },
+  { href: "/ear", label: "Listen & Speak", icon: AudioLines },
+  { href: "/my-danish", label: "Mit dansk", icon: TreePine },
   { href: "/world", label: "World", icon: MessageCircle },
 ];
 

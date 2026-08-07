@@ -4,8 +4,10 @@ import type { Database, Json } from "@/types/database";
 import type {
   Concept,
   LearnerConceptState,
+  ListeningAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
+  SpeakingAttemptInput,
 } from "@/types/learning";
 
 type ConceptRow = Database["public"]["Tables"]["concepts"]["Row"];
@@ -140,6 +142,46 @@ export function createSupabaseLearningRepository(): LearningRepository {
 
       return loadState(input.conceptId, userId);
     },
+    async recordListeningAttempt(input: ListeningAttemptInput) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase.rpc("record_listening_attempt", {
+        p_concept_id: input.conceptId,
+        p_successful: input.successful,
+        p_score: input.score,
+        p_latency_ms: input.latencyMs,
+        p_speaker_id: input.speakerId,
+        p_playback_count: input.playbackCount,
+        p_context: input.context as Json,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return loadState(input.conceptId, userId);
+    },
+    async recordSpeakingAttempt(input: SpeakingAttemptInput) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase.rpc("record_speaking_attempt", {
+        p_concept_id: input.conceptId,
+        p_reference_text: input.referenceText,
+        p_recognized_text: input.recognizedText,
+        p_accuracy_score: input.accuracyScore,
+        p_fluency_score: input.fluencyScore,
+        p_completeness_score: input.completenessScore,
+        p_pronunciation_score: input.pronunciationScore,
+        p_successful: input.successful,
+        p_word_details: input.wordDetails as Json,
+        p_context: input.context as Json,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return loadState(input.conceptId, userId);
+    },
   };
 }
-

@@ -73,9 +73,37 @@ export interface RepairInput {
   context: Record<string, string | number | boolean | null>;
 }
 
+export interface ListeningAttemptInput {
+  conceptId: string;
+  successful: boolean;
+  score: number;
+  latencyMs: number;
+  speakerId: string;
+  playbackCount: number;
+  context: Record<string, string | number | boolean | null>;
+}
+
+export type PronunciationWordDetail = {
+  word: string;
+  accuracyScore: number;
+  errorType: string;
+};
+
+export interface SpeakingAttemptInput {
+  conceptId: string;
+  referenceText: string;
+  recognizedText: string;
+  accuracyScore: number;
+  fluencyScore: number;
+  completenessScore: number;
+  pronunciationScore: number;
+  successful: boolean;
+  wordDetails: PronunciationWordDetail[];
+  context: Record<string, string | number | boolean | null>;
+}
+
 export interface LearningSnapshot {
   concepts: Concept[];
   states: LearnerConceptState[];
   mode: "local" | "supabase";
 }
-

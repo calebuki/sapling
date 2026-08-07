@@ -2,13 +2,17 @@ import { demoConcepts, initialDemoStates } from "@/lib/learning/demo-data";
 import {
   applyDemoRepair,
   applyDemoRetrievalAttempt,
+  applyDemoListeningAttempt,
+  applyDemoSpeakingAttempt,
   createEmptyState,
 } from "@/lib/learning/model";
 import type { LearningRepository } from "@/lib/repositories/types";
 import type {
   LearnerConceptState,
+  ListeningAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
+  SpeakingAttemptInput,
 } from "@/types/learning";
 
 const stateStorageKey = "sapling.demo.concept-states.v1";
@@ -17,7 +21,12 @@ const eventStorageKey = "sapling.demo.learning-events.v1";
 type DemoEvent = {
   id: string;
   occurredAt: string;
-  eventType: "retrieval_attempt" | "error" | "repair";
+  eventType:
+    | "retrieval_attempt"
+    | "listening_attempt"
+    | "speaking_attempt"
+    | "error"
+    | "repair";
   conceptId: string;
   payload: Record<string, unknown>;
 };
@@ -123,6 +132,33 @@ export function createDemoLearningRepository(): LearningRepository {
 
       return replaceState(updated);
     },
+    async recordListeningAttempt(input: ListeningAttemptInput) {
+      const current =
+        readStates().find((state) => state.conceptId === input.conceptId) ??
+        createEmptyState(input.conceptId);
+      const updated = applyDemoListeningAttempt(current, input);
+
+      appendEvent({
+        eventType: "listening_attempt",
+        conceptId: input.conceptId,
+        payload: { ...input },
+      });
+
+      return replaceState(updated);
+    },
+    async recordSpeakingAttempt(input: SpeakingAttemptInput) {
+      const current =
+        readStates().find((state) => state.conceptId === input.conceptId) ??
+        createEmptyState(input.conceptId);
+      const updated = applyDemoSpeakingAttempt(current, input);
+
+      appendEvent({
+        eventType: "speaking_attempt",
+        conceptId: input.conceptId,
+        payload: { ...input },
+      });
+
+      return replaceState(updated);
+    },
   };
 }
-
