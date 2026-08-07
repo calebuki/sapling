@@ -24,12 +24,6 @@ export default function EarPage() {
           <h1 className="mt-2 max-w-2xl font-display text-5xl leading-[0.98] text-forest-950 sm:text-6xl">
             Learn the Danish people actually say.
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-7 text-forest-900/58">
-            Listening evidence will stay separate from reading. The first real
-            Ear session will begin with controlled speech, then earn its way
-            toward reduction, new voices, conversation, and noise.
-          </p>
-
           <div className="paper-panel mt-8 rounded-[28px] p-6">
             <div className="flex items-center justify-between">
               <span className="grid size-11 place-items-center rounded-2xl bg-moss-400/18 text-forest-800">
@@ -42,10 +36,6 @@ export default function EarPage() {
             <h2 className="mt-6 font-display text-3xl text-forest-950">
               blødt d
             </h2>
-            <p className="mt-2 text-sm leading-6 text-forest-900/55">
-              Hear one sound across several familiar words, then identify it
-              without seeing the spelling first.
-            </p>
             <div className="mt-6 grid grid-cols-3 gap-2">
               {[Volume2, AudioLines, Radio].map((Icon, index) => (
                 <div
@@ -84,13 +74,8 @@ export default function EarPage() {
               </li>
             ))}
           </ol>
-          <p className="mt-6 text-xs leading-5 text-forest-900/43">
-            This is an evidence progression, not a locked unit path. Sapling can
-            move between levels concept by concept.
-          </p>
         </section>
       </div>
     </div>
   );
 }
-

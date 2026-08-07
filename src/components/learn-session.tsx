@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Check,
   CircleAlert,
+  CircleHelp,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
@@ -38,7 +39,7 @@ const exercises = [
   },
 ];
 
-type Phase = "attempt" | "compare" | "repair" | "complete";
+type Phase = "attempt" | "compare" | "reveal" | "repair" | "complete";
 
 function normalize(value: string) {
   return value
@@ -51,7 +52,6 @@ function normalize(value: string) {
 export function LearnSession() {
   const {
     concepts,
-    mode,
     isLoading,
     error: modelError,
     recordRetrievalAttempt,
@@ -97,6 +97,43 @@ export function LearnSession() {
     );
     setSubmittedResponse(response.trim());
     setPhase("compare");
+  }
+
+  async function markNotSure(event: React.MouseEvent<HTMLButtonElement>) {
+    if (!concept || !exercise) {
+      return;
+    }
+
+    attemptLatencyMs.current = Math.max(
+      0,
+      Math.round(event.timeStamp - (startedAt.current ?? event.timeStamp)),
+    );
+    setIsSaving(true);
+    setActionError(null);
+    try {
+      await recordRetrievalAttempt({
+        conceptId: concept.id,
+        responseText: "",
+        expectedResponse: exercise.expected,
+        successful: false,
+        latencyMs: attemptLatencyMs.current,
+        context: {
+          exerciseId: exercise.id,
+          activityType: exercise.eyebrow,
+          responseMode: "not-sure",
+          source: "initial-learn-session",
+        },
+      });
+      setPhase("reveal");
+    } catch (saveError) {
+      setActionError(
+        saveError instanceof Error
+          ? saveError.message
+          : "This attempt could not be saved.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function assessAttempt(successful: boolean) {
@@ -195,20 +232,15 @@ export function LearnSession() {
           Session complete
         </p>
         <h2 className="mt-2 max-w-xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
-          Three pieces of Danish got another chance to take root.
+          Three answers practiced.
         </h2>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-forest-900/62">
-          Sapling kept the attempts and repairs as evidence. The growth view now
-          reflects the retrieval result without pretending that one answer means
-          mastery.
-        </p>
         <button
           className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
           onClick={restart}
           type="button"
         >
           <RotateCcw aria-hidden="true" size={17} />
-          Run the loop again
+          Practice again
         </button>
       </div>
     );
@@ -235,8 +267,7 @@ export function LearnSession() {
     <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
       <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
         <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-          <span>Session 01</span>
-          <span>
+          <span className="ml-auto">
             {itemIndex + 1} of {exercises.length}
           </span>
         </div>
@@ -263,10 +294,6 @@ export function LearnSession() {
             <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
               {exercise.prompt}
             </h2>
-            <p className="mt-4 text-sm leading-6 text-forest-900/55">
-              Retrieve before you reveal. Spelling can be imperfect; the honest
-              comparison is the useful part.
-            </p>
             <label className="mt-8 block">
               <span className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/60">
                 Your Danish
@@ -285,21 +312,55 @@ export function LearnSession() {
                 value={response}
               />
             </label>
+            <div className="mt-5 grid gap-3 sm:flex">
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                disabled={isSaving}
+                onClick={markNotSure}
+                type="button"
+              >
+                <CircleHelp aria-hidden="true" size={17} />
+                Not sure
+              </button>
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                disabled={!response.trim() || isSaving}
+                type="submit"
+              >
+                Check answer
+                <ArrowRight aria-hidden="true" size={17} />
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {phase === "reveal" ? (
+          <div className="mt-8 soft-enter">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
+              A natural answer
+            </p>
+            <h2 className="mt-3 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
+              {exercise.expected}
+            </h2>
+            <div className="mt-4 flex items-start gap-3 rounded-2xl bg-forest-900/[0.045] p-4 text-sm leading-6 text-forest-900/62">
+              <Sparkles className="mt-0.5 shrink-0 text-moss-500" size={17} />
+              <span>{exercise.note}</span>
+            </div>
             <button
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-              disabled={!response.trim()}
-              type="submit"
+              className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800 sm:w-auto"
+              onClick={moveForward}
+              type="button"
             >
-              Reveal and compare
+              Continue
               <ArrowRight aria-hidden="true" size={17} />
             </button>
-          </form>
+          </div>
         ) : null}
 
         {phase === "compare" ? (
           <div className="mt-8 soft-enter">
             <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
-              Compare the meaning and the shape.
+              Compare your answer.
             </h2>
             <div className="mt-6 grid gap-3 lg:grid-cols-2">
               <div className="rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
@@ -325,10 +386,7 @@ export function LearnSession() {
                 {exercise.note} {exactTextMatch ? "The text also matches exactly." : "Judge the idea, not only punctuation."}
               </span>
             </div>
-            <p className="mt-7 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-              Before seeing the answer, did you have it?
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
               <button
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition hover:bg-white disabled:opacity-50"
                 disabled={isSaving}
@@ -336,7 +394,7 @@ export function LearnSession() {
                 type="button"
               >
                 <RotateCcw aria-hidden="true" size={17} />
-                Needs repair
+                Needs practice
               </button>
               <button
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800 disabled:opacity-50"
@@ -345,7 +403,7 @@ export function LearnSession() {
                 type="button"
               >
                 <Check aria-hidden="true" size={17} />
-                I had it
+                Got it
               </button>
             </div>
           </div>
@@ -353,18 +411,15 @@ export function LearnSession() {
 
         {phase === "repair" ? (
           <form className="mt-8 soft-enter" onSubmit={submitRepair}>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-clay-400">
-              Repair
-            </p>
-            <h2 className="mt-3 font-display text-3xl text-forest-950 sm:text-4xl">
-              Build the right path once, now.
+            <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
+              Type it once more.
             </h2>
             <p className="mt-4 rounded-2xl bg-moss-400/12 p-4 text-lg font-semibold text-forest-950">
               {exercise.expected}
             </p>
             <label className="mt-6 block">
               <span className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/60">
-                Type it from the model
+                Your answer
               </span>
               <input
                 autoFocus
@@ -378,7 +433,7 @@ export function LearnSession() {
               disabled={!repairResponse.trim() || isSaving}
               type="submit"
             >
-              Save repair
+              Continue
               <ArrowRight aria-hidden="true" size={17} />
             </button>
           </form>
@@ -390,12 +445,6 @@ export function LearnSession() {
             {actionError ?? modelError}
           </p>
         ) : null}
-
-        <p className="mt-8 border-t border-forest-900/8 pt-5 text-xs leading-5 text-forest-900/45">
-          {mode === "supabase"
-            ? "This evidence is being written to your private Sapling model."
-            : "Foundation mode · evidence and state are stored only in this browser."}
-        </p>
       </div>
     </div>
   );
