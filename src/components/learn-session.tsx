@@ -7,25 +7,26 @@ import {
   Circle,
   CircleAlert,
   CircleHelp,
+  LoaderCircle,
   LockKeyhole,
+  Mic,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
+  Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useDanishSpeechRecognition } from "@/hooks/use-danish-speech-recognition";
 import { lessons } from "@/lib/learning/course";
+import type {
+  DanishSpeechResult,
+  LessonEvaluation,
+} from "@/types/lesson-evaluation";
 
-type Phase = "attempt" | "compare" | "reveal" | "repair" | "complete";
-
-function normalize(value: string) {
-  return value
-    .toLocaleLowerCase("da")
-    .replace(/[.,!?…]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+type Phase = "attempt" | "feedback" | "reveal" | "complete";
 
 export function LearnSession() {
   const {
@@ -34,20 +35,29 @@ export function LearnSession() {
     isLoading,
     error: modelError,
     recordRetrievalAttempt,
-    recordRepair,
+    recordSpeakingAttempt,
   } = useLearningModel();
   const [lessonIndex, setLessonIndex] = useState(0);
   const [exerciseQueue, setExerciseQueue] = useState<number[]>([0, 1, 2]);
   const [queuePosition, setQueuePosition] = useState(0);
   const [phase, setPhase] = useState<Phase>("attempt");
-  const [response, setResponse] = useState("");
-  const [submittedResponse, setSubmittedResponse] = useState("");
-  const [repairResponse, setRepairResponse] = useState("");
+  const [evaluation, setEvaluation] = useState<LessonEvaluation | null>(null);
+  const [speechResult, setSpeechResult] = useState<DanishSpeechResult | null>(
+    null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const didChooseStartingLesson = useRef(false);
   const startedAt = useRef<number | null>(null);
   const attemptLatencyMs = useRef(0);
+  const {
+    isRecording,
+    liveTranscript,
+    recordingStatus,
+    resetTranscript,
+    start: startRecognition,
+    stop: stopRecognition,
+  } = useDanishSpeechRecognition();
 
   const stateByConcept = useMemo(
     () => new Map(states.map((state) => [state.conceptId, state])),
@@ -116,9 +126,9 @@ export function LearnSession() {
   function resetExercise() {
     setQueuePosition(0);
     setPhase("attempt");
-    setResponse("");
-    setSubmittedResponse("");
-    setRepairResponse("");
+    setEvaluation(null);
+    setSpeechResult(null);
+    resetTranscript();
     setActionError(null);
     startedAt.current = null;
     attemptLatencyMs.current = 0;
@@ -141,24 +151,11 @@ export function LearnSession() {
     }
     setQueuePosition((current) => current + 1);
     setPhase("attempt");
-    setResponse("");
-    setSubmittedResponse("");
-    setRepairResponse("");
+    setEvaluation(null);
+    setSpeechResult(null);
+    resetTranscript();
     startedAt.current = null;
     attemptLatencyMs.current = 0;
-  }
-
-  function revealAnswer(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!response.trim()) {
-      return;
-    }
-    attemptLatencyMs.current = Math.max(
-      0,
-      Math.round(event.timeStamp - (startedAt.current ?? event.timeStamp)),
-    );
-    setSubmittedResponse(response.trim());
-    setPhase("compare");
   }
 
   async function markNotSure(event: React.MouseEvent<HTMLButtonElement>) {
@@ -199,73 +196,106 @@ export function LearnSession() {
     }
   }
 
-  async function assessAttempt(successful: boolean) {
-    if (!concept || !exercise || !lesson) {
+  async function startVoiceAttempt() {
+    if (!concept || !exercise || !lesson || isRecording || isSaving) {
       return;
     }
 
-    setIsSaving(true);
     setActionError(null);
+    setEvaluation(null);
+    setSpeechResult(null);
+
     try {
+      const spoken = await startRecognition(exercise.expected);
+      attemptLatencyMs.current = spoken.durationMs;
+      setSpeechResult(spoken);
+      setIsSaving(true);
+
+      const evaluationResponse = await fetch("/api/learning/evaluate-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lessonId: lesson.id,
+          exerciseId: exercise.audioId,
+          transcript: spoken.recognizedText,
+        }),
+      });
+      const evaluationBody = (await evaluationResponse.json()) as
+        | LessonEvaluation
+        | { error?: string };
+
+      if (!evaluationResponse.ok || !("successful" in evaluationBody)) {
+        throw new Error(
+          "error" in evaluationBody && evaluationBody.error
+            ? evaluationBody.error
+            : "Sapling couldn’t interpret that answer.",
+        );
+      }
+
       await recordRetrievalAttempt({
         conceptId: concept.id,
-        responseText: submittedResponse,
+        responseText: spoken.recognizedText,
         expectedResponse: exercise.expected,
-        successful,
+        successful: evaluationBody.successful,
         latencyMs: attemptLatencyMs.current,
         context: {
           lessonId: lesson.id,
           exerciseId: exercise.audioId,
           activityType: exercise.eyebrow,
+          responseMode: "speech",
+          evaluationProvider: evaluationBody.source,
+          meaningScore: evaluationBody.meaningScore,
+          grammarScore: evaluationBody.grammarScore,
+          vocabularyScore: evaluationBody.vocabularyScore,
+          feedbackSummary: evaluationBody.summary,
+          feedbackTips: evaluationBody.tips
+            .map((tip) => `${tip.area}: ${tip.message}`)
+            .join(" | "),
           source: "lesson-course",
         },
       });
 
-      if (successful) {
-        moveForward();
-      } else {
-        setPhase("repair");
-      }
-    } catch (saveError) {
+      void recordSpeakingAttempt({
+        conceptId: concept.id,
+        referenceText: exercise.expected,
+        ...spoken,
+        context: {
+          lessonId: lesson.id,
+          exerciseId: exercise.audioId,
+          provider: "azure-speech",
+          locale: "da-DK",
+          audioRetained: false,
+          source: "lesson-course",
+        },
+      }).catch((saveError: unknown) => {
+        setActionError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Your pronunciation score could not be saved.",
+        );
+      });
+
+      setEvaluation(evaluationBody);
+      setPhase("feedback");
+    } catch (voiceError) {
       setActionError(
-        saveError instanceof Error
-          ? saveError.message
-          : "This attempt could not be saved.",
+        voiceError instanceof Error
+          ? voiceError.message
+          : "Sapling couldn’t score that answer.",
       );
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function submitRepair(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!concept || !exercise || !lesson || !repairResponse.trim()) {
-      return;
-    }
-
-    setIsSaving(true);
+  function retryVoiceAttempt() {
+    setEvaluation(null);
+    setSpeechResult(null);
+    resetTranscript();
     setActionError(null);
-    try {
-      await recordRepair({
-        conceptId: concept.id,
-        responseText: repairResponse.trim(),
-        targetText: exercise.expected,
-        context: {
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          source: "lesson-course",
-        },
-      });
-      moveForward();
-    } catch (saveError) {
-      setActionError(
-        saveError instanceof Error
-          ? saveError.message
-          : "This repair could not be saved.",
-      );
-    } finally {
-      setIsSaving(false);
-    }
+    setPhase("attempt");
+    startedAt.current = null;
+    attemptLatencyMs.current = 0;
   }
 
   if (isLoading) {
@@ -294,21 +324,11 @@ export function LearnSession() {
           <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/20 text-forest-800">
             <Sparkles aria-hidden="true" size={25} />
           </div>
-          <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-forest-700/55">
+          <h2 className="mt-8 max-w-xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
             {lessonMastered
-              ? `Lesson ${lesson.number} complete`
-              : "Your next review is ready"}
-          </p>
-          <h2 className="mt-2 max-w-xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
-            {lessonMastered
-              ? `${lesson.title} has taken root.`
-              : "Sapling found what needs another pass."}
+              ? `${lesson.title} complete.`
+              : `${remainingIdeas} ${remainingIdeas === 1 ? "idea" : "ideas"} left.`}
           </h2>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-forest-900/60">
-            {lessonMastered
-              ? "Every idea in this lesson has one successful retrieval. The next lesson is now unlocked."
-              : `${remainingIdeas} ${remainingIdeas === 1 ? "idea needs" : "ideas need"} a successful retrieval before the next lesson unlocks. Your next round includes only those ideas.`}
-          </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {hasNextLesson ? (
               <button
@@ -362,9 +382,6 @@ export function LearnSession() {
     ((queuePosition + (phase === "attempt" ? 0 : 0.45)) /
       exerciseQueue.length) *
     100;
-  const exactTextMatch =
-    normalize(submittedResponse) === normalize(exercise.expected);
-
   return (
     <div className="space-y-5">
       <LessonRail
@@ -403,32 +420,52 @@ export function LearnSession() {
           </div>
 
           {phase === "attempt" ? (
-            <form className="mt-8" onSubmit={revealAnswer}>
+            <div className="mt-8">
               <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
                 {exercise.prompt}
               </h2>
-              <label className="mt-8 block">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/60">
-                  Your Danish
-                </span>
-                <textarea
-                  autoFocus
-                  className="mt-3 min-h-32 w-full resize-none rounded-[22px] border border-forest-900/12 bg-white/70 p-5 text-xl text-forest-950 outline-none transition placeholder:text-forest-900/25 focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
-                  onChange={(event) => {
-                    startedAt.current ??= event.timeStamp;
-                    setResponse(event.target.value);
-                  }}
-                  onFocus={(event) => {
-                    startedAt.current ??= event.timeStamp;
-                  }}
-                  placeholder="Skriv på dansk…"
-                  value={response}
-                />
-              </label>
+              <div
+                aria-live="polite"
+                className={`mt-8 rounded-[22px] border p-5 ${
+                  isRecording || isSaving
+                    ? "border-moss-500/25 bg-moss-400/10"
+                    : "border-forest-900/10 bg-white/55"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/65 text-forest-800">
+                    {isSaving ? (
+                      <Sparkles className="animate-pulse" aria-hidden="true" size={19} />
+                    ) : (
+                      <Mic aria-hidden="true" size={19} />
+                    )}
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">
+                      {isSaving
+                        ? "Understanding your answer"
+                        : recordingStatus === "starting"
+                          ? "Opening microphone"
+                          : recordingStatus === "stopping"
+                            ? "Finishing transcript"
+                            : recordingStatus === "listening"
+                              ? "Listening"
+                              : "Answer in Danish"}
+                    </p>
+                    <p className="mt-1 min-h-7 text-lg font-semibold text-forest-950" lang="da">
+                      {liveTranscript || (isRecording ? "Sig dit svar…" : "Tap Start speaking when you’re ready.")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-forest-900/48">
+                <ShieldCheck className="shrink-0 text-moss-500" size={15} />
+                Audio is scored, then discarded.
+              </p>
               <div className="mt-5 grid gap-3 sm:flex">
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-                  disabled={isSaving}
+                  disabled={isSaving || isRecording}
                   onClick={markNotSure}
                   type="button"
                 >
@@ -437,14 +474,33 @@ export function LearnSession() {
                 </button>
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-                  disabled={!response.trim() || isSaving}
-                  type="submit"
+                  disabled={isSaving || recordingStatus === "starting" || recordingStatus === "stopping"}
+                  onClick={
+                    recordingStatus === "listening"
+                      ? stopRecognition
+                      : startVoiceAttempt
+                  }
+                  type="button"
                 >
-                  Check answer
-                  <ArrowRight aria-hidden="true" size={17} />
+                  {isSaving || recordingStatus === "starting" || recordingStatus === "stopping" ? (
+                    <LoaderCircle className="animate-spin" aria-hidden="true" size={18} />
+                  ) : recordingStatus === "listening" ? (
+                    <Square aria-hidden="true" fill="currentColor" size={15} />
+                  ) : (
+                    <Mic aria-hidden="true" size={18} />
+                  )}
+                  {isSaving
+                    ? "Checking answer…"
+                    : recordingStatus === "starting"
+                      ? "Preparing…"
+                      : recordingStatus === "listening"
+                        ? "Stop & check"
+                        : recordingStatus === "stopping"
+                          ? "Finishing…"
+                          : "Start speaking"}
                 </button>
               </div>
-            </form>
+            </div>
           ) : null}
 
           {phase === "reveal" ? (
@@ -477,97 +533,102 @@ export function LearnSession() {
             </div>
           ) : null}
 
-          {phase === "compare" ? (
+          {phase === "feedback" && evaluation && speechResult ? (
             <div className="mt-8 soft-enter">
-              <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
-                Compare your answer.
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
+                  evaluation.successful
+                    ? "bg-moss-400/18 text-forest-800"
+                    : "bg-amber-400/16 text-amber-500"
+                }`}
+              >
+                {evaluation.successful ? (
+                  <Check aria-hidden="true" size={15} />
+                ) : (
+                  <RotateCcw aria-hidden="true" size={15} />
+                )}
+                {evaluation.successful ? "Meaning understood" : "Try once more"}
+              </div>
+              <h2 className="mt-5 max-w-2xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
+                {evaluation.summary}
               </h2>
-              <div className="mt-6 grid gap-3 lg:grid-cols-2">
+
+              <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_auto]">
                 <div className="rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/50">
-                    You wrote
+                    Sapling heard
                   </p>
-                  <p className="mt-3 text-lg leading-7 text-forest-950">
-                    {submittedResponse}
+                  <p className="mt-3 text-lg leading-7 text-forest-950" lang="da">
+                    {speechResult.recognizedText}
                   </p>
                 </div>
-                <div className="rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
+                <div className="rounded-[22px] bg-forest-900/[0.045] p-5 lg:min-w-44">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest-700/50">
+                    Pronunciation
+                  </p>
+                  <p className="mt-2 font-display text-4xl text-forest-950">
+                    {Math.round(speechResult.pronunciationScore * 100)}
+                  </p>
+                </div>
+              </div>
+
+              {evaluation.correctedDanish !== speechResult.recognizedText ||
+              evaluation.tips.length > 0 ? (
+                <div className="mt-4 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/55">
-                    A natural answer
+                    A natural version
                   </p>
-                  <p className="mt-3 text-lg font-semibold leading-7 text-forest-950">
-                    {exercise.expected}
+                  <p className="mt-2 text-xl font-semibold text-forest-950" lang="da">
+                    {evaluation.correctedDanish}
                   </p>
-                  <div className="mt-4">
-                    <DanishAudioButton clipId={exercise.audioId} showSlowControl />
-                  </div>
                 </div>
-              </div>
-              <div className="mt-4 flex items-start gap-3 rounded-2xl bg-forest-900/[0.045] p-4 text-sm leading-6 text-forest-900/62">
-                <Sparkles className="mt-0.5 shrink-0 text-moss-500" size={17} />
-                <span>
-                  {exercise.note}{" "}
-                  {exactTextMatch
-                    ? "The text also matches exactly."
-                    : "Judge the idea, not only punctuation."}
-                </span>
-              </div>
-              <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              ) : null}
+
+              {evaluation.tips.length > 0 ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {evaluation.tips.map((tip) => (
+                    <div className="rounded-2xl bg-white/55 p-4" key={`${tip.area}-${tip.message}`}>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-forest-700/48">
+                        {tip.area}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-forest-950">
+                        {tip.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="mt-7 grid gap-3 sm:flex">
                 <button
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition hover:bg-white disabled:opacity-50"
-                  disabled={isSaving}
-                  onClick={() => assessAttempt(false)}
+                  onClick={retryVoiceAttempt}
                   type="button"
                 >
                   <RotateCcw aria-hidden="true" size={17} />
-                  Needs practice
+                  Try again
                 </button>
-                <button
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800 disabled:opacity-50"
-                  disabled={isSaving}
-                  onClick={() => assessAttempt(true)}
-                  type="button"
-                >
-                  <Check aria-hidden="true" size={17} />
-                  Got it
-                </button>
+                {evaluation.successful ? (
+                  <button
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
+                    onClick={moveForward}
+                    type="button"
+                  >
+                    Continue
+                    <ArrowRight aria-hidden="true" size={17} />
+                  </button>
+                ) : (
+                  <button
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
+                    onClick={() => setPhase("reveal")}
+                    type="button"
+                  >
+                    Show answer
+                    <ArrowRight aria-hidden="true" size={17} />
+                  </button>
+                )}
               </div>
             </div>
-          ) : null}
-
-          {phase === "repair" ? (
-            <form className="mt-8 soft-enter" onSubmit={submitRepair}>
-              <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">
-                Type it once more.
-              </h2>
-              <div className="mt-4 rounded-2xl bg-moss-400/12 p-4">
-                <p className="text-lg font-semibold text-forest-950">
-                  {exercise.expected}
-                </p>
-                <div className="mt-3">
-                  <DanishAudioButton clipId={exercise.audioId} />
-                </div>
-              </div>
-              <label className="mt-6 block">
-                <span className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/60">
-                  Your answer
-                </span>
-                <input
-                  autoFocus
-                  className="mt-3 w-full rounded-[20px] border border-forest-900/12 bg-white/70 px-5 py-4 text-lg text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
-                  onChange={(event) => setRepairResponse(event.target.value)}
-                  value={repairResponse}
-                />
-              </label>
-              <button
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:opacity-40 sm:w-auto"
-                disabled={!repairResponse.trim() || isSaving}
-                type="submit"
-              >
-                Continue
-                <ArrowRight aria-hidden="true" size={17} />
-              </button>
-            </form>
           ) : null}
 
           {actionError || modelError ? (

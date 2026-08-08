@@ -5,7 +5,6 @@ import {
   Check,
   CircleAlert,
   LoaderCircle,
-  LockKeyhole,
   Mic,
   RotateCcw,
   ShieldCheck,
@@ -13,12 +12,17 @@ import {
   Square,
   Volume2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { listenSpeakItems } from "@/lib/learning/course";
-import type { PronunciationWordDetail } from "@/types/learning";
+import type { ListenSpeakItem } from "@/lib/learning/course";
+import type {
+  Concept,
+  LearnerConceptState,
+  PronunciationWordDetail,
+} from "@/types/learning";
 
 type Phase = "listen" | "repeat" | "result" | "complete";
 type RecordingStatus = "idle" | "starting" | "listening" | "stopping";
@@ -47,6 +51,8 @@ type SpeechTokenResponse = {
   error?: string;
 };
 
+const listenSpeakRoundStorageKey = "sapling.listen-speak.round.v1";
+
 function toUnitScore(score: number | null | undefined) {
   if (typeof score !== "number" || !Number.isFinite(score)) {
     return 0;
@@ -54,15 +60,82 @@ function toUnitScore(score: number | null | undefined) {
   return Math.max(0, Math.min(1, score / 100));
 }
 
+function getNextRound() {
+  try {
+    const stored = Number.parseInt(
+      window.localStorage.getItem(listenSpeakRoundStorageKey) ?? "0",
+      10,
+    );
+    const round = Number.isFinite(stored) && stored >= 0 ? stored : 0;
+    window.localStorage.setItem(
+      listenSpeakRoundStorageKey,
+      String(round + 1),
+    );
+    return round;
+  } catch {
+    return 0;
+  }
+}
+
+function buildSession(
+  concepts: Concept[],
+  states: LearnerConceptState[],
+  round: number,
+) {
+  const conceptBySlug = new Map(
+    concepts.map((concept) => [concept.slug, concept]),
+  );
+  const stateByConcept = new Map(
+    states.map((state) => [state.conceptId, state]),
+  );
+  const variantsByConcept = new Map<string, ListenSpeakItem[]>();
+
+  for (const item of listenSpeakItems) {
+    const variants = variantsByConcept.get(item.conceptSlug) ?? [];
+    variants.push(item);
+    variantsByConcept.set(item.conceptSlug, variants);
+  }
+
+  return [...variantsByConcept.entries()]
+    .map(([conceptSlug, variants]) => {
+      const concept = conceptBySlug.get(conceptSlug);
+      const state = concept ? stateByConcept.get(concept.id) : undefined;
+      const scores = [
+        state?.recognitionAudio,
+        state?.production,
+        state?.pronunciation,
+      ].filter((score): score is number => typeof score === "number");
+      const strength =
+        scores.length > 0
+          ? scores.reduce((total, score) => total + score, 0) / scores.length
+          : 0;
+      const completedRounds = Math.floor((state?.exposureCount ?? 0) / 2);
+      const variant = variants[(completedRounds + round) % variants.length];
+
+      return {
+        item: variant,
+        sortOrder: concept?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+        strength,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.strength - right.strength || left.sortOrder - right.sortOrder,
+    )
+    .map(({ item }) => item);
+}
+
 export function ListenSpeakSession() {
   const {
     concepts,
+    states,
     isLoading,
     error: modelError,
     recordListeningAttempt,
     recordSpeakingAttempt,
   } = useLearningModel();
   const [itemIndex, setItemIndex] = useState(0);
+  const [sessionItems, setSessionItems] = useState<ListenSpeakItem[]>([]);
   const [phase, setPhase] = useState<Phase>("listen");
   const [selectedMeaning, setSelectedMeaning] = useState<string | null>(null);
   const [playbackCount, setPlaybackCount] = useState(0);
@@ -77,6 +150,21 @@ export function ListenSpeakSession() {
   const activeAudioConfig = useRef<{ close: () => void } | null>(null);
   const stopActiveRecognition = useRef<(() => void) | null>(null);
   const recognitionRunId = useRef(0);
+  const didPrepareSession = useRef(false);
+
+  const prepareSession = useCallback(
+    () => buildSession(concepts, states, getNextRound()),
+    [concepts, states],
+  );
+
+  useEffect(() => {
+    if (isLoading || didPrepareSession.current) {
+      return;
+    }
+
+    didPrepareSession.current = true;
+    setSessionItems(prepareSession());
+  }, [isLoading, prepareSession]);
 
   useEffect(() => {
     return () => {
@@ -92,7 +180,7 @@ export function ListenSpeakSession() {
 
   const isRecording = recordingStatus !== "idle";
 
-  const item = listenSpeakItems[itemIndex];
+  const item = sessionItems[itemIndex];
   const concept = concepts.find(
     (candidate) => candidate.slug === item?.conceptSlug,
   );
@@ -429,7 +517,7 @@ export function ListenSpeakSession() {
   }
 
   function moveForward() {
-    if (itemIndex === listenSpeakItems.length - 1) {
+    if (itemIndex === sessionItems.length - 1) {
       setPhase("complete");
       return;
     }
@@ -445,6 +533,7 @@ export function ListenSpeakSession() {
   }
 
   function restart() {
+    setSessionItems(prepareSession());
     setItemIndex(0);
     setPhase("listen");
     setSelectedMeaning(null);
@@ -455,7 +544,7 @@ export function ListenSpeakSession() {
     listeningStartedAt.current = null;
   }
 
-  if (isLoading) {
+  if (isLoading || sessionItems.length === 0) {
     return (
       <div className="paper-panel grid min-h-[500px] animate-pulse place-items-center rounded-[30px] text-sm text-forest-900/50">
         Tuning your listening practice…
@@ -469,16 +558,9 @@ export function ListenSpeakSession() {
         <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/20 text-forest-800">
           <Sparkles aria-hidden="true" size={25} />
         </div>
-        <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-forest-700/55">
-          Listen &amp; Speak complete
-        </p>
-        <h2 className="mt-2 max-w-2xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
-          Six Danish sentences heard and spoken.
+        <h2 className="mt-8 max-w-2xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
+          Round complete.
         </h2>
-        <p className="mt-4 max-w-xl text-sm leading-6 text-forest-900/60">
-          You can repeat this set whenever you like. Sapling keeps the learning
-          scores—not your recordings.
-        </p>
         <button
           className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
           onClick={restart}
@@ -503,16 +585,17 @@ export function ListenSpeakSession() {
     );
   }
 
-  const progress = ((itemIndex + (phase === "listen" ? 0 : 0.6)) / listenSpeakItems.length) * 100;
+  const progress =
+    ((itemIndex + (phase === "listen" ? 0 : 0.6)) / sessionItems.length) * 100;
   const meaningWasCorrect = selectedMeaning === item.meaning;
 
   return (
     <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
       <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
         <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-          <span>{phase === "listen" ? "Listen first" : "Now say it"}</span>
+          <span>{phase === "listen" ? "Listen" : "Speak"}</span>
           <span>
-            {itemIndex + 1} of {listenSpeakItems.length}
+            {itemIndex + 1} of {sessionItems.length}
           </span>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
@@ -530,7 +613,7 @@ export function ListenSpeakSession() {
               <Volume2 aria-hidden="true" size={25} />
             </div>
             <h2 className="mt-7 max-w-2xl font-display text-4xl leading-tight text-forest-950">
-              Listen without reading. What does it mean?
+              What does it mean?
             </h2>
             <div className="mt-6">
               <DanishAudioButton
@@ -552,12 +635,6 @@ export function ListenSpeakSession() {
                 </button>
               ))}
             </div>
-            {playbackCount === 0 ? (
-              <p className="mt-4 text-xs text-forest-900/45">
-                Play the sentence before choosing an answer. You can replay it as
-                often as you need.
-              </p>
-            ) : null}
           </div>
         ) : null}
 
@@ -591,23 +668,10 @@ export function ListenSpeakSession() {
                 showSlowControl
               />
             </div>
-            <p className="mt-5 max-w-2xl rounded-2xl bg-forest-900/[0.045] p-4 text-sm leading-6 text-forest-900/62">
-              {item.note}
-            </p>
-
             <div className="mt-7 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 shrink-0 text-moss-500" size={20} />
-                <div>
-                  <p className="text-sm font-bold text-forest-950">
-                    Your recording is temporary
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-forest-900/52">
-                    Sapling sends this one utterance to Azure for pronunciation
-                    scoring, then discards the audio. Only scores, recognized text,
-                    and word feedback are saved.
-                  </p>
-                </div>
+              <div className="flex items-center gap-3 text-sm font-semibold text-forest-900/62">
+                <ShieldCheck className="shrink-0 text-moss-500" size={19} />
+                <p>Audio is scored, then discarded.</p>
               </div>
               <button
                 className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
@@ -659,10 +723,6 @@ export function ListenSpeakSession() {
                     lang="da"
                   >
                     {liveTranscript || "Sig sætningen…"}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 text-forest-900/50">
-                    Stops about two seconds after your last words. Use Stop &amp;
-                    score any time if the room is noisy.
                   </p>
                 </div>
               ) : null}
@@ -728,11 +788,6 @@ export function ListenSpeakSession() {
               </div>
             ) : null}
 
-            <p className="mt-5 flex items-start gap-2 text-xs leading-5 text-forest-900/48">
-              <LockKeyhole className="mt-0.5 shrink-0" size={14} />
-              No recording was saved. Danish prosody scoring is not available, so
-              this feedback does not grade how native your accent sounds.
-            </p>
             <div className="mt-7 grid gap-3 sm:flex">
               <button
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition hover:bg-white"

@@ -13,10 +13,7 @@ export default function WorldPage() {
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
       <div className="grid items-start gap-8 lg:grid-cols-[.9fr_1.1fr]">
         <section>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-forest-700/55">
-            World
-          </p>
-          <h1 className="mt-2 max-w-xl font-display text-5xl leading-[0.98] text-forest-950 sm:text-6xl">
+          <h1 className="max-w-xl font-display text-5xl leading-[0.98] text-forest-950 sm:text-6xl">
             Language with somewhere to return to.
           </h1>
           <div className="mt-8 rounded-[28px] bg-forest-900 p-6 text-cream-50 shadow-2xl shadow-forest-950/15 sm:p-8">

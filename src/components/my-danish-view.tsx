@@ -5,7 +5,6 @@ import {
   ChevronDown,
   CircleAlert,
   Ear,
-  Info,
   Leaf,
   Mic,
   Sprout,
@@ -158,20 +157,13 @@ export function MyDanishView() {
       <section className="paper-panel overflow-hidden rounded-[28px] p-6 sm:p-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-forest-700/52">
-              Your growth
-            </p>
-            <h2 className="mt-2 font-display text-4xl text-forest-950 sm:text-5xl">
+            <h2 className="font-display text-4xl text-forest-950 sm:text-5xl">
               {growthStageLabels[overallStage.stage]}
             </h2>
             <p className="mt-2 text-sm text-forest-900/55">
               {practiced.length} ideas practiced · {growthPoints} growth points
             </p>
           </div>
-          <p className="max-w-xs text-xs leading-5 text-forest-900/48">
-            Growth points mark consistent practice—not fluency. Listening and
-            speaking build the same ideas in different ways.
-          </p>
         </div>
 
         <div className="mt-8">
@@ -242,17 +234,14 @@ export function MyDanishView() {
       ) : null}
 
       <ProgressGroup
-        description="These ideas will benefit most from another kind of practice."
         items={needsAttention}
         title="Needs attention"
       />
       <ProgressGroup
-        description="You have useful evidence; keep meeting these ideas in new situations."
         items={growing}
         title="Growing"
       />
       <ProgressGroup
-        description="These ideas are becoming dependable. Revisit them occasionally."
         items={strong}
         title="Strong"
       />
@@ -260,14 +249,9 @@ export function MyDanishView() {
       {newConcepts.length > 0 ? (
         <details className="paper-panel group rounded-[24px] p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-forest-950">
-                Coming up · {newConcepts.length} new ideas
-              </p>
-              <p className="mt-1 text-xs text-forest-900/48">
-                These appear as you work through the lessons.
-              </p>
-            </div>
+            <p className="text-sm font-bold text-forest-950">
+              Coming up · {newConcepts.length} new ideas
+            </p>
             <ChevronDown
               className="text-forest-900/40 transition group-open:rotate-180"
               size={18}
@@ -286,22 +270,15 @@ export function MyDanishView() {
         </details>
       ) : null}
 
-      <p className="flex items-start gap-2 px-2 text-xs leading-5 text-forest-900/45">
-        <Info className="mt-0.5 shrink-0" size={14} />
-        Stages are evidence-based estimates. Detailed scores stay available inside
-        each practiced idea.
-      </p>
     </div>
   );
 }
 
 function ProgressGroup({
   title,
-  description,
   items,
 }: {
   title: string;
-  description: string;
   items: ModeledConcept[];
 }) {
   if (items.length === 0) {
@@ -311,10 +288,7 @@ function ProgressGroup({
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-1">
-        <div>
-          <h2 className="font-display text-3xl text-forest-950">{title}</h2>
-          <p className="mt-1 text-xs text-forest-900/48">{description}</p>
-        </div>
+        <h2 className="font-display text-3xl text-forest-950">{title}</h2>
         <span className="rounded-full bg-white/55 px-3 py-1 text-xs font-bold text-forest-900/50">
           {items.length}
         </span>
