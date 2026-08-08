@@ -1,36 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Leaf, LockKeyhole } from "lucide-react";
+import { ArrowRight, Leaf, LockKeyhole, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginScreen() {
   const router = useRouter();
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function signIn(event: React.FormEvent<HTMLFormElement>) {
+  async function authenticate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
-    const { error: signInError } = await createClient().auth.signInWithPassword({
-      email,
-      password,
-    });
+    const supabase = createClient();
+    const result =
+      mode === "sign-up"
+        ? await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signInWithPassword({ email, password });
 
-    if (signInError) {
-      setError(signInError.message);
+    if (result.error) {
+      setError(result.error.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (mode === "sign-up" && !result.data.session) {
+      setMode("sign-in");
+      setError("Account created. Sign in to continue.");
       setIsSubmitting(false);
       return;
     }
 
     router.push("/learn");
     router.refresh();
+  }
+
+  function switchMode() {
+    setMode((current) => (current === "sign-in" ? "sign-up" : "sign-in"));
+    setError(null);
   }
 
   return (
@@ -44,11 +58,11 @@ export function LoginScreen() {
         <section className="paper-panel rounded-[30px] p-7 sm:p-9">
           <div className="text-center">
             <h1 className="font-display text-4xl text-forest-950">
-              Welcome back.
+              {mode === "sign-in" ? "Welcome back." : "Create an account."}
             </h1>
           </div>
 
-          <form className="mt-7 space-y-4" onSubmit={signIn}>
+          <form className="mt-7 space-y-4" onSubmit={authenticate}>
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">
                 Email
@@ -67,8 +81,9 @@ export function LoginScreen() {
                 Password
               </span>
               <input
-                autoComplete="current-password"
+                autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
                 className="mt-2 w-full rounded-2xl border border-forest-900/12 bg-white/65 px-4 py-3.5 text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
+                minLength={6}
                 onChange={(event) => setPassword(event.target.value)}
                 required
                 type="password"
@@ -87,11 +102,30 @@ export function LoginScreen() {
               disabled={isSubmitting}
               type="submit"
             >
-              <LockKeyhole aria-hidden="true" size={17} />
-              {isSubmitting ? "Signing in…" : "Sign in"}
+              {mode === "sign-in" ? (
+                <LockKeyhole aria-hidden="true" size={17} />
+              ) : (
+                <UserPlus aria-hidden="true" size={17} />
+              )}
+              {isSubmitting
+                ? mode === "sign-in"
+                  ? "Signing in…"
+                  : "Creating account…"
+                : mode === "sign-in"
+                  ? "Sign in"
+                  : "Create account"}
               {!isSubmitting ? <ArrowRight aria-hidden="true" size={17} /> : null}
             </button>
           </form>
+
+          <button
+            className="mt-5 w-full text-center text-sm font-bold text-forest-900/62 transition hover:text-forest-950"
+            disabled={isSubmitting}
+            onClick={switchMode}
+            type="button"
+          >
+            {mode === "sign-in" ? "Create an account" : "Back to sign in"}
+          </button>
         </section>
       </div>
     </main>
