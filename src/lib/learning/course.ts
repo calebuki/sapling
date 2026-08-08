@@ -406,6 +406,32 @@ const speechClips = new Map<string, SpeechClip>([
   ] as const),
 ]);
 
+function speechClipVersion(clip: SpeechClip) {
+  const source = `${clip.voice}\0${clip.text}`;
+  let hash = 2_166_136_261;
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
 export function getSpeechClip(id: string) {
   return speechClips.get(id) ?? null;
+}
+
+export function getSpeechClips() {
+  return [...speechClips.values()];
+}
+
+export function getSpeechAudioUrl(id: string) {
+  const clip = getSpeechClip(id);
+
+  if (!clip) {
+    return null;
+  }
+
+  return `/audio/danish/${encodeURIComponent(clip.id)}.mp3?v=${speechClipVersion(clip)}`;
 }

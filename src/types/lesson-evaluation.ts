@@ -18,6 +18,7 @@ export type LessonEvaluation = {
 
 export type DanishSpeechResult = {
   recognizedText: string;
+  alternatives: string[];
   durationMs: number;
   accuracyScore: number;
   fluencyScore: number;

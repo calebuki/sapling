@@ -18,6 +18,12 @@ import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { listenSpeakItems } from "@/lib/learning/course";
 import type { ListenSpeakItem } from "@/lib/learning/course";
+import {
+  calculateBeginnerPronunciationScore,
+  calculatePhraseCoverage,
+  pronunciationAttemptQuality,
+  pronunciationBand,
+} from "@/lib/learning/speech-scoring";
 import type {
   Concept,
   LearnerConceptState,
@@ -41,6 +47,7 @@ type SpeakingResult = {
   fluencyScore: number;
   completenessScore: number;
   pronunciationScore: number;
+  rawPronunciationScore: number;
   wordDetails: PronunciationWordDetail[];
   successful: boolean;
 };
@@ -58,6 +65,16 @@ function toUnitScore(score: number | null | undefined) {
     return 0;
   }
   return Math.max(0, Math.min(1, score / 100));
+}
+
+function resultLabel(result: SpeakingResult) {
+  if (result.completenessScore < 0.8) {
+    return "Finish the whole phrase";
+  }
+  if (result.pronunciationScore < 0.7) {
+    return "Try the phrase once more";
+  }
+  return "Clear and complete";
 }
 
 function getNextRound() {
@@ -144,6 +161,8 @@ export function ListenSpeakSession() {
     useState<RecordingStatus>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [speakingResult, setSpeakingResult] = useState<SpeakingResult | null>(null);
+  const [bestSpeakingResult, setBestSpeakingResult] =
+    useState<SpeakingResult | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const listeningStartedAt = useRef<number | null>(null);
   const activeRecognizer = useRef<ActiveSpeechRecognizer | null>(null);
@@ -380,6 +399,17 @@ export function ListenSpeakSession() {
           try {
             const assessment =
               sdk.PronunciationAssessmentResult.fromResult(event.result);
+            const recognizedText = event.result.text.trim();
+            const completenessScore = calculatePhraseCoverage(
+              item.text,
+              recognizedText,
+            );
+            const fluencyScore =
+              toUnitScore(assessment.fluencyScore) * completenessScore;
+            const accuracyScore = toUnitScore(assessment.accuracyScore);
+            const rawPronunciationScore = toUnitScore(
+              assessment.pronunciationScore,
+            );
             const assessmentWords = assessment.detailResult?.Words ?? [];
             const wordDetails = assessmentWords.map((word) => ({
               word: word.Word,
@@ -389,16 +419,20 @@ export function ListenSpeakSession() {
               errorType:
                 word.PronunciationAssessment?.ErrorType ?? "Unknown",
             }));
+            const pronunciationScore = calculateBeginnerPronunciationScore({
+              accuracyScore,
+              wordDetails,
+            });
             const result: SpeakingResult = {
-              recognizedText: event.result.text.trim(),
-              accuracyScore: toUnitScore(assessment.accuracyScore),
-              fluencyScore: toUnitScore(assessment.fluencyScore),
-              completenessScore: toUnitScore(assessment.completenessScore),
-              pronunciationScore: toUnitScore(assessment.pronunciationScore),
+              recognizedText,
+              accuracyScore,
+              fluencyScore,
+              completenessScore,
+              pronunciationScore,
+              rawPronunciationScore,
               wordDetails,
               successful:
-                assessment.pronunciationScore >= 65 &&
-                assessment.completenessScore >= 70,
+                pronunciationScore >= 0.7 && completenessScore >= 0.8,
             };
 
             settled = true;
@@ -461,7 +495,14 @@ export function ListenSpeakSession() {
         return;
       }
 
-      setSpeakingResult(scored);
+      const bestResult =
+        !bestSpeakingResult ||
+        pronunciationAttemptQuality(scored) >
+          pronunciationAttemptQuality(bestSpeakingResult)
+          ? scored
+          : bestSpeakingResult;
+      setBestSpeakingResult(bestResult);
+      setSpeakingResult(bestResult);
       setPhase("result");
       void recordSpeakingAttempt({
         conceptId: concept.id,
@@ -470,6 +511,7 @@ export function ListenSpeakSession() {
         context: {
           itemId: item.id,
           provider: "azure-speech",
+          rawPronunciationScore: scored.rawPronunciationScore,
           locale: "da-DK",
           audioRetained: false,
           source: "listen-speak",
@@ -527,6 +569,7 @@ export function ListenSpeakSession() {
     setSelectedMeaning(null);
     setPlaybackCount(0);
     setSpeakingResult(null);
+    setBestSpeakingResult(null);
     setLiveTranscript("");
     setActionError(null);
     listeningStartedAt.current = null;
@@ -539,6 +582,7 @@ export function ListenSpeakSession() {
     setSelectedMeaning(null);
     setPlaybackCount(0);
     setSpeakingResult(null);
+    setBestSpeakingResult(null);
     setLiveTranscript("");
     setActionError(null);
     listeningStartedAt.current = null;
@@ -738,24 +782,34 @@ export function ListenSpeakSession() {
               ) : (
                 <Sparkles aria-hidden="true" size={16} />
               )}
-              {speakingResult.successful ? "Clear and complete" : "Good evidence collected"}
+              {resultLabel(speakingResult)}
             </div>
             <h2 className="mt-3 font-display text-4xl leading-tight text-forest-950">
               {item.text}
             </h2>
-            <p className="mt-4 text-sm text-forest-900/55">
-              Azure heard: <span className="font-semibold text-forest-950">{speakingResult.recognizedText || "—"}</span>
+            <p className="mt-4 text-base leading-7 text-forest-900/72">
+              Best attempt: <span className="font-semibold text-forest-950">{speakingResult.recognizedText || "—"}</span>
             </p>
 
             <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-2xl bg-white/60 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest-700/68">
+                  Pronunciation
+                </p>
+                <p className="mt-2 text-xl font-bold text-forest-950">
+                  {pronunciationBand(speakingResult.pronunciationScore)}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-forest-900/55">
+                  Best {Math.round(speakingResult.pronunciationScore * 100)}
+                </p>
+              </div>
               {[
-                ["Pronunciation", speakingResult.pronunciationScore],
                 ["Accuracy", speakingResult.accuracyScore],
-                ["Complete", speakingResult.completenessScore],
+                ["Completeness", speakingResult.completenessScore],
                 ["Fluency", speakingResult.fluencyScore],
               ].map(([label, score]) => (
                 <div className="rounded-2xl bg-white/60 p-4" key={label as string}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-forest-700/48">
+                  <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest-700/68">
                     {label as string}
                   </p>
                   <p className="mt-1 font-display text-3xl text-forest-950">
@@ -767,13 +821,13 @@ export function ListenSpeakSession() {
 
             {speakingResult.wordDetails.length > 0 ? (
               <div className="mt-6 rounded-[22px] bg-forest-900/[0.045] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/52">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/68">
                   Word feedback
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {speakingResult.wordDetails.map((word, index) => (
                     <span
-                      className={`rounded-xl px-3 py-2 text-sm font-semibold ${
+                      className={`rounded-xl px-3 py-2 text-base font-semibold ${
                         word.accuracyScore >= 0.7 && word.errorType === "None"
                           ? "bg-moss-400/15 text-forest-900"
                           : "bg-amber-400/16 text-amber-500"
@@ -797,14 +851,24 @@ export function ListenSpeakSession() {
                 <RotateCcw aria-hidden="true" size={17} />
                 Try speaking again
               </button>
-              <button
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                onClick={moveForward}
-                type="button"
-              >
-                Continue
-                <ArrowRight aria-hidden="true" size={17} />
-              </button>
+              {speakingResult.successful ? (
+                <button
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
+                  onClick={moveForward}
+                  type="button"
+                >
+                  Continue
+                  <ArrowRight aria-hidden="true" size={17} />
+                </button>
+              ) : (
+                <button
+                  className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-forest-900/62 transition hover:bg-white/70"
+                  onClick={moveForward}
+                  type="button"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           </div>
         ) : null}
