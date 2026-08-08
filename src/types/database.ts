@@ -165,9 +165,35 @@ export interface Database {
         };
         Returns: number;
       };
+      record_listening_attempt: {
+        Args: {
+          p_concept_id: string;
+          p_successful: boolean;
+          p_score: number;
+          p_latency_ms: number;
+          p_speaker_id: string;
+          p_playback_count: number;
+          p_context?: Json;
+        };
+        Returns: number;
+      };
+      record_speaking_attempt: {
+        Args: {
+          p_concept_id: string;
+          p_reference_text: string;
+          p_recognized_text: string;
+          p_accuracy_score: number;
+          p_fluency_score: number;
+          p_completeness_score: number;
+          p_pronunciation_score: number;
+          p_successful: boolean;
+          p_word_details?: Json;
+          p_context?: Json;
+        };
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
 }
-
