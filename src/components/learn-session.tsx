@@ -7,10 +7,11 @@ import {
   Circle,
   CircleAlert,
   CircleHelp,
+  LockKeyhole,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
@@ -36,7 +37,8 @@ export function LearnSession() {
     recordRepair,
   } = useLearningModel();
   const [lessonIndex, setLessonIndex] = useState(0);
-  const [itemIndex, setItemIndex] = useState(0);
+  const [exerciseQueue, setExerciseQueue] = useState<number[]>([0, 1, 2]);
+  const [queuePosition, setQueuePosition] = useState(0);
   const [phase, setPhase] = useState<Phase>("attempt");
   const [response, setResponse] = useState("");
   const [submittedResponse, setSubmittedResponse] = useState("");
@@ -47,17 +49,50 @@ export function LearnSession() {
   const startedAt = useRef<number | null>(null);
   const attemptLatencyMs = useRef(0);
 
-  const stateByConcept = new Map(
-    states.map((state) => [state.conceptId, state]),
+  const stateByConcept = useMemo(
+    () => new Map(states.map((state) => [state.conceptId, state])),
+    [states],
   );
-  const conceptBySlug = new Map(concepts.map((concept) => [concept.slug, concept]));
-  const completedLessons = lessons.map((lesson) =>
-    lesson.exercises.every((exercise) => {
-      const concept = conceptBySlug.get(exercise.conceptSlug);
-      return concept
-        ? (stateByConcept.get(concept.id)?.exposureCount ?? 0) > 0
-        : false;
-    }),
+  const conceptBySlug = useMemo(
+    () => new Map(concepts.map((concept) => [concept.slug, concept])),
+    [concepts],
+  );
+  const masteredExerciseCounts = lessons.map(
+    (lesson) =>
+      lesson.exercises.filter((exercise) => {
+        const concept = conceptBySlug.get(exercise.conceptSlug);
+        return concept
+          ? (stateByConcept.get(concept.id)?.successfulRetrievalCount ?? 0) > 0
+          : false;
+      }).length,
+  );
+  const completedLessons = lessons.map(
+    (lesson, index) => masteredExerciseCounts[index] === lesson.exercises.length,
+  );
+  const firstIncompleteLesson = completedLessons.findIndex(
+    (complete) => !complete,
+  );
+  const unlockedLessonIndex =
+    firstIncompleteLesson === -1 ? lessons.length - 1 : firstIncompleteLesson;
+
+  const getPracticeQueue = useCallback(
+    (index: number) => {
+      const targetLesson = lessons[index];
+      const unfinished = targetLesson.exercises.flatMap(
+        (exercise, exerciseIndex) => {
+          const concept = conceptBySlug.get(exercise.conceptSlug);
+          const mastered = concept
+            ? (stateByConcept.get(concept.id)?.successfulRetrievalCount ?? 0) > 0
+            : false;
+          return mastered ? [] : [exerciseIndex];
+        },
+      );
+
+      return unfinished.length > 0
+        ? unfinished
+        : targetLesson.exercises.map((_, exerciseIndex) => exerciseIndex);
+    },
+    [conceptBySlug, stateByConcept],
   );
 
   useEffect(() => {
@@ -65,17 +100,21 @@ export function LearnSession() {
       return;
     }
 
-    const firstIncomplete = completedLessons.findIndex((complete) => !complete);
-    setLessonIndex(firstIncomplete === -1 ? lessons.length - 1 : firstIncomplete);
+    const startingLesson =
+      firstIncompleteLesson === -1 ? lessons.length - 1 : firstIncompleteLesson;
+    setLessonIndex(startingLesson);
+    setExerciseQueue(getPracticeQueue(startingLesson));
+    setQueuePosition(0);
     didChooseStartingLesson.current = true;
-  }, [completedLessons, isLoading]);
+  }, [firstIncompleteLesson, getPracticeQueue, isLoading]);
 
   const lesson = lessons[lessonIndex];
-  const exercise = lesson?.exercises[itemIndex];
+  const exerciseIndex = exerciseQueue[queuePosition] ?? 0;
+  const exercise = lesson?.exercises[exerciseIndex];
   const concept = exercise ? conceptBySlug.get(exercise.conceptSlug) : undefined;
 
   function resetExercise() {
-    setItemIndex(0);
+    setQueuePosition(0);
     setPhase("attempt");
     setResponse("");
     setSubmittedResponse("");
@@ -86,16 +125,21 @@ export function LearnSession() {
   }
 
   function chooseLesson(index: number) {
+    if (index > unlockedLessonIndex) {
+      return;
+    }
+
     setLessonIndex(index);
+    setExerciseQueue(getPracticeQueue(index));
     resetExercise();
   }
 
   function moveForward() {
-    if (!lesson || itemIndex === lesson.exercises.length - 1) {
+    if (!lesson || queuePosition === exerciseQueue.length - 1) {
       setPhase("complete");
       return;
     }
-    setItemIndex((current) => current + 1);
+    setQueuePosition((current) => current + 1);
     setPhase("attempt");
     setResponse("");
     setSubmittedResponse("");
@@ -233,27 +277,37 @@ export function LearnSession() {
   }
 
   if (phase === "complete" && lesson) {
-    const hasNextLesson = lessonIndex < lessons.length - 1;
+    const lessonMastered = completedLessons[lessonIndex];
+    const remainingIdeas =
+      lesson.exercises.length - masteredExerciseCounts[lessonIndex];
+    const hasNextLesson = lessonMastered && lessonIndex < lessons.length - 1;
     return (
       <div className="space-y-5">
         <LessonRail
           completedLessons={completedLessons}
           lessonIndex={lessonIndex}
+          masteredExerciseCounts={masteredExerciseCounts}
           onChoose={chooseLesson}
+          unlockedLessonIndex={unlockedLessonIndex}
         />
         <div className="paper-panel soft-enter rounded-[30px] p-7 sm:p-10">
           <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/20 text-forest-800">
             <Sparkles aria-hidden="true" size={25} />
           </div>
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.2em] text-forest-700/55">
-            Lesson {lesson.number} complete
+            {lessonMastered
+              ? `Lesson ${lesson.number} complete`
+              : "Your next review is ready"}
           </p>
           <h2 className="mt-2 max-w-xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
-            {lesson.title} has taken root.
+            {lessonMastered
+              ? `${lesson.title} has taken root.`
+              : "Sapling found what needs another pass."}
           </h2>
           <p className="mt-4 max-w-xl text-sm leading-6 text-forest-900/60">
-            You practiced all three ideas. Hearing and saying them in Listen &amp;
-            Speak will strengthen a different part of your Danish.
+            {lessonMastered
+              ? "Every idea in this lesson has one successful retrieval. The next lesson is now unlocked."
+              : `${remainingIdeas} ${remainingIdeas === 1 ? "idea needs" : "ideas need"} a successful retrieval before the next lesson unlocks. Your next round includes only those ideas.`}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {hasNextLesson ? (
@@ -266,14 +320,25 @@ export function LearnSession() {
                 <ArrowRight aria-hidden="true" size={17} />
               </button>
             ) : null}
-            <button
-              className="inline-flex items-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900 transition hover:bg-white"
-              onClick={resetExercise}
-              type="button"
-            >
-              <RotateCcw aria-hidden="true" size={17} />
-              Practice again
-            </button>
+            {!lessonMastered ? (
+              <button
+                className="inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
+                onClick={() => chooseLesson(lessonIndex)}
+                type="button"
+              >
+                <RotateCcw aria-hidden="true" size={17} />
+                Review {remainingIdeas === 1 ? "that idea" : "those ideas"}
+              </button>
+            ) : (
+              <button
+                className="inline-flex items-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900 transition hover:bg-white"
+                onClick={() => chooseLesson(lessonIndex)}
+                type="button"
+              >
+                <RotateCcw aria-hidden="true" size={17} />
+                Practice this lesson
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -294,8 +359,8 @@ export function LearnSession() {
   }
 
   const progress =
-    ((itemIndex + (phase === "attempt" ? 0 : 0.45)) /
-      lesson.exercises.length) *
+    ((queuePosition + (phase === "attempt" ? 0 : 0.45)) /
+      exerciseQueue.length) *
     100;
   const exactTextMatch =
     normalize(submittedResponse) === normalize(exercise.expected);
@@ -305,7 +370,9 @@ export function LearnSession() {
       <LessonRail
         completedLessons={completedLessons}
         lessonIndex={lessonIndex}
+        masteredExerciseCounts={masteredExerciseCounts}
         onChoose={chooseLesson}
+        unlockedLessonIndex={unlockedLessonIndex}
       />
       <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
         <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
@@ -314,7 +381,7 @@ export function LearnSession() {
               Lesson {lesson.number} · {lesson.title}
             </span>
             <span>
-              {itemIndex + 1} of {lesson.exercises.length}
+              {queuePosition + 1} of {exerciseQueue.length} in this focus
             </span>
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
@@ -518,11 +585,15 @@ export function LearnSession() {
 function LessonRail({
   completedLessons,
   lessonIndex,
+  masteredExerciseCounts,
   onChoose,
+  unlockedLessonIndex,
 }: {
   completedLessons: boolean[];
   lessonIndex: number;
+  masteredExerciseCounts: number[];
   onChoose: (index: number) => void;
+  unlockedLessonIndex: number;
 }) {
   return (
     <div className="paper-panel overflow-x-auto rounded-[24px] p-3">
@@ -530,28 +601,51 @@ function LessonRail({
         {lessons.map((lesson, index) => {
           const active = index === lessonIndex;
           const complete = completedLessons[index];
-          const next = !complete && completedLessons.slice(0, index).every(Boolean);
+          const locked = index > unlockedLessonIndex;
+          const next = index === unlockedLessonIndex && !complete;
           return (
             <button
               aria-current={active ? "step" : undefined}
+              aria-label={
+                locked
+                  ? `${lesson.title} locked. Complete lesson ${index} first.`
+                  : `${lesson.title}, ${masteredExerciseCounts[index]} of ${lesson.exercises.length} ideas retrieved`
+              }
               className={`flex items-center gap-2 rounded-2xl px-4 py-3 text-left text-xs font-bold transition ${
                 active
                   ? "bg-forest-900 text-cream-50"
-                  : "bg-white/45 text-forest-900/62 hover:bg-white/75"
+                  : locked
+                    ? "cursor-not-allowed bg-forest-900/[0.035] text-forest-900/30"
+                    : "bg-white/45 text-forest-900/62 hover:bg-white/75"
               }`}
+              disabled={locked}
               key={lesson.id}
               onClick={() => onChoose(index)}
+              title={
+                locked
+                  ? `Complete ${lessons[index - 1]?.title ?? "the prior lesson"} to unlock this lesson.`
+                  : undefined
+              }
               type="button"
             >
               {complete ? (
                 <CheckCircle2 aria-hidden="true" size={16} />
               ) : next ? (
                 <Sparkles aria-hidden="true" size={16} />
+              ) : locked ? (
+                <LockKeyhole aria-hidden="true" size={15} />
               ) : (
                 <Circle aria-hidden="true" size={15} />
               )}
-              <span>
-                {lesson.number}. {lesson.title}
+              <span className="flex items-center gap-2">
+                <span>
+                  {lesson.number}. {lesson.title}
+                </span>
+                {!locked ? (
+                  <span className={active ? "text-cream-50/55" : "text-forest-900/35"}>
+                    {masteredExerciseCounts[index]}/{lesson.exercises.length}
+                  </span>
+                ) : null}
               </span>
             </button>
           );
