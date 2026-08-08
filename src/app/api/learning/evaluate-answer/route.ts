@@ -125,10 +125,12 @@ Give kind, concrete feedback in English. Keep the summary to one short sentence 
       prompt: JSON.stringify({
         lesson: lesson.title,
         activity: exercise.eyebrow,
+        learningMode: exercise.mode,
         prompt: exercise.prompt,
         targetConcept: exercise.conceptSlug,
         exampleAnswer: exercise.expected,
         teachingNote: exercise.note,
+        scenarioSupport: lesson.support ?? null,
         learnerTranscript: parsed.data.transcript,
         alternateRecognitionCandidates: parsed.data.alternatives ?? [],
       }),
