@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronDown,
   Circle,
   CircleAlert,
   CircleHelp,
@@ -11,7 +12,6 @@ import {
   LockKeyhole,
   Mic,
   RotateCcw,
-  ShieldCheck,
   Sparkles,
   Square,
 } from "lucide-react";
@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { useDanishSpeechRecognition } from "@/hooks/use-danish-speech-recognition";
-import { lessons } from "@/lib/learning/course";
+import { lessons, type LessonSupport } from "@/lib/learning/course";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
@@ -280,16 +280,16 @@ export function LearnSession() {
           targetText: evaluationBody.correctedDanish,
           context: attemptContext,
         });
-      } else {
-        await recordRetrievalAttempt({
-          conceptId: concept.id,
-          responseText: spoken.recognizedText,
-          expectedResponse: exercise.expected,
-          successful: evaluationBody.successful,
-          latencyMs: attemptLatencyMs.current,
-          context: attemptContext,
-        });
       }
+
+      await recordRetrievalAttempt({
+        conceptId: concept.id,
+        responseText: spoken.recognizedText,
+        expectedResponse: exercise.expected,
+        successful: evaluationBody.successful,
+        latencyMs: attemptLatencyMs.current,
+        context: attemptContext,
+      });
 
       setEvaluation(evaluationBody);
       setPhase("feedback");
@@ -402,7 +402,10 @@ export function LearnSession() {
     const lessonMastered = completedLessons[lessonIndex];
     const remainingIdeas =
       lesson.exercises.length - masteredExerciseCounts[lessonIndex];
-    const hasNextLesson = lessonMastered && lessonIndex < lessons.length - 1;
+    const nextLessonIndex = completedLessons.findIndex(
+      (complete, index) => index > lessonIndex && !complete,
+    );
+    const hasNextLesson = lessonMastered && nextLessonIndex !== -1;
     return (
       <div className="space-y-5">
         <LessonRail
@@ -425,10 +428,10 @@ export function LearnSession() {
             {hasNextLesson ? (
               <button
                 className="inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                onClick={() => chooseLesson(lessonIndex + 1)}
+                onClick={() => chooseLesson(nextLessonIndex)}
                 type="button"
               >
-                Start lesson {lesson.number + 1}
+                Start lesson {lessons[nextLessonIndex].number}
                 <ArrowRight aria-hidden="true" size={17} />
               </button>
             ) : null}
@@ -461,11 +464,8 @@ export function LearnSession() {
     return (
       <div className="paper-panel rounded-[30px] p-8">
         <CircleAlert className="text-clay-400" size={24} />
-        <h2 className="mt-4 font-display text-3xl">The lesson catalog is updating.</h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-forest-900/60">
-          Apply Sapling’s latest Supabase migration to unlock the new A0–A1
-          lessons.
-        </p>
+        <h2 className="mt-4 font-display text-3xl">Lessons are updating.</h2>
+        <p className="mt-2 text-sm text-forest-900/60">Try again soon.</p>
       </div>
     );
   }
@@ -497,15 +497,44 @@ export function LearnSession() {
         </div>
 
         <div className="p-6 sm:p-8 lg:p-10">
+          {lesson.support ? (
+            <div className="mb-6 lg:hidden">
+              <ScenarioSupportPanel compact support={lesson.support} />
+            </div>
+          ) : null}
+          <div
+            className={
+              lesson.support
+                ? "grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]"
+                : undefined
+            }
+          >
+            <div className="min-w-0">
           {phase === "attempt" ? (
             <div>
-              <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
-                {exercise.prompt}
-              </h2>
+              {exercise.mode === "repeat" ? (
+                <div>
+                  <h2
+                    className="font-display text-4xl leading-tight text-forest-950 sm:text-5xl"
+                    lang="da"
+                  >
+                    {exercise.expected}
+                  </h2>
+                  <p className="mt-2 text-sm font-semibold text-forest-900/52">
+                    {exercise.prompt}
+                  </p>
+                </div>
+              ) : (
+                <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
+                  {exercise.prompt}
+                </h2>
+              )}
               <div className="mt-5">
                 <DanishAudioButton
                   clipId={exercise.audioId}
-                  label="Hear an example"
+                  label={
+                    exercise.mode === "repeat" ? "Hear it" : "Hear an example"
+                  }
                   onPlay={() => setUsedAudioHint(true)}
                   showSlowControl
                 />
@@ -544,10 +573,6 @@ export function LearnSession() {
                   </div>
                 </div>
               </div>
-              <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-forest-900/62">
-                <ShieldCheck className="shrink-0 text-moss-500" size={15} />
-                Audio is discarded after scoring.
-              </p>
               <div className="mt-5 grid gap-3 sm:flex">
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
@@ -803,9 +828,102 @@ export function LearnSession() {
               {actionError ?? modelError}
             </p>
           ) : null}
+            </div>
+            {lesson.support ? (
+              <div className="hidden lg:block">
+                <ScenarioSupportPanel support={lesson.support} />
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ScenarioSupportPanel({
+  compact = false,
+  support,
+}: {
+  compact?: boolean;
+  support: LessonSupport;
+}) {
+  if (compact) {
+    return (
+      <details className="group rounded-2xl border border-forest-900/10 bg-white/55">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-forest-950">
+          Words &amp; ideas
+          <ChevronDown
+            aria-hidden="true"
+            className="transition group-open:rotate-180"
+            size={17}
+          />
+        </summary>
+        <div className="border-t border-forest-900/8 p-4">
+          <ScenarioSupportContent support={support} />
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <aside className="sticky top-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
+      <ScenarioSupportContent support={support} />
+    </aside>
+  );
+}
+
+function ScenarioSupportContent({ support }: { support: LessonSupport }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/58">
+        {support.title}
+      </p>
+      {support.idea ? (
+        <p className="mt-2 text-sm leading-6 text-forest-900/62">{support.idea}</p>
+      ) : null}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {support.words.map((word) => (
+          <ScenarioWord key={`${word.danish}-${word.english}`} word={word} />
+        ))}
+      </div>
+      {support.starters?.length ? (
+        <div className="mt-5 space-y-2 border-t border-forest-900/8 pt-4">
+          {support.starters.map((starter) => (
+            <ScenarioWord
+              key={`${starter.danish}-${starter.english}`}
+              wide
+              word={starter}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ScenarioWord({
+  wide = false,
+  word,
+}: {
+  wide?: boolean;
+  word: LessonSupport["words"][number];
+}) {
+  return (
+    <button
+      aria-label={`${word.danish}: ${word.english}`}
+      className={`group/word rounded-xl bg-forest-900/[0.045] px-3 py-2 text-left outline-none transition hover:bg-moss-400/12 focus-visible:ring-2 focus-visible:ring-moss-500/50 ${
+        wide ? "block w-full" : "min-w-0"
+      }`}
+      type="button"
+    >
+      <span className="block truncate text-sm font-bold text-forest-950" lang="da">
+        {word.danish}
+      </span>
+      <span className="block truncate text-xs text-forest-900/0 transition group-hover/word:text-forest-900/52 group-focus/word:text-forest-900/52">
+        {word.english}
+      </span>
+    </button>
   );
 }
 
