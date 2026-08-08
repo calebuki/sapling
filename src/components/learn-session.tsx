@@ -35,7 +35,6 @@ import type {
 type Phase = "attempt" | "feedback" | "reveal" | "complete";
 
 const GUIDED_PRONUNCIATION_TARGET = 0.7;
-const GUIDED_ATTEMPTS_BEFORE_SKIP = 3;
 
 export function LearnSession() {
   const {
@@ -48,6 +47,8 @@ export function LearnSession() {
     recordSpeakingAttempt,
   } = useLearningModel();
   const [lessonIndex, setLessonIndex] = useState(0);
+  const [sessionUnlockedLessonIndex, setSessionUnlockedLessonIndex] =
+    useState(0);
   const [exerciseQueue, setExerciseQueue] = useState<number[]>([0, 1, 2]);
   const [queuePosition, setQueuePosition] = useState(0);
   const [phase, setPhase] = useState<Phase>("attempt");
@@ -57,7 +58,6 @@ export function LearnSession() {
   );
   const [revealSpeechResult, setRevealSpeechResult] =
     useState<DanishSpeechResult | null>(null);
-  const [revealAttemptCount, setRevealAttemptCount] = useState(0);
   const [usedAudioHint, setUsedAudioHint] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -98,6 +98,10 @@ export function LearnSession() {
   );
   const unlockedLessonIndex =
     firstIncompleteLesson === -1 ? lessons.length - 1 : firstIncompleteLesson;
+  const availableLessonIndex = Math.max(
+    unlockedLessonIndex,
+    sessionUnlockedLessonIndex,
+  );
 
   const getPracticeQueue = useCallback(
     (index: number) => {
@@ -143,7 +147,6 @@ export function LearnSession() {
     setEvaluation(null);
     setSpeechResult(null);
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     setUsedAudioHint(false);
     resetTranscript();
     setActionError(null);
@@ -152,7 +155,7 @@ export function LearnSession() {
   }
 
   function chooseLesson(index: number) {
-    if (index > unlockedLessonIndex) {
+    if (index > availableLessonIndex) {
       return;
     }
 
@@ -163,6 +166,9 @@ export function LearnSession() {
 
   function moveForward() {
     if (!lesson || queuePosition === exerciseQueue.length - 1) {
+      setSessionUnlockedLessonIndex((current) =>
+        Math.max(current, Math.min(lessonIndex + 1, lessons.length - 1)),
+      );
       setPhase("complete");
       return;
     }
@@ -171,7 +177,6 @@ export function LearnSession() {
     setEvaluation(null);
     setSpeechResult(null);
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     setUsedAudioHint(false);
     resetTranscript();
     startedAt.current = null;
@@ -206,7 +211,6 @@ export function LearnSession() {
       });
       resetTranscript();
       setRevealSpeechResult(null);
-      setRevealAttemptCount(0);
       setPhase("reveal");
     } catch (saveError) {
       setActionError(
@@ -316,7 +320,6 @@ export function LearnSession() {
 
   function showAnswer() {
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     resetTranscript();
     setActionError(null);
     setPhase("reveal");
@@ -361,7 +364,6 @@ export function LearnSession() {
           ? scoredAttempt
           : current,
       );
-      setRevealAttemptCount((current) => current + 1);
       setIsSaving(true);
 
       await recordSpeakingAttempt({
@@ -402,10 +404,8 @@ export function LearnSession() {
     const lessonMastered = completedLessons[lessonIndex];
     const remainingIdeas =
       lesson.exercises.length - masteredExerciseCounts[lessonIndex];
-    const nextLessonIndex = completedLessons.findIndex(
-      (complete, index) => index > lessonIndex && !complete,
-    );
-    const hasNextLesson = lessonMastered && nextLessonIndex !== -1;
+    const nextLessonIndex = lessonIndex + 1;
+    const hasNextLesson = nextLessonIndex < lessons.length;
     return (
       <div className="space-y-5">
         <LessonRail
@@ -413,7 +413,7 @@ export function LearnSession() {
           lessonIndex={lessonIndex}
           masteredExerciseCounts={masteredExerciseCounts}
           onChoose={chooseLesson}
-          unlockedLessonIndex={unlockedLessonIndex}
+          unlockedLessonIndex={availableLessonIndex}
         />
         <div className="paper-panel soft-enter rounded-[30px] p-7 sm:p-10">
           <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/20 text-forest-800">
@@ -481,7 +481,7 @@ export function LearnSession() {
         lessonIndex={lessonIndex}
         masteredExerciseCounts={masteredExerciseCounts}
         onChoose={chooseLesson}
-        unlockedLessonIndex={unlockedLessonIndex}
+        unlockedLessonIndex={availableLessonIndex}
       />
       <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
         <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
@@ -610,6 +610,15 @@ export function LearnSession() {
                           ? "Finishing…"
                           : "Start speaking"}
                 </button>
+                <button
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold text-forest-900/65 transition enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  disabled={isSaving || isRecording}
+                  onClick={moveForward}
+                  type="button"
+                >
+                  Move on
+                  <ArrowRight aria-hidden="true" size={17} />
+                </button>
               </div>
             </div>
           ) : null}
@@ -713,15 +722,15 @@ export function LearnSession() {
                       Continue
                       <ArrowRight aria-hidden="true" size={17} />
                     </button>
-                  ) : revealAttemptCount >= GUIDED_ATTEMPTS_BEFORE_SKIP ? (
+                  ) : (
                     <button
                       className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
                       onClick={moveForward}
                       type="button"
                     >
-                      Skip for now
+                      Move on
                     </button>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>
@@ -809,14 +818,24 @@ export function LearnSession() {
                     <ArrowRight aria-hidden="true" size={17} />
                   </button>
                 ) : (
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                    onClick={showAnswer}
-                    type="button"
-                  >
-                    Show answer
-                    <ArrowRight aria-hidden="true" size={17} />
-                  </button>
+                  <>
+                    <button
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
+                      onClick={showAnswer}
+                      type="button"
+                    >
+                      Show answer
+                      <ArrowRight aria-hidden="true" size={17} />
+                    </button>
+                    <button
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
+                      onClick={moveForward}
+                      type="button"
+                    >
+                      Move on
+                      <ArrowRight aria-hidden="true" size={17} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>

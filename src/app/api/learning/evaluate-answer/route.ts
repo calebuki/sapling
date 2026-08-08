@@ -30,6 +30,21 @@ const evaluationSchema = z.object({
     .max(2),
 });
 
+const successfulFallbackSummaries = [
+  "That carries the lesson idea clearly.",
+  "Nice — your answer gets the key idea across.",
+  "That works — your meaning comes through clearly.",
+  "Good answer — you communicated the target idea.",
+  "Yes — that expresses the lesson idea well.",
+  "You got it — that answer fits the lesson goal.",
+] as const;
+
+function successfulFallbackSummary() {
+  return successfulFallbackSummaries[
+    Math.floor(Math.random() * successfulFallbackSummaries.length)
+  ];
+}
+
 function normalize(value: string) {
   return value
     .toLocaleLowerCase("da")
@@ -64,7 +79,7 @@ function fallbackEvaluation(
     meaningScore: score,
     grammarScore: score,
     vocabularyScore: score,
-    summary: "That carries the lesson idea clearly.",
+    summary: successfulFallbackSummary(),
     correctedDanish: transcript,
     tips: [],
     source: "fallback",
