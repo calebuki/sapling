@@ -35,7 +35,6 @@ import type {
 type Phase = "attempt" | "feedback" | "reveal" | "complete";
 
 const GUIDED_PRONUNCIATION_TARGET = 0.7;
-const GUIDED_ATTEMPTS_BEFORE_SKIP = 3;
 
 export function LearnSession() {
   const {
@@ -57,7 +56,6 @@ export function LearnSession() {
   );
   const [revealSpeechResult, setRevealSpeechResult] =
     useState<DanishSpeechResult | null>(null);
-  const [revealAttemptCount, setRevealAttemptCount] = useState(0);
   const [usedAudioHint, setUsedAudioHint] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -143,7 +141,6 @@ export function LearnSession() {
     setEvaluation(null);
     setSpeechResult(null);
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     setUsedAudioHint(false);
     resetTranscript();
     setActionError(null);
@@ -171,7 +168,6 @@ export function LearnSession() {
     setEvaluation(null);
     setSpeechResult(null);
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     setUsedAudioHint(false);
     resetTranscript();
     startedAt.current = null;
@@ -206,7 +202,6 @@ export function LearnSession() {
       });
       resetTranscript();
       setRevealSpeechResult(null);
-      setRevealAttemptCount(0);
       setPhase("reveal");
     } catch (saveError) {
       setActionError(
@@ -316,7 +311,6 @@ export function LearnSession() {
 
   function showAnswer() {
     setRevealSpeechResult(null);
-    setRevealAttemptCount(0);
     resetTranscript();
     setActionError(null);
     setPhase("reveal");
@@ -361,7 +355,6 @@ export function LearnSession() {
           ? scoredAttempt
           : current,
       );
-      setRevealAttemptCount((current) => current + 1);
       setIsSaving(true);
 
       await recordSpeakingAttempt({
@@ -713,15 +706,15 @@ export function LearnSession() {
                       Continue
                       <ArrowRight aria-hidden="true" size={17} />
                     </button>
-                  ) : revealAttemptCount >= GUIDED_ATTEMPTS_BEFORE_SKIP ? (
+                  ) : (
                     <button
                       className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
                       onClick={moveForward}
                       type="button"
                     >
-                      Skip for now
+                      Move on
                     </button>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>
