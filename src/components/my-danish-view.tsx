@@ -32,10 +32,10 @@ const growthPath: Array<{
   Icon: typeof Sprout;
 }> = [
   { stage: "seed", percent: 0, Icon: Leaf },
-  { stage: "sprout", percent: 1, Icon: Sprout },
-  { stage: "growing", percent: 10, Icon: Sprout },
-  { stage: "established", percent: 35, Icon: TreePine },
-  { stage: "automatic", percent: 70, Icon: TreePine },
+  { stage: "sprout", percent: 10, Icon: Sprout },
+  { stage: "growing", percent: 25, Icon: Sprout },
+  { stage: "established", percent: 50, Icon: TreePine },
+  { stage: "automatic", percent: 75, Icon: TreePine },
 ];
 
 const nearFluencyTarget = 10_000;
