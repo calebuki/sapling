@@ -483,8 +483,8 @@ export function LearnSession() {
         onChoose={chooseLesson}
         unlockedLessonIndex={availableLessonIndex}
       />
-      <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
-        <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
+      <div className="paper-panel soft-enter overflow-hidden rounded-[24px]">
+        <div className="border-b border-forest-900/8 px-6 py-4 sm:px-8 sm:py-5">
           <div className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/65">
             Lesson {lesson.number} · {lesson.title}
           </div>
@@ -496,7 +496,7 @@ export function LearnSession() {
           </div>
         </div>
 
-        <div className="p-6 sm:p-8 lg:p-10">
+        <div className="p-5 sm:p-8 lg:p-10">
           {lesson.support ? (
             <div className="mb-6 lg:hidden">
               <ScenarioSupportPanel compact support={lesson.support} />
@@ -515,7 +515,7 @@ export function LearnSession() {
               {exercise.mode === "repeat" ? (
                 <div>
                   <h2
-                    className="font-display text-4xl leading-tight text-forest-950 sm:text-5xl"
+                    className="font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl"
                     lang="da"
                   >
                     {exercise.expected}
@@ -525,11 +525,11 @@ export function LearnSession() {
                   </p>
                 </div>
               ) : (
-                <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
+                <h2 className="max-w-3xl font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
                   {exercise.prompt}
                 </h2>
               )}
-              <div className="mt-5">
+              <div className="mt-4 sm:mt-5">
                 <DanishAudioButton
                   clipId={exercise.audioId}
                   label={
@@ -541,7 +541,7 @@ export function LearnSession() {
               </div>
               <div
                 aria-live="polite"
-                className={`mt-8 rounded-[22px] border p-5 ${
+                className={`mt-6 rounded-[18px] border p-5 sm:mt-8 ${
                   isRecording || isSaving
                     ? "border-moss-500/25 bg-moss-400/10"
                     : "border-forest-900/10 bg-white/55"
@@ -575,7 +575,7 @@ export function LearnSession() {
               </div>
               <div className="mt-5 grid gap-3 sm:flex">
                 <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-forest-900/14 bg-white/75 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
                   disabled={isSaving || isRecording}
                   onClick={markNotSure}
                   type="button"
@@ -584,7 +584,7 @@ export function LearnSession() {
                   Not sure
                 </button>
                 <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3.5 text-sm font-extrabold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
                   disabled={isSaving || recordingStatus === "starting" || recordingStatus === "stopping"}
                   onClick={
                     recordingStatus === "listening"
@@ -611,7 +611,7 @@ export function LearnSession() {
                           : "Start speaking"}
                 </button>
                 <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold text-forest-900/65 transition enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] px-5 py-3.5 text-sm font-bold text-forest-900/62 transition enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-45 sm:ml-auto sm:w-auto"
                   disabled={isSaving || isRecording}
                   onClick={moveForward}
                   type="button"
@@ -960,8 +960,8 @@ function LessonRail({
   unlockedLessonIndex: number;
 }) {
   return (
-    <div className="paper-panel overflow-x-auto rounded-[24px] p-3">
-      <div className="flex min-w-max gap-2">
+    <div className="paper-panel scrollbar-hidden overflow-x-auto rounded-[18px] p-2.5 [scroll-snap-type:x_mandatory]">
+      <div className="flex min-w-max gap-1.5">
         {lessons.map((lesson, index) => {
           const active = index === lessonIndex;
           const complete = completedLessons[index];
@@ -975,12 +975,12 @@ function LessonRail({
                   ? `${lesson.title} locked. Complete lesson ${index} first.`
                   : `${lesson.title}, ${masteredExerciseCounts[index]} of ${lesson.exercises.length} ideas retrieved`
               }
-              className={`flex items-center gap-2 rounded-2xl px-4 py-3 text-left text-xs font-bold transition ${
+              className={`flex min-w-[9.5rem] snap-start items-center gap-2 rounded-[13px] px-3.5 py-3 text-left text-xs font-bold transition ${
                 active
                   ? "bg-forest-900 text-cream-50"
                   : locked
-                    ? "cursor-not-allowed bg-forest-900/[0.035] text-forest-900/30"
-                    : "bg-white/45 text-forest-900/62 hover:bg-white/75"
+                    ? "cursor-not-allowed bg-forest-900/[0.035] text-forest-900/38"
+                    : "bg-white/48 text-forest-900/68 hover:bg-white/82"
               }`}
               disabled={locked}
               key={lesson.id}

@@ -55,9 +55,10 @@ export function LoginScreen() {
             <Leaf aria-hidden="true" size={25} />
           </span>
         </div>
-        <section className="paper-panel rounded-[30px] p-7 sm:p-9">
+        <section className="paper-panel rounded-[24px] p-7 sm:p-9">
           <div className="text-center">
-            <h1 className="font-display text-4xl text-forest-950">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/58">Sapling Danish</p>
+            <h1 className="font-display text-3xl text-forest-950 sm:text-4xl">
               {mode === "sign-in" ? "Welcome back." : "Create an account."}
             </h1>
           </div>
@@ -69,7 +70,7 @@ export function LoginScreen() {
               </span>
               <input
                 autoComplete="email"
-                className="mt-2 w-full rounded-2xl border border-forest-900/12 bg-white/65 px-4 py-3.5 text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
+                className="mt-2 w-full rounded-[14px] border border-forest-900/14 bg-white/72 px-4 py-3.5 font-semibold text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
                 onChange={(event) => setEmail(event.target.value)}
                 required
                 type="email"
@@ -82,7 +83,7 @@ export function LoginScreen() {
               </span>
               <input
                 autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-                className="mt-2 w-full rounded-2xl border border-forest-900/12 bg-white/65 px-4 py-3.5 text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
+                className="mt-2 w-full rounded-[14px] border border-forest-900/14 bg-white/72 px-4 py-3.5 font-semibold text-forest-950 outline-none transition focus:border-moss-500 focus:ring-4 focus:ring-moss-400/15"
                 minLength={6}
                 onChange={(event) => setPassword(event.target.value)}
                 required
@@ -98,7 +99,7 @@ export function LoginScreen() {
             ) : null}
 
             <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:opacity-50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3.5 text-sm font-extrabold text-cream-50 transition enabled:hover:bg-forest-800 disabled:opacity-50"
               disabled={isSubmitting}
               type="submit"
             >

@@ -1,17 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Fraunces } from "next/font/google";
+import { Manrope } from "next/font/google";
 
 import { publicEnv } from "@/lib/env";
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const manrope = Manrope({
   subsets: ["latin"],
-  variable: "--font-dm-sans",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
+  variable: "--font-manrope",
 });
 
 function getMetadataBase() {
@@ -44,10 +39,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${fraunces.variable} antialiased`}
+      className={`${manrope.variable} antialiased`}
     >
       <body>{children}</body>
     </html>
   );
 }
-

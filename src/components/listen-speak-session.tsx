@@ -590,7 +590,7 @@ export function ListenSpeakSession() {
 
   if (isLoading || sessionItems.length === 0) {
     return (
-      <div className="paper-panel grid min-h-[500px] animate-pulse place-items-center rounded-[30px] text-sm text-forest-900/50">
+      <div className="paper-panel grid min-h-[500px] animate-pulse place-items-center rounded-[24px] text-sm font-semibold text-forest-900/58">
         Tuning your listening practice…
       </div>
     );
@@ -634,7 +634,7 @@ export function ListenSpeakSession() {
   const meaningWasCorrect = selectedMeaning === item.meaning;
 
   return (
-    <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
+    <div className="paper-panel soft-enter overflow-hidden rounded-[24px]">
       <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
         <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
           <span>{phase === "listen" ? "Listen" : "Speak"}</span>
@@ -656,7 +656,7 @@ export function ListenSpeakSession() {
             <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/18 text-forest-800">
               <Volume2 aria-hidden="true" size={25} />
             </div>
-            <h2 className="mt-7 max-w-2xl font-display text-4xl leading-tight text-forest-950">
+            <h2 className="mt-7 max-w-2xl font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
               What does it mean?
             </h2>
             <div className="mt-6">
@@ -669,7 +669,7 @@ export function ListenSpeakSession() {
             <div className="mt-8 grid gap-3">
               {item.options.map((option) => (
                 <button
-                  className="rounded-[20px] border border-forest-900/10 bg-white/60 px-5 py-4 text-left text-sm font-semibold text-forest-950 transition enabled:hover:border-moss-500/40 enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="rounded-[14px] border border-forest-900/12 bg-white/68 px-5 py-4 text-left text-sm font-bold text-forest-950 transition enabled:hover:border-moss-500/45 enabled:hover:bg-white disabled:cursor-not-allowed disabled:bg-forest-900/[0.025] disabled:text-forest-900/42"
                   disabled={playbackCount === 0 || isSaving}
                   key={option}
                   onClick={(event) => chooseMeaning(option, event.timeStamp)}
@@ -701,7 +701,7 @@ export function ListenSpeakSession() {
             <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
               {item.meaning}
             </p>
-            <h2 className="mt-2 font-display text-4xl leading-tight text-forest-950 sm:text-5xl">
+            <h2 className="mt-2 font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
               {item.text}
             </h2>
             <div className="mt-6">
@@ -718,7 +718,7 @@ export function ListenSpeakSession() {
                 <p>Audio is scored, then discarded.</p>
               </div>
               <button
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3.5 text-sm font-extrabold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
                 disabled={
                   recordingStatus === "starting" ||
                   recordingStatus === "stopping"

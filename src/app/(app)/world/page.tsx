@@ -1,32 +1,37 @@
-import { Coffee, TrainFront, Utensils } from "lucide-react";
+import { ArrowRight, Check, Coffee, LockKeyhole, TrainFront, Utensils } from "lucide-react";
 
 export const metadata = { title: "World" };
 
 const moments = [
-  { icon: Coffee, label: "Mød Emil", detail: "A first coffee in Nørrebro" },
-  { icon: TrainFront, label: "På vej", detail: "A plan changes at the station" },
-  { icon: Utensils, label: "I køkkenet", detail: "Dinner and a small misunderstanding" },
+  { icon: Coffee, label: "Mød Emil", detail: "A first coffee in Nørrebro", status: "current" },
+  { icon: TrainFront, label: "På vej", detail: "A plan changes at the station", status: "locked" },
+  { icon: Utensils, label: "I køkkenet", detail: "Dinner and a small misunderstanding", status: "locked" },
 ];
 
 export default function WorldPage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
-      <div className="grid items-start gap-8 lg:grid-cols-[.9fr_1.1fr]">
+    <div className="mx-auto w-full max-w-6xl px-5 py-7 sm:px-8 sm:py-9 lg:px-12 lg:py-12">
+      <div className="mb-7">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/65">World</p>
+        <h1 className="max-w-3xl font-display text-4xl leading-[1.03] text-forest-950 sm:text-5xl">
+          Language, somewhere to return to.
+        </h1>
+      </div>
+      <div className="grid items-start gap-5 lg:grid-cols-[.88fr_1.12fr]">
         <section>
-          <h1 className="max-w-xl font-display text-5xl leading-[0.98] text-forest-950 sm:text-6xl">
-            Language with somewhere to return to.
-          </h1>
-          <div className="mt-8 rounded-[28px] bg-forest-900 p-6 text-cream-50 shadow-2xl shadow-forest-950/15 sm:p-8">
+          <div className="relative overflow-hidden rounded-[24px] bg-forest-950 p-6 text-cream-50 shadow-2xl shadow-forest-950/14 sm:p-8">
+            <div className="absolute -right-12 -top-16 size-56 rounded-full border border-cream-100/8" />
+            <div className="absolute -right-2 -top-8 size-36 rounded-full border border-cream-100/8" />
             <div className="flex items-start justify-between gap-5">
-              <div className="grid size-14 place-items-center rounded-[20px] bg-cream-100/10 font-display text-2xl">
+              <div className="grid size-13 place-items-center rounded-[16px] bg-cream-100/10 text-xl font-extrabold">
                 E
               </div>
-              <span className="rounded-full bg-cream-100/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-cream-100/65">
-                Recurring character
+              <span className="rounded-full bg-cream-100/10 px-3 py-1 text-[10px] font-bold tracking-[0.08em] text-cream-100/72">
+                Your guide
               </span>
             </div>
-            <h2 className="mt-8 font-display text-4xl">Emil</h2>
-            <p className="mt-3 text-sm leading-6 text-cream-100/62">
+            <h2 className="mt-9 text-3xl font-extrabold tracking-[-0.04em]">Meet Emil</h2>
+            <p className="mt-3 max-w-md text-sm font-medium leading-6 text-cream-100/68">
               Patient, dryly funny, and always suggesting a different bakery.
               Emil remembers what happened yesterday—even when you need the same
               Danish again today.
@@ -34,25 +39,40 @@ export default function WorldPage() {
           </div>
         </section>
 
-        <section className="paper-panel rounded-[28px] p-6 sm:p-8">
-          <div className="relative space-y-3 before:absolute before:bottom-8 before:left-[19px] before:top-8 before:w-px before:bg-forest-900/12">
-            {moments.map(({ icon: Icon, label, detail }, index) => (
+        <section className="paper-panel rounded-[24px] p-4 sm:p-5">
+          <div className="space-y-3">
+            {moments.map(({ icon: Icon, label, detail, status }, index) => (
               <div
-                className="relative flex items-center gap-4 rounded-[22px] bg-white/50 p-4"
+                className={`relative flex items-center gap-4 rounded-[18px] border p-4 sm:p-5 ${
+                  status === "current"
+                    ? "border-moss-500/24 bg-moss-300/18"
+                    : "border-forest-950/7 bg-white/50"
+                }`}
                 key={label}
               >
-                <span className="z-10 grid size-10 shrink-0 place-items-center rounded-full border border-forest-900/10 bg-cream-50 text-forest-800">
+                <span className={`z-10 grid size-10 shrink-0 place-items-center rounded-[13px] ${
+                  status === "current"
+                    ? "bg-forest-950 text-cream-50"
+                    : "bg-forest-950/6 text-forest-800/48"
+                }`}>
                   <Icon aria-hidden="true" size={17} />
                 </span>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-forest-700/42">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-bold tracking-[0.1em] text-forest-700/56">
                     Encounter {index + 1}
-                  </p>
-                  <h3 className="mt-0.5 font-display text-2xl text-forest-950">
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-forest-700/58">
+                      {status === "current" ? <Check aria-hidden="true" size={12} /> : <LockKeyhole aria-hidden="true" size={12} />}
+                      {status === "current" ? "Current" : "Locked"}
+                    </span>
+                  </div>
+                  <h3 className="mt-1 text-xl font-extrabold tracking-[-0.035em] text-forest-950">
                     {label}
                   </h3>
-                  <p className="mt-0.5 text-sm text-forest-900/52">{detail}</p>
+                  <p className="mt-1 text-sm font-medium text-forest-900/56">{detail}</p>
                 </div>
+                {status === "current" ? <ArrowRight aria-hidden="true" className="shrink-0 text-forest-800" size={18} /> : null}
               </div>
             ))}
           </div>

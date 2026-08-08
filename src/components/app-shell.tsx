@@ -35,32 +35,32 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[1500px] md:grid md:grid-cols-[240px_1fr]">
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-forest-900/10 bg-cream-100/80 px-5 py-7 backdrop-blur-xl md:flex">
-        <Link href="/learn" className="flex items-center gap-3 px-2">
-          <span className="grid size-11 place-items-center rounded-[16px] bg-forest-800 text-cream-50 shadow-lg shadow-forest-900/15">
-            <Leaf aria-hidden="true" size={22} strokeWidth={2.2} />
+    <div className="mx-auto min-h-dvh w-full max-w-[1720px] md:grid md:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-forest-950/8 bg-cream-50/72 px-5 py-6 backdrop-blur-xl md:flex">
+        <Link href="/learn" className="flex items-center gap-3 rounded-2xl px-2 py-1">
+          <span className="grid size-10 place-items-center rounded-[14px] bg-forest-950 text-cream-50 shadow-lg shadow-forest-950/12">
+            <Leaf aria-hidden="true" size={20} strokeWidth={2.4} />
           </span>
-          <span className="font-display text-2xl leading-none text-forest-950">
+          <span className="text-xl font-extrabold leading-none tracking-[-0.045em] text-forest-950">
             Sapling
           </span>
         </Link>
 
-        <nav aria-label="Primary" className="mt-12 space-y-2">
+        <nav aria-label="Primary" className="mt-11 space-y-1.5">
           {destinations.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
               <Link
                 aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                className={`flex items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold transition ${
                   active
-                    ? "bg-forest-900 text-cream-50 shadow-md shadow-forest-900/10"
-                    : "text-forest-900/65 hover:bg-white/70 hover:text-forest-950"
+                    ? "bg-moss-300/36 text-forest-950"
+                    : "text-forest-900/66 hover:bg-white/75 hover:text-forest-950"
                 }`}
                 href={href}
                 key={href}
               >
-                <Icon aria-hidden="true" size={19} strokeWidth={2} />
+                <Icon aria-hidden="true" size={18} strokeWidth={2.2} />
                 {label}
               </Link>
             );
@@ -69,7 +69,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
         {hasSupabase ? (
           <button
-            className="mt-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-forest-900/60 transition hover:bg-white/70 hover:text-forest-950"
+            className="mt-auto flex items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
             onClick={signOut}
             type="button"
           >
@@ -79,13 +79,13 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
         ) : null}
       </aside>
 
-      <div className="min-w-0 pb-24 md:pb-0">
-        <header className="flex items-center justify-between border-b border-forest-900/8 px-5 py-4 md:hidden">
+      <div className="min-w-0 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-forest-950/8 bg-cream-100/88 px-5 py-3.5 backdrop-blur-xl md:hidden">
           <Link href="/learn" className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-xl bg-forest-800 text-cream-50">
+            <span className="grid size-9 place-items-center rounded-xl bg-forest-950 text-cream-50">
               <Leaf aria-hidden="true" size={18} />
             </span>
-            <span className="font-display text-2xl text-forest-950">Sapling</span>
+            <span className="text-xl font-extrabold tracking-[-0.045em] text-forest-950">Sapling</span>
           </Link>
           {hasSupabase ? (
             <button
@@ -104,14 +104,14 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <nav
         aria-label="Primary"
-        className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-[22px] border border-forest-950/10 bg-forest-950/95 p-1.5 shadow-2xl shadow-forest-950/25 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-4 rounded-[20px] border border-forest-950/10 bg-forest-950/96 p-1.5 shadow-2xl shadow-forest-950/24 backdrop-blur-xl md:hidden"
       >
         {destinations.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
               aria-current={active ? "page" : undefined}
-              className={`flex min-w-0 flex-col items-center gap-1 rounded-[16px] px-1 py-2 text-[10px] font-semibold transition ${
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-[14px] px-1 py-2 text-[9px] font-bold transition ${
                 active ? "bg-cream-100 text-forest-950" : "text-cream-100/60"
               }`}
               href={href}
