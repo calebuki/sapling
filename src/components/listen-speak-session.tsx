@@ -47,7 +47,10 @@ type SpeechTokenResponse = {
   error?: string;
 };
 
-function toUnitScore(score: number) {
+function toUnitScore(score: number | null | undefined) {
+  if (typeof score !== "number" || !Number.isFinite(score)) {
+    return 0;
+  }
   return Math.max(0, Math.min(1, score / 100));
 }
 
@@ -193,7 +196,7 @@ export function ListenSpeakSession() {
         item.text,
         sdk.PronunciationAssessmentGradingSystem.HundredMark,
         sdk.PronunciationAssessmentGranularity.Phoneme,
-        true,
+        false,
       );
       assessmentConfig.phonemeAlphabet = "IPA";
       assessmentConfig.applyTo(recognizer);
@@ -289,7 +292,8 @@ export function ListenSpeakSession() {
           try {
             const assessment =
               sdk.PronunciationAssessmentResult.fromResult(event.result);
-            const wordDetails = assessment.detailResult.Words.map((word) => ({
+            const assessmentWords = assessment.detailResult?.Words ?? [];
+            const wordDetails = assessmentWords.map((word) => ({
               word: word.Word,
               accuracyScore: toUnitScore(
                 word.PronunciationAssessment?.AccuracyScore ?? 0,
