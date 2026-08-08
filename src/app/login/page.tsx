@@ -4,7 +4,7 @@ import { LoginScreen } from "@/components/login-screen";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Sign in or create an account" };
 
 export default async function LoginPage() {
   if (!hasSupabase) {
