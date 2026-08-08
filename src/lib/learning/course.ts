@@ -26,7 +26,6 @@ export type ListenSpeakItem = {
   text: string;
   meaning: string;
   options: string[];
-  note: string;
 };
 
 export type SpeechClip = {
@@ -222,7 +221,24 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Måske senere.",
     meaning: "Maybe later.",
     options: ["Maybe later.", "See you tomorrow.", "It is already late."],
-    note: "Listen for måske at the beginning, then repeat the whole thought.",
+  },
+  {
+    id: "maybe-tomorrow",
+    conceptSlug: "maaske",
+    audioId: "listen-maaske-i-morgen",
+    voice: "da-DK-JeppeNeural",
+    text: "Måske i morgen.",
+    meaning: "Maybe tomorrow.",
+    options: ["Maybe tomorrow.", "Tomorrow morning.", "Not tomorrow."],
+  },
+  {
+    id: "yes-maybe",
+    conceptSlug: "maaske",
+    audioId: "listen-ja-maaske",
+    voice: "da-DK-ChristelNeural",
+    text: "Ja, måske.",
+    meaning: "Yes, maybe.",
+    options: ["Yes, maybe.", "Yes, of course.", "No, maybe not."],
   },
   {
     id: "anna-introduction",
@@ -232,7 +248,24 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Hej, jeg hedder Anna.",
     meaning: "Hi, my name is Anna.",
     options: ["Hi, my name is Anna.", "Anna is over here.", "Hi, do you know Anna?"],
-    note: "Danish hedder is often much softer in speech than its spelling suggests.",
+  },
+  {
+    id: "mikkel-introduction",
+    conceptSlug: "jeg-hedder",
+    audioId: "listen-jeg-hedder-mikkel",
+    voice: "da-DK-ChristelNeural",
+    text: "Jeg hedder Mikkel.",
+    meaning: "My name is Mikkel.",
+    options: ["My name is Mikkel.", "I know Mikkel.", "Mikkel is here."],
+  },
+  {
+    id: "sara-introduction",
+    conceptSlug: "jeg-hedder",
+    audioId: "listen-hej-jeg-hedder-sara",
+    voice: "da-DK-JeppeNeural",
+    text: "Hej, jeg hedder Sara.",
+    meaning: "Hi, my name is Sara.",
+    options: ["Hi, my name is Sara.", "Hi Sara, come in.", "Sara says hello."],
   },
   {
     id: "coffee-request",
@@ -242,7 +275,28 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Jeg vil gerne have en kaffe.",
     meaning: "I would like a coffee.",
     options: ["I would like a coffee.", "I have already had coffee.", "Is the coffee ready?"],
-    note: "Treat jeg vil gerne as one reusable sound pattern rather than four separate words.",
+  },
+  {
+    id: "tea-request",
+    conceptSlug: "jeg-vil-gerne",
+    audioId: "listen-jeg-vil-gerne-te",
+    voice: "da-DK-JeppeNeural",
+    text: "Jeg vil gerne have en te.",
+    meaning: "I would like a tea.",
+    options: ["I would like a tea.", "The tea is ready.", "I do not drink tea."],
+  },
+  {
+    id: "ticket-request",
+    conceptSlug: "jeg-vil-gerne",
+    audioId: "listen-jeg-vil-gerne-billet",
+    voice: "da-DK-ChristelNeural",
+    text: "Jeg vil gerne købe en billet.",
+    meaning: "I would like to buy a ticket.",
+    options: [
+      "I would like to buy a ticket.",
+      "I already have a ticket.",
+      "Where can I buy a ticket?",
+    ],
   },
   {
     id: "find-station",
@@ -252,7 +306,24 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Hvor er stationen?",
     meaning: "Where is the station?",
     options: ["Where is the station?", "When does the train leave?", "Is this the last station?"],
-    note: "Let the question rise naturally; Azure scores pronunciation, not a native-like accent.",
+  },
+  {
+    id: "find-toilet",
+    conceptSlug: "hvor-er-stationen",
+    audioId: "listen-hvor-er-toilettet",
+    voice: "da-DK-ChristelNeural",
+    text: "Hvor er toilettet?",
+    meaning: "Where is the toilet?",
+    options: ["Where is the toilet?", "Is the toilet free?", "Where is the station?"],
+  },
+  {
+    id: "find-bus",
+    conceptSlug: "hvor-er-stationen",
+    audioId: "listen-hvor-er-bussen",
+    voice: "da-DK-JeppeNeural",
+    text: "Hvor er bussen?",
+    meaning: "Where is the bus?",
+    options: ["Where is the bus?", "When does the bus leave?", "Is this the bus?"],
   },
   {
     id: "repeat-that",
@@ -262,7 +333,32 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Kan du gentage det?",
     meaning: "Can you repeat that?",
     options: ["Can you repeat that?", "Can you translate that?", "Can you write that down?"],
-    note: "This is a useful real-world repair phrase—clear communication matters more than perfection.",
+  },
+  {
+    id: "repeat-slowly",
+    conceptSlug: "kan-du-gentage",
+    audioId: "listen-kan-du-gentage-langsomt",
+    voice: "da-DK-JeppeNeural",
+    text: "Kan du gentage det langsomt?",
+    meaning: "Can you repeat that slowly?",
+    options: [
+      "Can you repeat that slowly?",
+      "Can you speak more loudly?",
+      "Can you translate that?",
+    ],
+  },
+  {
+    id: "repeat-question",
+    conceptSlug: "kan-du-gentage",
+    audioId: "listen-kan-du-gentage-spoergsmaalet",
+    voice: "da-DK-ChristelNeural",
+    text: "Kan du gentage spørgsmålet?",
+    meaning: "Can you repeat the question?",
+    options: [
+      "Can you repeat the question?",
+      "Can you answer the question?",
+      "Can you write the question?",
+    ],
   },
   {
     id: "get-off-here",
@@ -272,7 +368,28 @@ export const listenSpeakItems: ListenSpeakItem[] = [
     text: "Jeg skal af her.",
     meaning: "I need to get off here.",
     options: ["I need to get off here.", "I am getting on here.", "I will wait here."],
-    note: "Keep skal af together as one action: needing to get off.",
+  },
+  {
+    id: "get-off-next-stop",
+    conceptSlug: "jeg-skal-af-her",
+    audioId: "listen-jeg-skal-af-naeste-stop",
+    voice: "da-DK-ChristelNeural",
+    text: "Jeg skal af ved næste stop.",
+    meaning: "I need to get off at the next stop.",
+    options: [
+      "I need to get off at the next stop.",
+      "I got on at the last stop.",
+      "The next stop is closed.",
+    ],
+  },
+  {
+    id: "get-off-now",
+    conceptSlug: "jeg-skal-af-her",
+    audioId: "listen-vi-skal-af-nu",
+    voice: "da-DK-JeppeNeural",
+    text: "Vi skal af nu.",
+    meaning: "We need to get off now.",
+    options: ["We need to get off now.", "We need to wait here.", "We are leaving now."],
   },
 ];
 
