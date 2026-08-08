@@ -21,12 +21,21 @@ import { DanishAudioButton } from "@/components/danish-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { useDanishSpeechRecognition } from "@/hooks/use-danish-speech-recognition";
 import { lessons } from "@/lib/learning/course";
+import {
+  calculateBeginnerPronunciationScore,
+  calculatePhraseCoverage,
+  pronunciationAttemptQuality,
+  pronunciationBand,
+} from "@/lib/learning/speech-scoring";
 import type {
   DanishSpeechResult,
   LessonEvaluation,
 } from "@/types/lesson-evaluation";
 
 type Phase = "attempt" | "feedback" | "reveal" | "complete";
+
+const GUIDED_PRONUNCIATION_TARGET = 0.7;
+const GUIDED_ATTEMPTS_BEFORE_SKIP = 3;
 
 export function LearnSession() {
   const {
@@ -35,6 +44,7 @@ export function LearnSession() {
     isLoading,
     error: modelError,
     recordRetrievalAttempt,
+    recordRepair,
     recordSpeakingAttempt,
   } = useLearningModel();
   const [lessonIndex, setLessonIndex] = useState(0);
@@ -45,6 +55,10 @@ export function LearnSession() {
   const [speechResult, setSpeechResult] = useState<DanishSpeechResult | null>(
     null,
   );
+  const [revealSpeechResult, setRevealSpeechResult] =
+    useState<DanishSpeechResult | null>(null);
+  const [revealAttemptCount, setRevealAttemptCount] = useState(0);
+  const [usedAudioHint, setUsedAudioHint] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const didChooseStartingLesson = useRef(false);
@@ -128,6 +142,9 @@ export function LearnSession() {
     setPhase("attempt");
     setEvaluation(null);
     setSpeechResult(null);
+    setRevealSpeechResult(null);
+    setRevealAttemptCount(0);
+    setUsedAudioHint(false);
     resetTranscript();
     setActionError(null);
     startedAt.current = null;
@@ -153,6 +170,9 @@ export function LearnSession() {
     setPhase("attempt");
     setEvaluation(null);
     setSpeechResult(null);
+    setRevealSpeechResult(null);
+    setRevealAttemptCount(0);
+    setUsedAudioHint(false);
     resetTranscript();
     startedAt.current = null;
     attemptLatencyMs.current = 0;
@@ -184,6 +204,9 @@ export function LearnSession() {
           source: "lesson-course",
         },
       });
+      resetTranscript();
+      setRevealSpeechResult(null);
+      setRevealAttemptCount(0);
       setPhase("reveal");
     } catch (saveError) {
       setActionError(
@@ -206,7 +229,7 @@ export function LearnSession() {
     setSpeechResult(null);
 
     try {
-      const spoken = await startRecognition(exercise.expected);
+      const spoken = await startRecognition({ mode: "open" });
       attemptLatencyMs.current = spoken.durationMs;
       setSpeechResult(spoken);
       setIsSaving(true);
@@ -218,6 +241,7 @@ export function LearnSession() {
           lessonId: lesson.id,
           exerciseId: exercise.audioId,
           transcript: spoken.recognizedText,
+          alternatives: spoken.alternatives,
         }),
       });
       const evaluationBody = (await evaluationResponse.json()) as
@@ -232,48 +256,40 @@ export function LearnSession() {
         );
       }
 
-      await recordRetrievalAttempt({
-        conceptId: concept.id,
-        responseText: spoken.recognizedText,
-        expectedResponse: exercise.expected,
-        successful: evaluationBody.successful,
-        latencyMs: attemptLatencyMs.current,
-        context: {
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          activityType: exercise.eyebrow,
-          responseMode: "speech",
-          evaluationProvider: evaluationBody.source,
-          meaningScore: evaluationBody.meaningScore,
-          grammarScore: evaluationBody.grammarScore,
-          vocabularyScore: evaluationBody.vocabularyScore,
-          feedbackSummary: evaluationBody.summary,
-          feedbackTips: evaluationBody.tips
-            .map((tip) => `${tip.area}: ${tip.message}`)
-            .join(" | "),
-          source: "lesson-course",
-        },
-      });
+      const attemptContext = {
+        lessonId: lesson.id,
+        exerciseId: exercise.audioId,
+        activityType: exercise.eyebrow,
+        responseMode: "speech",
+        assisted: usedAudioHint,
+        evaluationProvider: evaluationBody.source,
+        meaningScore: evaluationBody.meaningScore,
+        grammarScore: evaluationBody.grammarScore,
+        vocabularyScore: evaluationBody.vocabularyScore,
+        feedbackSummary: evaluationBody.summary,
+        feedbackTips: evaluationBody.tips
+          .map((tip) => `${tip.area}: ${tip.message}`)
+          .join(" | "),
+        source: "lesson-course",
+      };
 
-      void recordSpeakingAttempt({
-        conceptId: concept.id,
-        referenceText: exercise.expected,
-        ...spoken,
-        context: {
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          provider: "azure-speech",
-          locale: "da-DK",
-          audioRetained: false,
-          source: "lesson-course",
-        },
-      }).catch((saveError: unknown) => {
-        setActionError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Your pronunciation score could not be saved.",
-        );
-      });
+      if (usedAudioHint) {
+        await recordRepair({
+          conceptId: concept.id,
+          responseText: spoken.recognizedText,
+          targetText: evaluationBody.correctedDanish,
+          context: attemptContext,
+        });
+      } else {
+        await recordRetrievalAttempt({
+          conceptId: concept.id,
+          responseText: spoken.recognizedText,
+          expectedResponse: exercise.expected,
+          successful: evaluationBody.successful,
+          latencyMs: attemptLatencyMs.current,
+          context: attemptContext,
+        });
+      }
 
       setEvaluation(evaluationBody);
       setPhase("feedback");
@@ -296,6 +312,82 @@ export function LearnSession() {
     setPhase("attempt");
     startedAt.current = null;
     attemptLatencyMs.current = 0;
+  }
+
+  function showAnswer() {
+    setRevealSpeechResult(null);
+    setRevealAttemptCount(0);
+    resetTranscript();
+    setActionError(null);
+    setPhase("reveal");
+  }
+
+  async function startGuidedPronunciation() {
+    if (!concept || !exercise || !lesson || isRecording || isSaving) {
+      return;
+    }
+
+    setActionError(null);
+    resetTranscript();
+
+    try {
+      const spoken = await startRecognition({
+        mode: "scripted",
+        referenceText: exercise.expected,
+      });
+      const rawPronunciationScore = spoken.pronunciationScore;
+      const completenessScore = calculatePhraseCoverage(
+        exercise.expected,
+        spoken.recognizedText,
+      );
+      const pronunciationScore = calculateBeginnerPronunciationScore({
+        accuracyScore: spoken.accuracyScore,
+        wordDetails: spoken.wordDetails,
+      });
+      const successful =
+        pronunciationScore >= GUIDED_PRONUNCIATION_TARGET &&
+        completenessScore >= 0.8;
+      const scoredAttempt = {
+        ...spoken,
+        completenessScore,
+        fluencyScore: spoken.fluencyScore * completenessScore,
+        pronunciationScore,
+        successful,
+      };
+      setRevealSpeechResult((current) =>
+        !current ||
+        pronunciationAttemptQuality(scoredAttempt) >
+          pronunciationAttemptQuality(current)
+          ? scoredAttempt
+          : current,
+      );
+      setRevealAttemptCount((current) => current + 1);
+      setIsSaving(true);
+
+      await recordSpeakingAttempt({
+        conceptId: concept.id,
+        referenceText: exercise.expected,
+        ...scoredAttempt,
+        context: {
+          lessonId: lesson.id,
+          exerciseId: exercise.audioId,
+          provider: "azure-speech",
+          locale: "da-DK",
+          assessmentMode: "scripted-repair",
+          rawPronunciationScore,
+          audioRetained: false,
+          source: "lesson-course",
+        },
+      });
+    } catch (voiceError) {
+      setActionError(
+        voiceError instanceof Error
+          ? voiceError.message
+          : "Sapling couldn’t score that pronunciation.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (isLoading) {
@@ -393,13 +485,8 @@ export function LearnSession() {
       />
       <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
         <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
-          <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-            <span>
-              Lesson {lesson.number} · {lesson.title}
-            </span>
-            <span>
-              {queuePosition + 1} of {exerciseQueue.length} in this focus
-            </span>
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/65">
+            Lesson {lesson.number} · {lesson.title}
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
             <div
@@ -410,20 +497,19 @@ export function LearnSession() {
         </div>
 
         <div className="p-6 sm:p-8 lg:p-10">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-moss-400/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-forest-800">
-              {exercise.eyebrow}
-            </span>
-            <span className="rounded-full border border-forest-900/10 px-3 py-1 text-[11px] font-semibold text-forest-800/55">
-              {concept.kind.replaceAll("_", " ")}
-            </span>
-          </div>
-
           {phase === "attempt" ? (
-            <div className="mt-8">
+            <div>
               <h2 className="max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl lg:text-[44px]">
                 {exercise.prompt}
               </h2>
+              <div className="mt-5">
+                <DanishAudioButton
+                  clipId={exercise.audioId}
+                  label="Hear an example"
+                  onPlay={() => setUsedAudioHint(true)}
+                  showSlowControl
+                />
+              </div>
               <div
                 aria-live="polite"
                 className={`mt-8 rounded-[22px] border p-5 ${
@@ -458,9 +544,9 @@ export function LearnSession() {
                   </div>
                 </div>
               </div>
-              <p className="mt-4 flex items-center gap-2 text-xs font-semibold text-forest-900/48">
+              <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-forest-900/62">
                 <ShieldCheck className="shrink-0 text-moss-500" size={15} />
-                Audio is scored, then discarded.
+                Audio is discarded after scoring.
               </p>
               <div className="mt-5 grid gap-3 sm:flex">
                 <button
@@ -504,8 +590,8 @@ export function LearnSession() {
           ) : null}
 
           {phase === "reveal" ? (
-            <div className="mt-8 soft-enter">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
+            <div className="soft-enter">
+              <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/70">
                 A natural answer
               </p>
               <h2 className="mt-3 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
@@ -518,23 +604,106 @@ export function LearnSession() {
                   showSlowControl
                 />
               </div>
-              <div className="mt-4 flex items-start gap-3 rounded-2xl bg-forest-900/[0.045] p-4 text-sm leading-6 text-forest-900/62">
-                <Sparkles className="mt-0.5 shrink-0 text-moss-500" size={17} />
+              <div className="mt-5 flex items-start gap-3 rounded-2xl bg-forest-900/[0.055] p-5 text-base leading-7 text-forest-900/78">
+                <Sparkles className="mt-1 shrink-0 text-moss-500" size={18} />
                 <span>{exercise.note}</span>
               </div>
-              <button
-                className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800 sm:w-auto"
-                onClick={moveForward}
-                type="button"
-              >
-                Continue
-                <ArrowRight aria-hidden="true" size={17} />
-              </button>
+
+              <div className="mt-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5 sm:p-6">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/70">
+                  Repeat it
+                </p>
+                <div aria-live="polite" className="mt-3">
+                  <p className="min-h-7 text-lg font-semibold leading-8 text-forest-950" lang="da">
+                    {liveTranscript ||
+                      (isRecording
+                        ? "Sig sætningen…"
+                        : "Listen, then say the phrase aloud.")}
+                  </p>
+                </div>
+
+                {revealSpeechResult && !isRecording ? (
+                  <div
+                    className={`mt-4 rounded-2xl p-4 ${
+                      revealSpeechResult.successful
+                        ? "bg-moss-400/16"
+                        : "bg-amber-400/12"
+                    }`}
+                  >
+                    <p className="text-base font-bold text-forest-950">
+                      {revealSpeechResult.successful
+                        ? "Good pronunciation — keep going."
+                        : `${pronunciationBand(revealSpeechResult.pronunciationScore)} — listen and try once more.`}
+                    </p>
+                    <p className="mt-2 text-base leading-7 text-forest-900/78">
+                      Best attempt · Pronunciation {Math.round(revealSpeechResult.pronunciationScore * 100)}
+                      · Phrase {Math.round(revealSpeechResult.completenessScore * 100)}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-45"
+                    disabled={
+                      isSaving ||
+                      recordingStatus === "starting" ||
+                      recordingStatus === "stopping"
+                    }
+                    onClick={
+                      recordingStatus === "listening"
+                        ? stopRecognition
+                        : startGuidedPronunciation
+                    }
+                    type="button"
+                  >
+                    {isSaving ||
+                    recordingStatus === "starting" ||
+                    recordingStatus === "stopping" ? (
+                      <LoaderCircle className="animate-spin" aria-hidden="true" size={18} />
+                    ) : recordingStatus === "listening" ? (
+                      <Square aria-hidden="true" fill="currentColor" size={15} />
+                    ) : (
+                      <Mic aria-hidden="true" size={18} />
+                    )}
+                    {isSaving
+                      ? "Saving…"
+                      : recordingStatus === "starting"
+                        ? "Preparing…"
+                        : recordingStatus === "listening"
+                          ? "Stop & score"
+                          : recordingStatus === "stopping"
+                            ? "Scoring…"
+                            : revealSpeechResult
+                              ? "Try again"
+                              : "Start speaking"}
+                  </button>
+
+                  {revealSpeechResult?.successful ? (
+                    <button
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-moss-500 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-moss-600"
+                      onClick={moveForward}
+                      type="button"
+                    >
+                      Continue
+                      <ArrowRight aria-hidden="true" size={17} />
+                    </button>
+                  ) : revealAttemptCount >= GUIDED_ATTEMPTS_BEFORE_SKIP ? (
+                    <button
+                      className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
+                      onClick={moveForward}
+                      type="button"
+                    >
+                      Skip for now
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : null}
 
           {phase === "feedback" && evaluation && speechResult ? (
-            <div className="mt-8 soft-enter">
+            <div className="soft-enter">
               <div
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
                   evaluation.successful
@@ -553,45 +722,42 @@ export function LearnSession() {
                 {evaluation.summary}
               </h2>
 
-              <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_auto]">
-                <div className="rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/50">
-                    Sapling heard
-                  </p>
-                  <p className="mt-3 text-lg leading-7 text-forest-950" lang="da">
-                    {speechResult.recognizedText}
-                  </p>
-                </div>
-                <div className="rounded-[22px] bg-forest-900/[0.045] p-5 lg:min-w-44">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-forest-700/50">
-                    Pronunciation
-                  </p>
-                  <p className="mt-2 font-display text-4xl text-forest-950">
-                    {Math.round(speechResult.pronunciationScore * 100)}
-                  </p>
-                </div>
+              <div className="mt-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
+                  Sapling heard
+                </p>
+                <p className="mt-3 text-xl font-medium leading-8 text-forest-950" lang="da">
+                  {speechResult.recognizedText}
+                </p>
               </div>
 
               {evaluation.correctedDanish !== speechResult.recognizedText ||
               evaluation.tips.length > 0 ? (
                 <div className="mt-4 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/55">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
                     A natural version
                   </p>
-                  <p className="mt-2 text-xl font-semibold text-forest-950" lang="da">
+                  <p className="mt-2 text-2xl font-semibold leading-9 text-forest-950" lang="da">
                     {evaluation.correctedDanish}
                   </p>
+                  <div className="mt-4">
+                    <DanishAudioButton
+                      clipId={exercise.audioId}
+                      label="Hear an example"
+                      showSlowControl
+                    />
+                  </div>
                 </div>
               ) : null}
 
               {evaluation.tips.length > 0 ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {evaluation.tips.map((tip) => (
-                    <div className="rounded-2xl bg-white/55 p-4" key={`${tip.area}-${tip.message}`}>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-forest-700/48">
+                    <div className="rounded-2xl bg-white/65 p-5" key={`${tip.area}-${tip.message}`}>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
                         {tip.area}
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-forest-950">
+                      <p className="mt-2 text-base leading-7 text-forest-950">
                         {tip.message}
                       </p>
                     </div>
@@ -620,7 +786,7 @@ export function LearnSession() {
                 ) : (
                   <button
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                    onClick={() => setPhase("reveal")}
+                    onClick={showAnswer}
                     type="button"
                   >
                     Show answer
@@ -698,15 +864,8 @@ function LessonRail({
               ) : (
                 <Circle aria-hidden="true" size={15} />
               )}
-              <span className="flex items-center gap-2">
-                <span>
-                  {lesson.number}. {lesson.title}
-                </span>
-                {!locked ? (
-                  <span className={active ? "text-cream-50/55" : "text-forest-900/35"}>
-                    {masteredExerciseCounts[index]}/{lesson.exercises.length}
-                  </span>
-                ) : null}
+              <span>
+                {lesson.number}. {lesson.title}
               </span>
             </button>
           );

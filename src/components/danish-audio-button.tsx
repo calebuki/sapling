@@ -3,6 +3,8 @@
 import { CircleAlert, Gauge, Pause, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { getSpeechAudioUrl } from "@/lib/learning/course";
+
 type DanishAudioButtonProps = {
   clipId: string;
   label?: string;
@@ -33,7 +35,13 @@ export function DanishAudioButton({
     setError(null);
 
     if (!audioRef.current) {
-      const audio = new Audio(`/api/speech/audio/${encodeURIComponent(clipId)}`);
+      const audioUrl = getSpeechAudioUrl(clipId);
+      if (!audioUrl) {
+        setError("Audio is unavailable right now.");
+        return;
+      }
+
+      const audio = new Audio(audioUrl);
       audio.preload = "none";
       audio.onended = () => setIsPlaying(false);
       audio.onerror = () => {

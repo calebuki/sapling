@@ -6,6 +6,10 @@ import type { DanishSpeechResult } from "@/types/lesson-evaluation";
 
 export type RecordingStatus = "idle" | "starting" | "listening" | "stopping";
 
+export type DanishRecognitionOptions =
+  | { mode: "open" }
+  | { mode: "scripted"; referenceText: string };
+
 type ActiveSpeechRecognizer = {
   close: () => void;
   stopContinuousRecognitionAsync: (
@@ -25,6 +29,32 @@ function toUnitScore(score: number | null | undefined) {
     return 0;
   }
   return Math.max(0, Math.min(1, score / 100));
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function recognitionAlternatives(resultJson: string | undefined) {
+  if (!resultJson) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(resultJson) as {
+      NBest?: Array<{ Display?: string; Lexical?: string }>;
+    };
+    return (parsed.NBest ?? [])
+      .flatMap((candidate) => candidate.Display ?? candidate.Lexical ?? [])
+      .map((candidate) => candidate.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
 }
 
 export function useDanishSpeechRecognition() {
@@ -54,7 +84,7 @@ export function useDanishSpeechRecognition() {
     stopActiveRecognition.current?.();
   }, []);
 
-  const start = useCallback(async (referenceText: string) => {
+  const start = useCallback(async (options: DanishRecognitionOptions) => {
     if (activeRecognizer.current) {
       throw new Error("The microphone is already listening.");
     }
@@ -85,15 +115,19 @@ export function useDanishSpeechRecognition() {
         credentials.token,
         credentials.region,
       );
+      const isOpenResponse = options.mode === "open";
+      const silenceBeforeStopMs = isOpenResponse ? 3_200 : 1_600;
+      const maximumDurationMs = isOpenResponse ? 45_000 : 15_000;
+
       speechConfig.speechRecognitionLanguage = "da-DK";
       speechConfig.outputFormat = sdk.OutputFormat.Detailed;
       speechConfig.setProperty(
         sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs,
-        "900",
+        isOpenResponse ? "1800" : "900",
       );
       speechConfig.setProperty(
         sdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
-        "8000",
+        "10000",
       );
 
       const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput();
@@ -103,14 +137,16 @@ export function useDanishSpeechRecognition() {
       activeRecognizer.current = recognizer;
       activeAudioConfig.current = audioConfig;
 
-      const assessmentConfig = new sdk.PronunciationAssessmentConfig(
-        referenceText,
-        sdk.PronunciationAssessmentGradingSystem.HundredMark,
-        sdk.PronunciationAssessmentGranularity.Phoneme,
-        false,
-      );
-      assessmentConfig.phonemeAlphabet = "IPA";
-      assessmentConfig.applyTo(recognizer);
+      if (options.mode === "scripted") {
+        const assessmentConfig = new sdk.PronunciationAssessmentConfig(
+          options.referenceText,
+          sdk.PronunciationAssessmentGradingSystem.HundredMark,
+          sdk.PronunciationAssessmentGranularity.Phoneme,
+          false,
+        );
+        assessmentConfig.phonemeAlphabet = "IPA";
+        assessmentConfig.applyTo(recognizer);
+      }
 
       return await new Promise<DanishSpeechResult>((resolve, reject) => {
         let settled = false;
@@ -120,6 +156,8 @@ export function useDanishSpeechRecognition() {
         let initialSilenceTimer: ReturnType<typeof setTimeout> | null = null;
         let maximumDurationTimer: ReturnType<typeof setTimeout> | null = null;
         let finalResultTimer: ReturnType<typeof setTimeout> | null = null;
+        const finalSegments: DanishSpeechResult[] = [];
+        const alternativeTexts = new Set<string>();
 
         function clearTimer(timer: ReturnType<typeof setTimeout> | null) {
           if (timer) {
@@ -143,6 +181,64 @@ export function useDanishSpeechRecognition() {
           reject(error);
         }
 
+        function combinedTranscript(partial = "") {
+          return [...finalSegments.map((segment) => segment.recognizedText), partial]
+            .map((text) => text.trim())
+            .filter(Boolean)
+            .join(" ");
+        }
+
+        function finish() {
+          if (settled || recognitionRunId.current !== runId) {
+            return;
+          }
+
+          if (finalSegments.length === 0) {
+            fail(
+              new Error(
+                heardSpeech
+                  ? "I heard you, but couldn’t finish the transcript. Try once more."
+                  : "I couldn’t hear speech. Check your microphone and try again.",
+              ),
+            );
+            return;
+          }
+
+          settled = true;
+          clearRecognitionTimers();
+          const recognizedText = combinedTranscript();
+          const pronunciationScore = average(
+            finalSegments.map((segment) => segment.pronunciationScore),
+          );
+          const completenessScore = average(
+            finalSegments.map((segment) => segment.completenessScore),
+          );
+          const result: DanishSpeechResult = {
+            recognizedText,
+            durationMs: finalSegments.reduce(
+              (total, segment) => total + segment.durationMs,
+              0,
+            ),
+            accuracyScore: average(
+              finalSegments.map((segment) => segment.accuracyScore),
+            ),
+            fluencyScore: average(
+              finalSegments.map((segment) => segment.fluencyScore),
+            ),
+            completenessScore,
+            pronunciationScore,
+            wordDetails: finalSegments.flatMap((segment) => segment.wordDetails),
+            alternatives: [...alternativeTexts]
+              .filter((alternative) => alternative !== recognizedText)
+              .slice(0, 6),
+            successful:
+              pronunciationScore >= 0.7 &&
+              (isOpenResponse || completenessScore >= 0.7),
+          };
+          setLiveTranscript(recognizedText);
+          resolve(result);
+        }
+
         function requestStop() {
           if (stopRequested || recognitionRunId.current !== runId) {
             return;
@@ -153,41 +249,33 @@ export function useDanishSpeechRecognition() {
           clearTimer(initialSilenceTimer);
           clearTimer(maximumDurationTimer);
 
-          if (!settled) {
-            finalResultTimer = setTimeout(() => {
-              fail(
-                new Error(
-                  heardSpeech
-                    ? "I heard you, but couldn’t finish the transcript. Try once more."
-                    : "I couldn’t hear speech. Check your microphone and try again.",
-                ),
-              );
-            }, 4000);
-          }
+          finalResultTimer = setTimeout(() => {
+            finish();
+          }, 4_000);
 
           recognizer.stopContinuousRecognitionAsync(
-            undefined,
+            finish,
             (recognitionError) => fail(new Error(recognitionError)),
           );
         }
 
-        function noteRecognizedSpeech(text: string) {
-          const transcript = text.trim();
+        function noteSpeech(partial: string) {
+          const transcript = partial.trim();
           if (!transcript || recognitionRunId.current !== runId) {
             return;
           }
 
           heardSpeech = true;
-          setLiveTranscript(transcript);
           clearTimer(initialSilenceTimer);
           clearTimer(silenceTimer);
-          silenceTimer = setTimeout(requestStop, 1600);
+          setLiveTranscript(combinedTranscript(transcript));
+          silenceTimer = setTimeout(requestStop, silenceBeforeStopMs);
         }
 
         stopActiveRecognition.current = requestStop;
 
         recognizer.recognizing = (_sender, event) => {
-          noteRecognizedSpeech(event.result.text);
+          noteSpeech(event.result.text);
         };
 
         recognizer.recognized = (_sender, event) => {
@@ -200,46 +288,59 @@ export function useDanishSpeechRecognition() {
             return;
           }
 
-          try {
-            const assessment =
-              sdk.PronunciationAssessmentResult.fromResult(event.result);
-            const wordDetails = (assessment.detailResult?.Words ?? []).map(
-              (word) => ({
-                word: word.Word,
-                accuracyScore: toUnitScore(
-                  word.PronunciationAssessment?.AccuracyScore ?? 0,
-                ),
-                errorType:
-                  word.PronunciationAssessment?.ErrorType ?? "Unknown",
-              }),
-            );
-            const result: DanishSpeechResult = {
-              recognizedText: event.result.text.trim(),
-              durationMs: Math.round(event.result.duration / 10_000),
-              accuracyScore: toUnitScore(assessment.accuracyScore),
-              fluencyScore: toUnitScore(assessment.fluencyScore),
-              completenessScore: toUnitScore(assessment.completenessScore),
-              pronunciationScore: toUnitScore(assessment.pronunciationScore),
-              wordDetails,
-              successful:
-                assessment.pronunciationScore >= 65 &&
-                assessment.completenessScore >= 70,
-            };
+          heardSpeech = true;
+          const recognizedText = event.result.text.trim();
+          for (const alternative of recognitionAlternatives(event.result.json)) {
+            alternativeTexts.add(alternative);
+          }
 
-            settled = true;
-            clearRecognitionTimers();
-            setLiveTranscript(result.recognizedText);
-            if (!stopRequested) {
-              stopRequested = true;
-              recognizer.stopContinuousRecognitionAsync();
+          let accuracyScore = 0;
+          let fluencyScore = 0;
+          let completenessScore = isOpenResponse ? 1 : 0;
+          let pronunciationScore = 0;
+          let wordDetails: DanishSpeechResult["wordDetails"] = [];
+
+          if (!isOpenResponse) {
+            try {
+              const assessment =
+                sdk.PronunciationAssessmentResult.fromResult(event.result);
+              accuracyScore = toUnitScore(assessment.accuracyScore);
+              fluencyScore = toUnitScore(assessment.fluencyScore);
+              completenessScore = toUnitScore(assessment.completenessScore);
+              pronunciationScore = toUnitScore(assessment.pronunciationScore);
+              wordDetails = (assessment.detailResult?.Words ?? []).map(
+                (word) => ({
+                  word: word.Word,
+                  accuracyScore: toUnitScore(
+                    word.PronunciationAssessment?.AccuracyScore ?? 0,
+                  ),
+                  errorType:
+                    word.PronunciationAssessment?.ErrorType ?? "Unknown",
+                }),
+              );
+            } catch {
+              // The transcript is still useful if assessment metadata is absent.
             }
-            resolve(result);
-          } catch (assessmentError) {
-            fail(
-              assessmentError instanceof Error
-                ? assessmentError
-                : new Error("Sapling could not score this recording."),
-            );
+          }
+
+          finalSegments.push({
+            recognizedText,
+            durationMs: Math.round(event.result.duration / 10_000),
+            accuracyScore,
+            fluencyScore,
+            completenessScore,
+            pronunciationScore,
+            wordDetails,
+            alternatives: [],
+            successful: false,
+          });
+          setLiveTranscript(combinedTranscript());
+          clearTimer(silenceTimer);
+
+          if (isOpenResponse) {
+            silenceTimer = setTimeout(requestStop, silenceBeforeStopMs);
+          } else {
+            requestStop();
           }
         };
 
@@ -255,16 +356,7 @@ export function useDanishSpeechRecognition() {
 
         recognizer.sessionStopped = () => {
           if (!settled) {
-            clearTimer(finalResultTimer);
-            finalResultTimer = setTimeout(() => {
-              fail(
-                new Error(
-                  heardSpeech
-                    ? "I heard you, but couldn’t produce a final transcript. Try again."
-                    : "I couldn’t hear speech. Check your microphone and try again.",
-                ),
-              );
-            }, 350);
+            finish();
           }
         };
 
@@ -275,8 +367,8 @@ export function useDanishSpeechRecognition() {
               return;
             }
             setRecordingStatus("listening");
-            initialSilenceTimer = setTimeout(requestStop, 8000);
-            maximumDurationTimer = setTimeout(requestStop, 15000);
+            initialSilenceTimer = setTimeout(requestStop, 10_000);
+            maximumDurationTimer = setTimeout(requestStop, maximumDurationMs);
           },
           (recognitionError) => fail(new Error(recognitionError)),
         );

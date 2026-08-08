@@ -28,15 +28,18 @@ import type {
 
 const growthPath: Array<{
   stage: GrowthStage;
-  points: number;
+  percent: number;
   Icon: typeof Sprout;
 }> = [
-  { stage: "seed", points: 0, Icon: Leaf },
-  { stage: "sprout", points: 6, Icon: Sprout },
-  { stage: "growing", points: 20, Icon: Sprout },
-  { stage: "established", points: 45, Icon: TreePine },
-  { stage: "automatic", points: 90, Icon: TreePine },
+  { stage: "seed", percent: 0, Icon: Leaf },
+  { stage: "sprout", percent: 1, Icon: Sprout },
+  { stage: "growing", percent: 10, Icon: Sprout },
+  { stage: "established", percent: 35, Icon: TreePine },
+  { stage: "automatic", percent: 70, Icon: TreePine },
 ];
+
+const nearFluencyTarget = 10_000;
+const maxPointsPerConcept = 10;
 
 const stageStyles: Record<GrowthStage, string> = {
   seed: "bg-amber-400/15 text-amber-500",
@@ -85,8 +88,11 @@ function nextAction(state: LearnerConceptState) {
   return { Icon: Sprout, label: "Use it in a new situation" };
 }
 
-function currentGrowthStage(points: number) {
-  return [...growthPath].reverse().find((step) => points >= step.points) ?? growthPath[0];
+function currentGrowthStage(progress: number) {
+  return (
+    [...growthPath].reverse().find((step) => progress >= step.percent) ??
+    growthPath[0]
+  );
 }
 
 export function MyDanishView() {
@@ -102,20 +108,20 @@ export function MyDanishView() {
   const newConcepts = modeled.filter(({ state }) => state.exposureCount === 0);
   const growthPoints = practiced.reduce(
     (total, { state }) =>
-      total + state.exposureCount + state.successfulRetrievalCount * 2,
+      total +
+      Math.min(
+        maxPointsPerConcept,
+        state.exposureCount + state.successfulRetrievalCount * 2,
+      ),
     0,
   );
-  const overallStage = currentGrowthStage(growthPoints);
-  const overallIndex = growthPath.findIndex(
-    ({ stage }) => stage === overallStage.stage,
+  const journeyProgress = Math.min(
+    100,
+    (growthPoints / nearFluencyTarget) * 100,
   );
-  const nextStage = growthPath[overallIndex + 1] ?? null;
-  const previousThreshold = overallStage.points;
-  const stageProgress = nextStage
-    ? ((growthPoints - previousThreshold) /
-        (nextStage.points - previousThreshold)) *
-      100
-    : 100;
+  const displayedProgress =
+    practiced.length > 0 ? Math.max(1, Math.round(journeyProgress)) : 0;
+  const overallStage = currentGrowthStage(displayedProgress);
 
   const needsAttention = practiced.filter(({ state, stage }) => {
     const audioGap =
@@ -161,31 +167,34 @@ export function MyDanishView() {
               {growthStageLabels[overallStage.stage]}
             </h2>
             <p className="mt-2 text-sm text-forest-900/55">
-              {practiced.length} ideas practiced · {growthPoints} growth points
+              {practiced.length} ideas practiced
             </p>
           </div>
         </div>
 
         <div className="mt-8">
           <div className="flex items-center justify-between text-xs font-semibold text-forest-900/55">
-            <span>
-              {nextStage
-                ? `${Math.max(0, nextStage.points - growthPoints)} points to ${growthStageLabels[nextStage.stage]}`
-                : "Your Danish tree is thriving"}
-            </span>
-            <span>{Math.min(100, Math.round(stageProgress))}%</span>
+            <span>Toward near-fluent Danish</span>
+            <span>{displayedProgress}%</span>
           </div>
-          <div className="mt-2 h-3 overflow-hidden rounded-full bg-forest-900/8">
+          <div
+            aria-label="Progress toward near-fluent Danish"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={displayedProgress}
+            className="mt-2 h-3 overflow-hidden rounded-full bg-forest-900/8"
+            role="progressbar"
+          >
             <div
               className="h-full rounded-full bg-gradient-to-r from-moss-400 to-forest-700 transition-[width] duration-500"
-              style={{ width: `${Math.max(3, Math.min(100, stageProgress))}%` }}
+              style={{ width: `${displayedProgress}%` }}
             />
           </div>
         </div>
 
         <ol className="mt-8 grid grid-cols-5 gap-2">
-          {growthPath.map(({ stage, points, Icon }, index) => {
-            const reached = growthPoints >= points;
+          {growthPath.map(({ stage, percent, Icon }, index) => {
+            const reached = displayedProgress >= percent;
             const active = stage === overallStage.stage;
             return (
               <li className="min-w-0 text-center" key={stage}>
