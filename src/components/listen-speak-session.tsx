@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DanishAudioButton } from "@/components/danish-audio-button";
+import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { listenSpeakItems } from "@/lib/learning/course";
-import type { ListenSpeakItem } from "@/lib/learning/course";
+import { getCourse, type ListenSpeakItem } from "@/lib/learning/course";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
@@ -58,8 +58,6 @@ type SpeechTokenResponse = {
   error?: string;
 };
 
-const listenSpeakRoundStorageKey = "sapling.listen-speak.round.v1";
-
 function toUnitScore(score: number | null | undefined) {
   if (typeof score !== "number" || !Number.isFinite(score)) {
     return 0;
@@ -77,15 +75,16 @@ function resultLabel(result: SpeakingResult) {
   return "Clear and complete";
 }
 
-function getNextRound() {
+function getNextRound(languageCode: TargetLanguageCode) {
+  const storageKey = `sapling.listen-speak.round.${languageCode}.v2`;
   try {
     const stored = Number.parseInt(
-      window.localStorage.getItem(listenSpeakRoundStorageKey) ?? "0",
+      window.localStorage.getItem(storageKey) ?? "0",
       10,
     );
     const round = Number.isFinite(stored) && stored >= 0 ? stored : 0;
     window.localStorage.setItem(
-      listenSpeakRoundStorageKey,
+      storageKey,
       String(round + 1),
     );
     return round;
@@ -97,6 +96,7 @@ function getNextRound() {
 function buildSession(
   concepts: Concept[],
   states: LearnerConceptState[],
+  listenSpeakItems: ListenSpeakItem[],
   round: number,
 ) {
   const conceptBySlug = new Map(
@@ -143,14 +143,22 @@ function buildSession(
 }
 
 export function ListenSpeakSession() {
+  const { targetLanguage } = useLearningModel();
+
+  return <LanguageListenSpeakSession key={targetLanguage.code} />;
+}
+
+function LanguageListenSpeakSession() {
   const {
     concepts,
     states,
     isLoading,
     error: modelError,
+    targetLanguage,
     recordListeningAttempt,
     recordSpeakingAttempt,
   } = useLearningModel();
+  const { listenSpeakItems } = getCourse(targetLanguage.code);
   const [itemIndex, setItemIndex] = useState(0);
   const [sessionItems, setSessionItems] = useState<ListenSpeakItem[]>([]);
   const [phase, setPhase] = useState<Phase>("listen");
@@ -172,8 +180,14 @@ export function ListenSpeakSession() {
   const didPrepareSession = useRef(false);
 
   const prepareSession = useCallback(
-    () => buildSession(concepts, states, getNextRound()),
-    [concepts, states],
+    () =>
+      buildSession(
+        concepts,
+        states,
+        listenSpeakItems,
+        getNextRound(targetLanguage.code),
+      ),
+    [concepts, listenSpeakItems, states, targetLanguage.code],
   );
 
   useEffect(() => {
@@ -282,7 +296,7 @@ export function ListenSpeakSession() {
         credentials.token,
         credentials.region,
       );
-      speechConfig.speechRecognitionLanguage = "da-DK";
+      speechConfig.speechRecognitionLanguage = targetLanguage.locale;
       speechConfig.outputFormat = sdk.OutputFormat.Detailed;
       speechConfig.setProperty(
         sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs,
@@ -512,7 +526,7 @@ export function ListenSpeakSession() {
           itemId: item.id,
           provider: "azure-speech",
           rawPronunciationScore: scored.rawPronunciationScore,
-          locale: "da-DK",
+          locale: targetLanguage.locale,
           audioRetained: false,
           source: "listen-speak",
         },
@@ -660,8 +674,9 @@ export function ListenSpeakSession() {
               What does it mean?
             </h2>
             <div className="mt-6">
-              <DanishAudioButton
+              <TargetAudioButton
                 clipId={item.audioId}
+                languageName={targetLanguage.name}
                 label="Play sentence"
                 onPlay={notePlayback}
               />
@@ -705,8 +720,9 @@ export function ListenSpeakSession() {
               {item.text}
             </h2>
             <div className="mt-6">
-              <DanishAudioButton
+              <TargetAudioButton
                 clipId={item.audioId}
+                languageName={targetLanguage.name}
                 label="Hear it again"
                 onPlay={notePlayback}
                 showSlowControl
@@ -760,13 +776,13 @@ export function ListenSpeakSession() {
                         ? "Finishing your score"
                         : liveTranscript
                           ? "Sapling is hearing"
-                          : "Listening for Danish"}
+                          : `Listening for ${targetLanguage.name}`}
                   </p>
                   <p
                     className="mt-2 min-h-7 text-lg font-semibold text-forest-950"
-                    lang="da"
+                    lang={targetLanguage.code}
                   >
-                    {liveTranscript || "Sig sætningen…"}
+                    {liveTranscript || targetLanguage.speakPrompt}
                   </p>
                 </div>
               ) : null}

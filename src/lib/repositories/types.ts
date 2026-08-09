@@ -6,10 +6,13 @@ import type {
   RetrievalAttemptInput,
   SpeakingAttemptInput,
 } from "@/types/learning";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 
 export interface LearningRepository {
   mode: "local" | "supabase";
-  loadSnapshot(): Promise<LearningSnapshot>;
+  getTargetLanguage(): Promise<TargetLanguageCode>;
+  setTargetLanguage(languageCode: TargetLanguageCode): Promise<void>;
+  loadSnapshot(languageCode: TargetLanguageCode): Promise<LearningSnapshot>;
   recordRetrievalAttempt(
     input: RetrievalAttemptInput,
   ): Promise<LearnerConceptState>;

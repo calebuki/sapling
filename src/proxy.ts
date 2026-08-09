@@ -11,6 +11,7 @@ export const config = {
     "/learn/:path*",
     "/ear/:path*",
     "/my-danish/:path*",
+    "/progress/:path*",
     "/world/:path*",
     "/login",
   ],

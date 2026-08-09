@@ -57,7 +57,7 @@ export function LoginScreen() {
         </div>
         <section className="paper-panel rounded-[24px] p-7 sm:p-9">
           <div className="text-center">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/58">Sapling Danish</p>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/58">Sapling languages</p>
             <h1 className="font-display text-3xl text-forest-950 sm:text-4xl">
               {mode === "sign-in" ? "Welcome back." : "Create an account."}
             </h1>

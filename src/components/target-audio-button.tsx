@@ -5,19 +5,21 @@ import { useEffect, useRef, useState } from "react";
 
 import { getSpeechAudioUrl } from "@/lib/learning/course";
 
-type DanishAudioButtonProps = {
+type TargetAudioButtonProps = {
   clipId: string;
+  languageName: string;
   label?: string;
   onPlay?: () => void;
   showSlowControl?: boolean;
 };
 
-export function DanishAudioButton({
+export function TargetAudioButton({
   clipId,
+  languageName,
   label = "Hear it",
   onPlay,
   showSlowControl = false,
-}: DanishAudioButtonProps) {
+}: TargetAudioButtonProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -74,7 +76,7 @@ export function DanishAudioButton({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
-        aria-label={isPlaying ? "Pause Danish audio" : label}
+        aria-label={isPlaying ? `Pause ${languageName} audio` : label}
         className="inline-flex items-center gap-2 rounded-2xl border border-forest-900/12 bg-white/75 px-4 py-2.5 text-sm font-bold text-forest-900 transition hover:bg-white"
         onClick={play}
         type="button"

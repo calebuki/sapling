@@ -32,6 +32,28 @@ type LearnerConceptStateRow = {
 export interface Database {
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          display_name: string | null;
+          native_language_code: string;
+          target_language_code: string;
+          time_zone: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          display_name?: string | null;
+          native_language_code?: string;
+          target_language_code?: string;
+          time_zone?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Relationships: [];
+      };
       concepts: {
         Row: {
           id: string;

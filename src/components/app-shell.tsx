@@ -2,6 +2,7 @@
 
 import {
   AudioLines,
+  Languages,
   Leaf,
   LogOut,
   MessageCircle,
@@ -12,18 +13,28 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { hasSupabase } from "@/lib/env";
+import { supportedLanguageCodes, targetLanguages } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/client";
-
-const destinations = [
-  { href: "/learn", label: "Learn", icon: Sprout },
-  { href: "/ear", label: "Listen & Speak", icon: AudioLines },
-  { href: "/my-danish", label: "Mit dansk", icon: TreePine },
-  { href: "/world", label: "World", icon: MessageCircle },
-];
+import { useLearningModel } from "@/components/providers/learning-model-provider";
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const router = useRouter();
+  const {
+    isSwitchingLanguage,
+    selectTargetLanguage,
+    targetLanguage,
+  } = useLearningModel();
+  const destinations = [
+    { href: "/learn", label: "Learn", icon: Sprout },
+    { href: "/ear", label: "Listen & Speak", icon: AudioLines },
+    {
+      href: "/progress",
+      label: `My ${targetLanguage.name}`,
+      icon: TreePine,
+    },
+    { href: "/world", label: "World", icon: MessageCircle },
+  ];
 
   async function signOut() {
     if (!hasSupabase) {
@@ -46,7 +57,29 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           </span>
         </Link>
 
-        <nav aria-label="Primary" className="mt-11 space-y-1.5">
+        <label className="mt-7 flex items-center gap-2.5 rounded-[14px] border border-forest-950/9 bg-white/58 px-3 py-2.5 text-forest-900/65">
+          <Languages aria-hidden="true" className="shrink-0" size={17} />
+          <span className="sr-only">Learning language</span>
+          <select
+            aria-label="Learning language"
+            className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent text-[12px] font-extrabold text-forest-950 outline-none disabled:cursor-wait disabled:opacity-55"
+            disabled={isSwitchingLanguage}
+            onChange={(event) => {
+              void selectTargetLanguage(
+                event.target.value as (typeof supportedLanguageCodes)[number],
+              ).catch(() => undefined);
+            }}
+            value={targetLanguage.code}
+          >
+            {supportedLanguageCodes.map((languageCode) => (
+              <option key={languageCode} value={languageCode}>
+                {targetLanguages[languageCode].endonym}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <nav aria-label="Primary" className="mt-7 space-y-1.5">
           {destinations.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href);
             return (
@@ -87,6 +120,27 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             </span>
             <span className="text-xl font-extrabold tracking-[-0.045em] text-forest-950">Sapling</span>
           </Link>
+          <label className="ml-auto flex items-center gap-1.5 rounded-xl border border-forest-950/9 bg-white/58 px-2.5 py-2 text-forest-900/65">
+            <Languages aria-hidden="true" size={16} />
+            <span className="sr-only">Learning language</span>
+            <select
+              aria-label="Learning language"
+              className="appearance-none bg-transparent text-[11px] font-extrabold text-forest-950 outline-none disabled:cursor-wait disabled:opacity-55"
+              disabled={isSwitchingLanguage}
+              onChange={(event) => {
+                void selectTargetLanguage(
+                  event.target.value as (typeof supportedLanguageCodes)[number],
+                ).catch(() => undefined);
+              }}
+              value={targetLanguage.code}
+            >
+              {supportedLanguageCodes.map((languageCode) => (
+                <option key={languageCode} value={languageCode}>
+                  {targetLanguages[languageCode].endonym}
+                </option>
+              ))}
+            </select>
+          </label>
           {hasSupabase ? (
             <button
               aria-label="Sign out"

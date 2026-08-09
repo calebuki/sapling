@@ -3,7 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
 
-const protectedPrefixes = ["/learn", "/ear", "/my-danish", "/world"];
+const protectedPrefixes = [
+  "/learn",
+  "/ear",
+  "/my-danish",
+  "/progress",
+  "/world",
+];
 
 export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -57,4 +63,3 @@ export async function updateSession(request: NextRequest) {
 
   return response;
 }
-

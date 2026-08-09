@@ -17,10 +17,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { DanishAudioButton } from "@/components/danish-audio-button";
+import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { useDanishSpeechRecognition } from "@/hooks/use-danish-speech-recognition";
-import { lessons, type LessonSupport } from "@/lib/learning/course";
+import { useTargetSpeechRecognition } from "@/hooks/use-target-speech-recognition";
+import { getCourse, type Lesson, type LessonSupport } from "@/lib/learning/course";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
@@ -28,7 +29,7 @@ import {
   pronunciationBand,
 } from "@/lib/learning/speech-scoring";
 import type {
-  DanishSpeechResult,
+  TargetSpeechResult,
   LessonEvaluation,
 } from "@/types/lesson-evaluation";
 
@@ -37,15 +38,23 @@ type Phase = "attempt" | "feedback" | "reveal" | "complete";
 const GUIDED_PRONUNCIATION_TARGET = 0.7;
 
 export function LearnSession() {
+  const { targetLanguage } = useLearningModel();
+
+  return <LanguageLearnSession key={targetLanguage.code} />;
+}
+
+function LanguageLearnSession() {
   const {
     concepts,
     states,
     isLoading,
     error: modelError,
+    targetLanguage,
     recordRetrievalAttempt,
     recordRepair,
     recordSpeakingAttempt,
   } = useLearningModel();
+  const { lessons } = getCourse(targetLanguage.code);
   const [lessonIndex, setLessonIndex] = useState(0);
   const [sessionUnlockedLessonIndex, setSessionUnlockedLessonIndex] =
     useState(0);
@@ -53,11 +62,11 @@ export function LearnSession() {
   const [queuePosition, setQueuePosition] = useState(0);
   const [phase, setPhase] = useState<Phase>("attempt");
   const [evaluation, setEvaluation] = useState<LessonEvaluation | null>(null);
-  const [speechResult, setSpeechResult] = useState<DanishSpeechResult | null>(
+  const [speechResult, setSpeechResult] = useState<TargetSpeechResult | null>(
     null,
   );
   const [revealSpeechResult, setRevealSpeechResult] =
-    useState<DanishSpeechResult | null>(null);
+    useState<TargetSpeechResult | null>(null);
   const [usedAudioHint, setUsedAudioHint] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -71,7 +80,7 @@ export function LearnSession() {
     resetTranscript,
     start: startRecognition,
     stop: stopRecognition,
-  } = useDanishSpeechRecognition();
+  } = useTargetSpeechRecognition(targetLanguage.locale);
 
   const stateByConcept = useMemo(
     () => new Map(states.map((state) => [state.conceptId, state])),
@@ -120,7 +129,7 @@ export function LearnSession() {
         ? unfinished
         : targetLesson.exercises.map((_, exerciseIndex) => exerciseIndex);
     },
-    [conceptBySlug, stateByConcept],
+    [conceptBySlug, lessons, stateByConcept],
   );
 
   useEffect(() => {
@@ -134,7 +143,7 @@ export function LearnSession() {
     setExerciseQueue(getPracticeQueue(startingLesson));
     setQueuePosition(0);
     didChooseStartingLesson.current = true;
-  }, [firstIncompleteLesson, getPracticeQueue, isLoading]);
+  }, [firstIncompleteLesson, getPracticeQueue, isLoading, lessons.length]);
 
   const lesson = lessons[lessonIndex];
   const exerciseIndex = exerciseQueue[queuePosition] ?? 0;
@@ -242,6 +251,7 @@ export function LearnSession() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          languageCode: targetLanguage.code,
           lessonId: lesson.id,
           exerciseId: exercise.audioId,
           transcript: spoken.recognizedText,
@@ -281,7 +291,7 @@ export function LearnSession() {
         await recordRepair({
           conceptId: concept.id,
           responseText: spoken.recognizedText,
-          targetText: evaluationBody.correctedDanish,
+          targetText: evaluationBody.correctedTargetText,
           context: attemptContext,
         });
       }
@@ -374,7 +384,7 @@ export function LearnSession() {
           lessonId: lesson.id,
           exerciseId: exercise.audioId,
           provider: "azure-speech",
-          locale: "da-DK",
+          locale: targetLanguage.locale,
           assessmentMode: "scripted-repair",
           rawPronunciationScore,
           audioRetained: false,
@@ -411,6 +421,7 @@ export function LearnSession() {
         <LessonRail
           completedLessons={completedLessons}
           lessonIndex={lessonIndex}
+          lessons={lessons}
           masteredExerciseCounts={masteredExerciseCounts}
           onChoose={chooseLesson}
           unlockedLessonIndex={availableLessonIndex}
@@ -479,6 +490,7 @@ export function LearnSession() {
       <LessonRail
         completedLessons={completedLessons}
         lessonIndex={lessonIndex}
+        lessons={lessons}
         masteredExerciseCounts={masteredExerciseCounts}
         onChoose={chooseLesson}
         unlockedLessonIndex={availableLessonIndex}
@@ -499,7 +511,11 @@ export function LearnSession() {
         <div className="p-5 sm:p-8 lg:p-10">
           {lesson.support ? (
             <div className="mb-6 lg:hidden">
-              <ScenarioSupportPanel compact support={lesson.support} />
+              <ScenarioSupportPanel
+                compact
+                languageCode={targetLanguage.code}
+                support={lesson.support}
+              />
             </div>
           ) : null}
           <div
@@ -516,7 +532,7 @@ export function LearnSession() {
                 <div>
                   <h2
                     className="font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl"
-                    lang="da"
+                    lang={targetLanguage.code}
                   >
                     {exercise.expected}
                   </h2>
@@ -530,8 +546,9 @@ export function LearnSession() {
                 </h2>
               )}
               <div className="mt-4 sm:mt-5">
-                <DanishAudioButton
+                <TargetAudioButton
                   clipId={exercise.audioId}
+                  languageName={targetLanguage.name}
                   label={
                     exercise.mode === "repeat" ? "Hear it" : "Hear an example"
                   }
@@ -565,9 +582,9 @@ export function LearnSession() {
                             ? "Finishing transcript"
                             : recordingStatus === "listening"
                               ? "Listening"
-                              : "Answer in Danish"}
+                              : `Answer in ${targetLanguage.name}`}
                     </p>
-                    <p className="mt-1 min-h-7 text-lg font-semibold text-forest-950" lang="da">
+                    <p className="mt-1 min-h-7 text-lg font-semibold text-forest-950" lang={targetLanguage.code}>
                       {liveTranscript || (isRecording ? "Sig dit svar…" : "Tap Start speaking when you’re ready.")}
                     </p>
                   </div>
@@ -632,8 +649,9 @@ export function LearnSession() {
                 {exercise.expected}
               </h2>
               <div className="mt-4">
-                <DanishAudioButton
+                <TargetAudioButton
                   clipId={exercise.audioId}
+                  languageName={targetLanguage.name}
                   label="Hear the answer"
                   showSlowControl
                 />
@@ -648,7 +666,7 @@ export function LearnSession() {
                   Repeat it
                 </p>
                 <div aria-live="polite" className="mt-3">
-                  <p className="min-h-7 text-lg font-semibold leading-8 text-forest-950" lang="da">
+                  <p className="min-h-7 text-lg font-semibold leading-8 text-forest-950" lang={targetLanguage.code}>
                     {liveTranscript ||
                       (isRecording
                         ? "Sig sætningen…"
@@ -760,23 +778,24 @@ export function LearnSession() {
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
                   Sapling heard
                 </p>
-                <p className="mt-3 text-xl font-medium leading-8 text-forest-950" lang="da">
+                <p className="mt-3 text-xl font-medium leading-8 text-forest-950" lang={targetLanguage.code}>
                   {speechResult.recognizedText}
                 </p>
               </div>
 
-              {evaluation.correctedDanish !== speechResult.recognizedText ||
+              {evaluation.correctedTargetText !== speechResult.recognizedText ||
               evaluation.tips.length > 0 ? (
                 <div className="mt-4 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
                     A natural version
                   </p>
-                  <p className="mt-2 text-2xl font-semibold leading-9 text-forest-950" lang="da">
-                    {evaluation.correctedDanish}
+                  <p className="mt-2 text-2xl font-semibold leading-9 text-forest-950" lang={targetLanguage.code}>
+                    {evaluation.correctedTargetText}
                   </p>
                   <div className="mt-4">
-                    <DanishAudioButton
+                    <TargetAudioButton
                       clipId={exercise.audioId}
+                      languageName={targetLanguage.name}
                       label="Hear an example"
                       showSlowControl
                     />
@@ -850,7 +869,10 @@ export function LearnSession() {
             </div>
             {lesson.support ? (
               <div className="hidden lg:block">
-                <ScenarioSupportPanel support={lesson.support} />
+                <ScenarioSupportPanel
+                  languageCode={targetLanguage.code}
+                  support={lesson.support}
+                />
               </div>
             ) : null}
           </div>
@@ -862,9 +884,11 @@ export function LearnSession() {
 
 function ScenarioSupportPanel({
   compact = false,
+  languageCode,
   support,
 }: {
   compact?: boolean;
+  languageCode: TargetLanguageCode;
   support: LessonSupport;
 }) {
   if (compact) {
@@ -879,7 +903,7 @@ function ScenarioSupportPanel({
           />
         </summary>
         <div className="border-t border-forest-900/8 p-4">
-          <ScenarioSupportContent support={support} />
+          <ScenarioSupportContent languageCode={languageCode} support={support} />
         </div>
       </details>
     );
@@ -887,12 +911,18 @@ function ScenarioSupportPanel({
 
   return (
     <aside className="sticky top-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
-      <ScenarioSupportContent support={support} />
+      <ScenarioSupportContent languageCode={languageCode} support={support} />
     </aside>
   );
 }
 
-function ScenarioSupportContent({ support }: { support: LessonSupport }) {
+function ScenarioSupportContent({
+  languageCode,
+  support,
+}: {
+  languageCode: TargetLanguageCode;
+  support: LessonSupport;
+}) {
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/58">
@@ -903,14 +933,19 @@ function ScenarioSupportContent({ support }: { support: LessonSupport }) {
       ) : null}
       <div className="mt-4 grid grid-cols-2 gap-2">
         {support.words.map((word) => (
-          <ScenarioWord key={`${word.danish}-${word.english}`} word={word} />
+          <ScenarioWord
+            key={`${word.target}-${word.english}`}
+            languageCode={languageCode}
+            word={word}
+          />
         ))}
       </div>
       {support.starters?.length ? (
         <div className="mt-5 space-y-2 border-t border-forest-900/8 pt-4">
           {support.starters.map((starter) => (
             <ScenarioWord
-              key={`${starter.danish}-${starter.english}`}
+              key={`${starter.target}-${starter.english}`}
+              languageCode={languageCode}
               wide
               word={starter}
             />
@@ -922,22 +957,24 @@ function ScenarioSupportContent({ support }: { support: LessonSupport }) {
 }
 
 function ScenarioWord({
+  languageCode,
   wide = false,
   word,
 }: {
+  languageCode: TargetLanguageCode;
   wide?: boolean;
   word: LessonSupport["words"][number];
 }) {
   return (
     <button
-      aria-label={`${word.danish}: ${word.english}`}
+      aria-label={`${word.target}: ${word.english}`}
       className={`group/word rounded-xl bg-forest-900/[0.045] px-3 py-2 text-left outline-none transition hover:bg-moss-400/12 focus-visible:ring-2 focus-visible:ring-moss-500/50 ${
         wide ? "block w-full" : "min-w-0"
       }`}
       type="button"
     >
-      <span className="block truncate text-sm font-bold text-forest-950" lang="da">
-        {word.danish}
+      <span className="block truncate text-sm font-bold text-forest-950" lang={languageCode}>
+        {word.target}
       </span>
       <span className="block truncate text-xs text-forest-900/0 transition group-hover/word:text-forest-900/52 group-focus/word:text-forest-900/52">
         {word.english}
@@ -949,12 +986,14 @@ function ScenarioWord({
 function LessonRail({
   completedLessons,
   lessonIndex,
+  lessons,
   masteredExerciseCounts,
   onChoose,
   unlockedLessonIndex,
 }: {
   completedLessons: boolean[];
   lessonIndex: number;
+  lessons: Lesson[];
   masteredExerciseCounts: number[];
   onChoose: (index: number) => void;
   unlockedLessonIndex: number;

@@ -20,11 +20,11 @@ function getMetadataBase() {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   title: {
-    default: "Sapling — Danish that takes root",
+    default: "Sapling — Languages that take root",
     template: "%s | Sapling",
   },
   description:
-    "A personal Danish learning system built around retrieval, listening, and a growing model of what you can use.",
+    "A personal language learning system built around retrieval, listening, and a growing model of what you can use.",
   applicationName: "Sapling",
   robots: { index: false, follow: false },
 };

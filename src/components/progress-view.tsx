@@ -58,7 +58,7 @@ const kindLabels: Record<ConceptKind, string> = {
   phonetic_contrast: "Sound contrast",
   communicative_function: "Conversation skill",
   pragmatic_convention: "Conversation habit",
-  listening_phenomenon: "Danish sound",
+  listening_phenomenon: "Language sound",
 };
 
 type ModeledConcept = {
@@ -95,8 +95,8 @@ function currentGrowthStage(progress: number) {
   );
 }
 
-export function MyDanishView() {
-  const { concepts, states, isLoading, error } = useLearningModel();
+export function ProgressView() {
+  const { concepts, states, isLoading, error, targetLanguage } = useLearningModel();
   const stateByConcept = new Map(
     states.map((state) => [state.conceptId, state]),
   );
@@ -189,7 +189,7 @@ export function MyDanishView() {
             <span>{displayedProgress}%</span>
           </div>
           <div
-            aria-label="Progress toward near-fluent Danish"
+            aria-label={`Progress toward near-fluent ${targetLanguage.name}`}
             aria-valuemax={100}
             aria-valuemin={0}
             aria-valuenow={displayedProgress}
@@ -255,16 +255,19 @@ export function MyDanishView() {
 
       <ProgressGroup
         items={needsAttention}
+        languageName={targetLanguage.name}
         title="Needs attention"
       />
       <ProgressGroup
         collapsed
         items={growing}
+        languageName={targetLanguage.name}
         title="Growing"
       />
       <ProgressGroup
         collapsed
         items={strong}
+        languageName={targetLanguage.name}
         title="Strong"
       />
 
@@ -298,10 +301,12 @@ export function MyDanishView() {
 
 function ProgressGroup({
   collapsed = false,
+  languageName,
   title,
   items,
 }: {
   collapsed?: boolean;
+  languageName: string;
   title: string;
   items: ModeledConcept[];
 }) {
@@ -312,7 +317,7 @@ function ProgressGroup({
   const cards = (
     <div className="grid gap-4 xl:grid-cols-2">
       {items.map((item) => (
-        <ConceptCard item={item} key={item.concept.id} />
+        <ConceptCard item={item} key={item.concept.id} languageName={languageName} />
       ))}
     </div>
   );
@@ -345,7 +350,13 @@ function ProgressGroup({
   );
 }
 
-function ConceptCard({ item }: { item: ModeledConcept }) {
+function ConceptCard({
+  item,
+  languageName,
+}: {
+  item: ModeledConcept;
+  languageName: string;
+}) {
   const { concept, state, stage } = item;
   const action = nextAction(state);
   const ActionIcon = action.Icon;
@@ -355,7 +366,9 @@ function ConceptCard({ item }: { item: ModeledConcept }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-forest-700/48">
-            {kindLabels[concept.kind]}
+            {concept.kind === "listening_phenomenon"
+              ? `${languageName} sound`
+              : kindLabels[concept.kind]}
           </p>
           <h3 className="mt-1 text-2xl font-extrabold leading-tight tracking-[-0.035em] text-forest-950">
             {concept.canonicalForm}
