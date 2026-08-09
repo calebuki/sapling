@@ -10,6 +10,11 @@ export type SpeechVoice =
   | "sv-SE-SofieNeural"
   | "sv-SE-MattiasNeural";
 
+export type FallbackPattern = {
+  requiredPhrase: string;
+  minimumTokens: number;
+};
+
 export type LessonExercise = {
   conceptSlug: string;
   audioId: string;
@@ -18,6 +23,7 @@ export type LessonExercise = {
   eyebrow: string;
   prompt: string;
   expected: string;
+  fallbackPatterns?: FallbackPattern[];
   note: string;
 };
 
@@ -135,6 +141,10 @@ const danishLessons: Lesson[] = [
         eyebrow: "Introduce yourself",
         prompt: "Say your name.",
         expected: "Hej, jeg hedder Caleb.",
+        fallbackPatterns: [
+          { requiredPhrase: "jeg hedder", minimumTokens: 3 },
+          { requiredPhrase: "mit navn er", minimumTokens: 4 },
+        ],
         note: "Jeg hedder … is the normal way to introduce yourself.",
       },
       {

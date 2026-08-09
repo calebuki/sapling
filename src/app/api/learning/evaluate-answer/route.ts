@@ -2,7 +2,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
-import { getCourse } from "@/lib/learning/course";
+import { getCourse, type FallbackPattern } from "@/lib/learning/course";
 import { getTargetLanguage } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/server";
 import type { LessonEvaluation } from "@/types/lesson-evaluation";
@@ -67,15 +67,34 @@ function tokenSimilarity(left: string, right: string, locale: string) {
   return (2 * shared) / (leftTokens.size + rightTokens.size);
 }
 
+function matchesFallbackPattern(
+  transcript: string,
+  pattern: FallbackPattern,
+  locale: string,
+) {
+  const normalizedTranscript = normalize(transcript, locale);
+  const requiredPhrase = normalize(pattern.requiredPhrase, locale);
+  const tokenCount = normalizedTranscript.split(" ").filter(Boolean).length;
+
+  return (
+    tokenCount >= pattern.minimumTokens &&
+    ` ${normalizedTranscript} `.includes(` ${requiredPhrase} `)
+  );
+}
+
 function fallbackEvaluation(
   transcript: string,
   expected: string,
   locale: string,
+  patterns: FallbackPattern[] = [],
 ): LessonEvaluation {
   const similarity = tokenSimilarity(transcript, expected, locale);
   const exact = normalize(transcript, locale) === normalize(expected, locale);
-  const successful = exact || similarity >= 0.72;
-  const score = exact ? 1 : Math.max(0.2, similarity);
+  const matchesPattern = patterns.some((pattern) =>
+    matchesFallbackPattern(transcript, pattern, locale),
+  );
+  const successful = exact || matchesPattern || similarity >= 0.72;
+  const score = exact || matchesPattern ? 1 : Math.max(0.2, similarity);
 
   return {
     successful,
@@ -119,6 +138,7 @@ export async function POST(request: Request) {
     parsed.data.transcript,
     exercise.expected,
     language.locale,
+    exercise.fallbackPatterns,
   );
   const canUseGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
 

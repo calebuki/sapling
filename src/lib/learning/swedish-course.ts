@@ -79,6 +79,10 @@ export const swedishLessons: Lesson[] = [
         eyebrow: "Introduce yourself",
         prompt: "Say your name.",
         expected: "Hej, jag heter Caleb.",
+        fallbackPatterns: [
+          { requiredPhrase: "jag heter", minimumTokens: 3 },
+          { requiredPhrase: "mitt namn är", minimumTokens: 4 },
+        ],
         note: "Jag heter … is the normal way to introduce yourself.",
       },
       {
