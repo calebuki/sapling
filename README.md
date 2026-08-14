@@ -5,12 +5,14 @@ separate Danish and Swedish learning tracks. Its core
 product is an evolving model of what a learner can recognize, retrieve,
 produce, pronounce, and understand across contexts and speakers.
 
-The first slice includes:
+The current product includes:
 
 - a small adaptive Learn loop built around attempt, reveal, compare, and repair
+- an adaptive Practice loop with recurring characters, push-to-talk
+  conversation, contextual speech resolution, and automatic personal memory
 - a language-specific progress view that keeps learning dimensions separate
-- a Supabase schema for concepts, learner state, and append-only evidence
-- focused placeholders for the future Ear and World systems
+- a Supabase schema for concepts, learner state, multi-concept conversation
+  evidence, character continuity, and append-only learning history
 - local demo persistence when Sapling's Supabase project is not configured
 
 ## Stack
@@ -43,8 +45,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). With no Supabase variables,
-Sapling uses a local demo repository in the browser so the Learn and progress
-flows can be exercised immediately.
+Sapling uses a local demo repository in the browser so Learn, Practice, and
+progress can be exercised immediately.
 
 To connect a new Sapling Supabase project, create `.env.local` from the variable
 names in `.env.example` and use values from **Sapling's own project**:
@@ -62,8 +64,8 @@ a Supabase secret or service-role key to the frontend.
 
 The initial migration is in `supabase/migrations`. It creates the core concept,
 learner-state, session, and evidence model; enables RLS on every public table;
-and installs authenticated database commands for atomic retrieval and repair
-logging.
+and installs authenticated database commands for atomic retrieval, repair, and
+conversation-evidence logging.
 
 After creating and linking Sapling's own Supabase project:
 

@@ -23,10 +23,23 @@ import type {
   RetrievalAttemptInput,
   SpeakingAttemptInput,
 } from "@/types/learning";
+import type {
+  CompletePracticeSessionInput,
+  PracticeSnapshot,
+  RecordPracticeTurnInput,
+  StartPracticeSessionInput,
+} from "@/types/practice";
+
+const emptyPracticeSnapshot: PracticeSnapshot = {
+  memories: [],
+  continuity: [],
+  recentScenarioIds: [],
+};
 
 type LearningModelContextValue = {
   concepts: Concept[];
   states: LearnerConceptState[];
+  practiceSnapshot: PracticeSnapshot;
   targetLanguage: TargetLanguage;
   mode: "local" | "supabase";
   isLoading: boolean;
@@ -43,6 +56,12 @@ type LearningModelContextValue = {
   recordSpeakingAttempt: (
     input: SpeakingAttemptInput,
   ) => Promise<LearnerConceptState>;
+  startPracticeSession: (input: StartPracticeSessionInput) => Promise<string>;
+  recordPracticeTurn: (input: RecordPracticeTurnInput) => Promise<void>;
+  completePracticeSession: (
+    input: CompletePracticeSessionInput,
+  ) => Promise<void>;
+  deleteLearnerMemory: (memoryId: string) => Promise<void>;
 };
 
 const LearningModelContext = createContext<LearningModelContextValue | null>(
@@ -55,6 +74,9 @@ export function LearningModelProvider({
   const repository = useMemo(() => createLearningRepository(), []);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [states, setStates] = useState<LearnerConceptState[]>([]);
+  const [practiceSnapshot, setPracticeSnapshot] = useState<PracticeSnapshot>(
+    emptyPracticeSnapshot,
+  );
   const [targetLanguageCode, setTargetLanguageCode] =
     useState<TargetLanguageCode>("da");
   const [isLoading, setIsLoading] = useState(true);
@@ -66,17 +88,21 @@ export function LearningModelProvider({
 
     repository
       .getTargetLanguage()
-      .then(async (languageCode) => ({
-        languageCode,
-        snapshot: await repository.loadSnapshot(languageCode),
-      }))
-      .then(({ languageCode, snapshot }) => {
+      .then(async (languageCode) => {
+        const [snapshot, loadedPracticeSnapshot] = await Promise.all([
+          repository.loadSnapshot(languageCode),
+          repository.loadPracticeSnapshot(languageCode),
+        ]);
+        return { languageCode, snapshot, loadedPracticeSnapshot };
+      })
+      .then(({ languageCode, snapshot, loadedPracticeSnapshot }) => {
         if (cancelled) {
           return;
         }
         setTargetLanguageCode(languageCode);
         setConcepts(snapshot.concepts);
         setStates(snapshot.states);
+        setPracticeSnapshot(loadedPracticeSnapshot);
       })
       .catch((loadError: unknown) => {
         if (!cancelled) {
@@ -108,10 +134,14 @@ export function LearningModelProvider({
       setIsSwitchingLanguage(true);
       try {
         await repository.setTargetLanguage(languageCode);
-        const snapshot = await repository.loadSnapshot(languageCode);
+        const [snapshot, loadedPracticeSnapshot] = await Promise.all([
+          repository.loadSnapshot(languageCode),
+          repository.loadPracticeSnapshot(languageCode),
+        ]);
         setTargetLanguageCode(languageCode);
         setConcepts(snapshot.concepts);
         setStates(snapshot.states);
+        setPracticeSnapshot(loadedPracticeSnapshot);
       } catch (languageError) {
         const message =
           languageError instanceof Error
@@ -208,11 +238,88 @@ export function LearningModelProvider({
     [repository, upsertState],
   );
 
+  const startPracticeSession = useCallback(
+    async (input: StartPracticeSessionInput) => {
+      setError(null);
+      try {
+        return await repository.startPracticeSession(input);
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not start this conversation.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository],
+  );
+
+  const recordPracticeTurn = useCallback(
+    async (input: RecordPracticeTurnInput) => {
+      setError(null);
+      try {
+        const updatedStates = await repository.recordPracticeTurn(input);
+        for (const updated of updatedStates) {
+          upsertState(updated);
+        }
+        setPracticeSnapshot(
+          await repository.loadPracticeSnapshot(input.languageCode),
+        );
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not save this conversation turn.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, upsertState],
+  );
+
+  const completePracticeSession = useCallback(
+    async (input: CompletePracticeSessionInput) => {
+      setError(null);
+      try {
+        setPracticeSnapshot(await repository.completePracticeSession(input));
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not finish this conversation.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository],
+  );
+
+  const deleteLearnerMemory = useCallback(
+    async (memoryId: string) => {
+      setError(null);
+      try {
+        setPracticeSnapshot(
+          await repository.deleteLearnerMemory(targetLanguageCode, memoryId),
+        );
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not forget that detail.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, targetLanguageCode],
+  );
+
   return (
     <LearningModelContext.Provider
       value={{
         concepts,
         states,
+        practiceSnapshot,
         targetLanguage: getTargetLanguage(targetLanguageCode),
         mode: repository.mode,
         isLoading,
@@ -223,6 +330,10 @@ export function LearningModelProvider({
         recordRepair,
         recordListeningAttempt,
         recordSpeakingAttempt,
+        startPracticeSession,
+        recordPracticeTurn,
+        completePracticeSession,
+        deleteLearnerMemory,
       }}
     >
       {children}

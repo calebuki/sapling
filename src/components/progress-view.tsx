@@ -247,8 +247,8 @@ export function ProgressView() {
             Your first seed is ready.
           </h2>
           <p className="mt-2 text-sm leading-6 text-forest-900/55">
-            Finish one learning prompt or Listen &amp; Speak sentence and your
-            progress will appear here.
+            Finish one learning prompt or Practice conversation and your progress
+            will appear here.
           </p>
         </section>
       ) : null}

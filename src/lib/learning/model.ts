@@ -6,6 +6,10 @@ import type {
   RetrievalAttemptInput,
   SpeakingAttemptInput,
 } from "@/types/learning";
+import type {
+  PracticeConceptEvidence,
+  PracticeSpeechMetrics,
+} from "@/types/practice";
 
 export const learningDimensions: LearningDimension[] = [
   "recognitionText",
@@ -195,5 +199,44 @@ export function applyDemoSpeakingAttempt(
     exposureCount: current.exposureCount + 1,
     lastExposureAt: now,
     algorithmVersion: 1,
+  };
+}
+
+export function applyDemoPracticeEvidence(
+  current: LearnerConceptState,
+  evidence: PracticeConceptEvidence,
+  speechMetrics: PracticeSpeechMetrics,
+): LearnerConceptState {
+  const now = new Date().toISOString();
+  const influence = 0.22 * evidence.weight;
+  const automaticityInfluence = 0.16 * evidence.weight;
+  const pronunciationInfluence = 0.16 * evidence.weight;
+
+  return {
+    ...current,
+    production: clamp(
+      (current.production ?? 0.12) * (1 - influence) +
+        evidence.productionScore * influence,
+    ),
+    pronunciation:
+      speechMetrics.pronunciationScore === null
+        ? current.pronunciation
+        : clamp(
+            (current.pronunciation ?? 0.12) * (1 - pronunciationInfluence) +
+              speechMetrics.pronunciationScore * pronunciationInfluence,
+          ),
+    automaticity: clamp(
+      (current.automaticity ?? 0.08) * (1 - automaticityInfluence) +
+        evidence.automaticityScore * automaticityInfluence,
+    ),
+    contextDiversity: clamp(
+      (current.contextDiversity ?? 0.08) + 0.06 * evidence.weight,
+    ),
+    estimateConfidence: clamp(
+      current.estimateConfidence + 0.05 * evidence.weight,
+    ),
+    exposureCount: current.exposureCount + 1,
+    lastExposureAt: now,
+    algorithmVersion: 2,
   };
 }

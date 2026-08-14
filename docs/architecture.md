@@ -10,6 +10,15 @@ history of learning evidence. A learner concept state is a replaceable,
 versioned projection over that evidence. Sessions and narrative experiences are
 ways to collect useful evidence; they are not the top-level learning model.
 
+The learner-facing product has two primary areas:
+
+- **Learn** introduces and strengthens vocabulary, patterns, sounds, and
+  communicative functions with guided retrieval and repair.
+- **Practice** combines encountered capabilities in conversations, roleplays,
+  and open questions. Practice is always available, but the planner limits each
+  scenario to language the learner has encountered and selects the best next
+  stretch automatically.
+
 The first implementation stays intentionally small: one learner and Danish in
 the UI, with `user_id` and `language_code` boundaries that prevent a future
 multi-user or multi-language rewrite.
@@ -50,13 +59,15 @@ aid, not a second production backend. It persists the same domain shape and raw
 event vocabulary in `localStorage`.
 
 When Supabase is configured, `@supabase/ssr` stores authentication in cookies.
-Next.js Proxy refreshes tokens and protects the four application routes. The
+Next.js Proxy refreshes tokens and protects the application routes. The
 browser uses only Sapling's publishable key; RLS is the authorization boundary.
 There is deliberately no service-role client in the regular application path.
 
-AI, speech-to-text, text-to-speech, and pronunciation analysis are future
-adapters. Provider outputs will become evidence events and content artifacts;
-provider-specific IDs must not become core concept or learner-state IDs.
+AI and speech providers remain adapters. Provider outputs become evidence
+events and content artifacts; provider-specific IDs never become core concept
+or learner-state IDs. Practice generation uses a structured scenario contract
+so the model varies natural dialogue without controlling progression,
+eligibility, or persistence rules.
 
 Learner speech recordings are ephemeral processing inputs, not stored content.
 The browser sends a recording to a server-side speech adapter, which returns a
@@ -65,6 +76,14 @@ application persists only that derived evidence and discards the recording when
 the scoring request completes. Sapling does not upload learner recordings to
 Supabase Storage. Any speech provider must have its own retention behavior
 reviewed and configured for the shortest available retention before use.
+
+Open conversation recognition keeps the provider transcript, detailed alternate
+candidates, and a context-resolved interpretation as separate derived values.
+A likely recognition artifact is recorded in `speech_resolutions` and is not
+treated as a learner vocabulary or grammar error. High-confidence resolutions
+remain invisible during the conversation; uncertain meaning produces a natural
+in-character clarification. Only recurring or useful details may appear in the
+post-conversation debrief.
 
 ## Data model
 
@@ -117,15 +136,27 @@ that deserves validation and querying:
 making lessons the core abstraction. Composite foreign keys include `user_id`
 so one learner cannot attach evidence to another learner's session.
 
+Practice sessions use `kind = 'practice'`. A conversation turn creates one
+append-only learning event and can attribute weighted evidence to multiple
+concepts through `learning_event_concepts`. `speech_resolutions` preserves the
+difference between provider transcription and contextual interpretation without
+retaining audio.
+
+`learner_memories` stores compact learner-owned facts explicitly stated during
+conversation, such as family, work, routines, interests, and preferences.
+Memories are captured automatically and remain visible and deletable by the
+learner. `character_continuity` stores a short summary and encounter count for
+the recurring guide in each language; raw conversation transcripts are not the
+continuity model.
+
 ### Deferred tables
 
-Stories, characters, story events, and reusable listening audio samples are
-important but deferred until their first working experience defines ownership
-and query patterns. The likely split is learner-owned narrative continuity plus
-reusable curriculum audio and speaker metadata. Reusable source audio is
-distinct from ephemeral learner speech and may be stored with explicit
-provenance and licensing. Deferring it avoids encoding speculative provider and
-licensing assumptions in the foundation migration.
+Story events, a broader cast, and reusable listening audio samples remain
+deferred until their first working experience defines ownership and query
+patterns. Basic learner-owned character continuity now exists; future narrative
+history can extend it without becoming the learning model. Reusable source audio
+is distinct from ephemeral learner speech and may be stored with explicit
+provenance and licensing.
 
 ## Security decisions
 
@@ -140,6 +171,8 @@ licensing assumptions in the foundation migration.
   the browser API.
 - Learning events and detail rows have select/insert policies but no client
   update/delete policies, preserving raw history.
+- Learner memories and character continuity are learner-owned and support
+  select, insert, update, and delete under RLS.
 - Authenticated database commands use invoker rights and assert the current
   user; no exposed security-definer function bypasses RLS.
 

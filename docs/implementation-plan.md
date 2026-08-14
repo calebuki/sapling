@@ -21,7 +21,21 @@
 - Replace the initial projection heuristic with tested, replayable estimators
 - Add an evidence inspector for debugging why a concept has its current state
 
-## Phase 3 — Ear
+## Learn / Practice product loop
+
+- [x] Reduce primary navigation to Learn and Practice
+- [x] Select the best next Practice scenario from encountered concept evidence
+- [x] Add push-to-talk conversations with recurring language-specific guides
+- [x] Resolve likely speech-recognition substitutions against scenario context
+- [x] Attach one conversation turn to multiple demonstrated concepts
+- [x] Capture visible and deletable personal memories automatically
+- [x] Persist character continuity and concise encounter summaries
+- [ ] Expand Learn with family, workplace, routine, and activity capability
+  bundles that unlock deeper personal and professional Practice scenarios
+- [ ] Add dynamic TTS for character replies after provider quality and retention
+  are reviewed
+
+## Phase 3 — listening depth inside Learn and Practice
 
 - Model audio samples, speakers, recording conditions, and listening phenomena
 - Add isolated-word and careful-sentence listening attempts
@@ -29,7 +43,7 @@
 - Progress toward natural reduction, unfamiliar speakers, conversation, and
   noise only as evidence supports it
 
-## Phase 4 — World
+## Phase 4 — richer recurring continuity
 
 - Add learner-owned characters, stories, and chronological story events
 - Continue a small cast across days

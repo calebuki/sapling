@@ -6,6 +6,7 @@ import {
 } from "@/lib/learning/languages";
 import {
   applyDemoRepair,
+  applyDemoPracticeEvidence,
   applyDemoRetrievalAttempt,
   applyDemoListeningAttempt,
   applyDemoSpeakingAttempt,
@@ -19,6 +20,11 @@ import type {
   RetrievalAttemptInput,
   SpeakingAttemptInput,
 } from "@/types/learning";
+import type {
+  CharacterContinuity,
+  LearnerMemory,
+  PracticeSnapshot,
+} from "@/types/practice";
 
 const targetLanguageStorageKey = "sapling.demo.target-language.v1";
 
@@ -34,6 +40,10 @@ function eventStorageKey(languageCode: TargetLanguageCode) {
     : "sapling.demo.learning-events.sv.v1";
 }
 
+function practiceStorageKey(languageCode: TargetLanguageCode) {
+  return `sapling.demo.practice.${languageCode}.v1`;
+}
+
 function languageForConcept(conceptId: string): TargetLanguageCode {
   return conceptId.startsWith("demo-sv-") ? "sv" : "da";
 }
@@ -45,11 +55,40 @@ type DemoEvent = {
     | "retrieval_attempt"
     | "listening_attempt"
     | "speaking_attempt"
+    | "conversation_turn"
     | "error"
     | "repair";
   conceptId: string;
   payload: Record<string, unknown>;
 };
+
+function emptyPracticeSnapshot(): PracticeSnapshot {
+  return { memories: [], continuity: [], recentScenarioIds: [] };
+}
+
+function readPracticeSnapshot(languageCode: TargetLanguageCode) {
+  try {
+    const stored = window.localStorage.getItem(practiceStorageKey(languageCode));
+    return stored ? (JSON.parse(stored) as PracticeSnapshot) : emptyPracticeSnapshot();
+  } catch {
+    return emptyPracticeSnapshot();
+  }
+}
+
+function writePracticeSnapshot(
+  languageCode: TargetLanguageCode,
+  snapshot: PracticeSnapshot,
+) {
+  try {
+    window.localStorage.setItem(
+      practiceStorageKey(languageCode),
+      JSON.stringify(snapshot),
+    );
+  } catch {
+    // Practice still works for the active tab when storage is restricted.
+  }
+  return snapshot;
+}
 
 function readStates(languageCode: TargetLanguageCode) {
   try {
@@ -208,6 +247,112 @@ export function createDemoLearningRepository(): LearningRepository {
       });
 
       return replaceState(updated);
+    },
+    async loadPracticeSnapshot(languageCode: TargetLanguageCode) {
+      return readPracticeSnapshot(languageCode);
+    },
+    async startPracticeSession() {
+      return crypto.randomUUID();
+    },
+    async recordPracticeTurn(input) {
+      const concepts =
+        input.languageCode === "da" ? demoConcepts : swedishDemoConcepts;
+      const conceptBySlug = new Map(
+        concepts.map((concept) => [concept.slug, concept]),
+      );
+      const states = readStates(input.languageCode);
+      const updatedStates: LearnerConceptState[] = [];
+
+      for (const evidence of input.evidence) {
+        const concept = conceptBySlug.get(evidence.conceptSlug);
+        if (!concept) {
+          continue;
+        }
+        const index = states.findIndex((state) => state.conceptId === concept.id);
+        const current = index === -1 ? createEmptyState(concept.id) : states[index];
+        const updated = applyDemoPracticeEvidence(
+          current,
+          evidence,
+          input.speechMetrics,
+        );
+        if (index === -1) {
+          states.push(updated);
+        } else {
+          states[index] = updated;
+        }
+        updatedStates.push(updated);
+      }
+
+      writeStates(input.languageCode, states);
+      const primaryConcept = conceptBySlug.get(input.evidence[0]?.conceptSlug ?? "");
+      if (primaryConcept) {
+        appendEvent({
+          eventType: "conversation_turn",
+          conceptId: primaryConcept.id,
+          payload: { ...input, audioRetained: false },
+        });
+      }
+
+      if (input.memories.length > 0) {
+        const snapshot = readPracticeSnapshot(input.languageCode);
+        const now = new Date().toISOString();
+        const memories = [...snapshot.memories];
+        for (const draft of input.memories) {
+          const index = memories.findIndex((memory) => memory.key === draft.key);
+          const memory: LearnerMemory = {
+            ...draft,
+            id: index === -1 ? crypto.randomUUID() : memories[index].id,
+            languageCode: input.languageCode,
+            lastConfirmedAt: now,
+          };
+          if (index === -1) {
+            memories.push(memory);
+          } else {
+            memories[index] = memory;
+          }
+        }
+        writePracticeSnapshot(input.languageCode, { ...snapshot, memories });
+      }
+
+      return updatedStates;
+    },
+    async completePracticeSession(input) {
+      const snapshot = readPracticeSnapshot(input.languageCode);
+      const continuity = [...snapshot.continuity];
+      const index = continuity.findIndex(
+        (item) => item.characterId === input.characterId,
+      );
+      const current = index === -1 ? null : continuity[index];
+      const updated: CharacterContinuity = {
+        characterId: input.characterId,
+        languageCode: input.languageCode,
+        encounterCount: (current?.encounterCount ?? 0) + 1,
+        lastScenarioId: input.scenarioId,
+        summary: input.summary,
+        lastMetAt: new Date().toISOString(),
+      };
+      if (index === -1) {
+        continuity.push(updated);
+      } else {
+        continuity[index] = updated;
+      }
+      return writePracticeSnapshot(input.languageCode, {
+        ...snapshot,
+        continuity,
+        recentScenarioIds: [
+          input.scenarioId,
+          ...snapshot.recentScenarioIds.filter(
+            (scenarioId) => scenarioId !== input.scenarioId,
+          ),
+        ].slice(0, 6),
+      });
+    },
+    async deleteLearnerMemory(languageCode, memoryId) {
+      const snapshot = readPracticeSnapshot(languageCode);
+      return writePracticeSnapshot(languageCode, {
+        ...snapshot,
+        memories: snapshot.memories.filter((memory) => memory.id !== memoryId),
+      });
     },
   };
 }

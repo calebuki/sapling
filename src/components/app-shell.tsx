@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AudioLines,
   Languages,
   Leaf,
   LogOut,
@@ -27,13 +26,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   } = useLearningModel();
   const destinations = [
     { href: "/learn", label: "Learn", icon: Sprout },
-    { href: "/ear", label: "Listen & Speak", icon: AudioLines },
-    {
-      href: "/progress",
-      label: `My ${targetLanguage.name}`,
-      icon: TreePine,
-    },
-    { href: "/world", label: "World", icon: MessageCircle },
+    { href: "/practice", label: "Practice", icon: MessageCircle },
   ];
 
   async function signOut() {
@@ -100,16 +93,25 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           })}
         </nav>
 
-        {hasSupabase ? (
-          <button
-            className="mt-auto flex items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
-            onClick={signOut}
-            type="button"
+        <div className="mt-auto space-y-1.5">
+          <Link
+            className="flex items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
+            href="/progress"
           >
-            <LogOut aria-hidden="true" size={18} />
-            Sign out
-          </button>
-        ) : null}
+            <TreePine aria-hidden="true" size={18} />
+            My {targetLanguage.name}
+          </Link>
+          {hasSupabase ? (
+            <button
+              className="flex w-full items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
+              onClick={signOut}
+              type="button"
+            >
+              <LogOut aria-hidden="true" size={18} />
+              Sign out
+            </button>
+          ) : null}
+        </div>
       </aside>
 
       <div className="min-w-0 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -141,6 +143,13 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
               ))}
             </select>
           </label>
+          <Link
+            aria-label={`My ${targetLanguage.name}`}
+            className="rounded-xl p-2 text-forest-900/55 transition hover:bg-white/70 hover:text-forest-950"
+            href="/progress"
+          >
+            <TreePine aria-hidden="true" size={18} />
+          </Link>
           {hasSupabase ? (
             <button
               aria-label="Sign out"
@@ -158,7 +167,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <nav
         aria-label="Primary"
-        className="fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-4 rounded-[20px] border border-forest-950/10 bg-forest-950/96 p-1.5 shadow-2xl shadow-forest-950/24 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-2 rounded-[20px] border border-forest-950/10 bg-forest-950/96 p-1.5 shadow-2xl shadow-forest-950/24 backdrop-blur-xl md:hidden"
       >
         {destinations.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);

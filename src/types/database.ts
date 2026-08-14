@@ -124,6 +124,101 @@ export interface Database {
         >;
         Relationships: [];
       };
+      learning_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: "learn" | "ear" | "practice";
+          status: "planned" | "active" | "completed" | "abandoned";
+          planner_version: string | null;
+          configuration: Json;
+          started_at: string;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: "learn" | "ear" | "practice";
+          status?: "planned" | "active" | "completed" | "abandoned";
+          planner_version?: string | null;
+          configuration?: Json;
+          started_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["learning_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      learner_memories: {
+        Row: {
+          id: string;
+          user_id: string;
+          language_code: string;
+          memory_key: string;
+          label: string;
+          value: string;
+          category:
+            | "identity"
+            | "family"
+            | "work"
+            | "home"
+            | "interest"
+            | "routine"
+            | "preference";
+          confidence: number;
+          source: "practice_conversation" | "learner_edit";
+          first_learned_at: string;
+          last_confirmed_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          language_code: string;
+          memory_key: string;
+          label: string;
+          value: string;
+          category: Database["public"]["Tables"]["learner_memories"]["Row"]["category"];
+          confidence?: number;
+          source?: "practice_conversation" | "learner_edit";
+          first_learned_at?: string;
+          last_confirmed_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["learner_memories"]["Insert"]>;
+        Relationships: [];
+      };
+      character_continuity: {
+        Row: {
+          user_id: string;
+          language_code: string;
+          character_id: string;
+          encounter_count: number;
+          last_scenario_id: string | null;
+          summary: string | null;
+          last_met_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          language_code: string;
+          character_id: string;
+          encounter_count?: number;
+          last_scenario_id?: string | null;
+          summary?: string | null;
+          last_met_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["character_continuity"]["Insert"]>;
+        Relationships: [];
+      };
       learning_events: {
         Row: {
           id: number;
@@ -211,6 +306,29 @@ export interface Database {
           p_successful: boolean;
           p_word_details?: Json;
           p_context?: Json;
+        };
+        Returns: number;
+      };
+      record_practice_turn: {
+        Args: {
+          p_session_id: string;
+          p_position: number;
+          p_scenario_id: string;
+          p_character_id: string;
+          p_language_code: string;
+          p_provider_transcript: string;
+          p_resolved_text: string;
+          p_alternatives: Json;
+          p_resolution_kind: string;
+          p_resolution_confidence: number;
+          p_invisible_note: string | null;
+          p_surface_after_session: boolean;
+          p_reply_text: string;
+          p_meaning_score: number;
+          p_grammar_score: number;
+          p_vocabulary_score: number;
+          p_speech_metrics: Json;
+          p_evidence: Json;
         };
         Returns: number;
       };
