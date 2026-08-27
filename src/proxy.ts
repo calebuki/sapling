@@ -10,6 +10,7 @@ export const config = {
   matcher: [
     "/learn/:path*",
     "/ear/:path*",
+    "/text/:path*",
     "/my-danish/:path*",
     "/world/:path*",
     "/login",

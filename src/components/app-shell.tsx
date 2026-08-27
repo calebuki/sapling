@@ -2,6 +2,7 @@
 
 import {
   AudioLines,
+  BookOpenText,
   Leaf,
   LogOut,
   MessageCircle,
@@ -15,10 +16,11 @@ import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
 
 const destinations = [
-  { href: "/learn", label: "Learn", icon: Sprout },
-  { href: "/ear", label: "Listen & Speak", icon: AudioLines },
-  { href: "/my-danish", label: "Mit dansk", icon: TreePine },
-  { href: "/world", label: "World", icon: MessageCircle },
+  { href: "/learn", label: "Learn", mobileLabel: "Learn", icon: Sprout },
+  { href: "/ear", label: "Listen & Speak", mobileLabel: "Listen", icon: AudioLines },
+  { href: "/text", label: "Read & Write", mobileLabel: "Text", icon: BookOpenText },
+  { href: "/my-danish", label: "Mit dansk", mobileLabel: "Danish", icon: TreePine },
+  { href: "/world", label: "World", mobileLabel: "World", icon: MessageCircle },
 ];
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -104,9 +106,9 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <nav
         aria-label="Primary"
-        className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-[22px] border border-forest-950/10 bg-forest-950/95 p-1.5 shadow-2xl shadow-forest-950/25 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[22px] border border-forest-950/10 bg-forest-950/95 p-1.5 shadow-2xl shadow-forest-950/25 backdrop-blur-xl md:hidden"
       >
-        {destinations.map(({ href, label, icon: Icon }) => {
+        {destinations.map(({ href, mobileLabel, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
@@ -118,7 +120,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
               key={href}
             >
               <Icon aria-hidden="true" size={18} />
-              <span className="truncate">{label}</span>
+              <span className="truncate">{mobileLabel}</span>
             </Link>
           );
         })}

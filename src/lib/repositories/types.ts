@@ -2,6 +2,7 @@ import type {
   LearningSnapshot,
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -17,5 +18,6 @@ export interface LearningRepository {
   recordListeningAttempt(
     input: ListeningAttemptInput,
   ): Promise<LearnerConceptState>;
+  recordReadingAttempt(input: ReadingAttemptInput): Promise<LearnerConceptState>;
   recordSpeakingAttempt(input: SpeakingAttemptInput): Promise<LearnerConceptState>;
 }

@@ -14,6 +14,7 @@ import type {
   Concept,
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -31,6 +32,9 @@ type LearningModelContextValue = {
   recordRepair: (input: RepairInput) => Promise<LearnerConceptState>;
   recordListeningAttempt: (
     input: ListeningAttemptInput,
+  ) => Promise<LearnerConceptState>;
+  recordReadingAttempt: (
+    input: ReadingAttemptInput,
   ) => Promise<LearnerConceptState>;
   recordSpeakingAttempt: (
     input: SpeakingAttemptInput,
@@ -147,6 +151,23 @@ export function LearningModelProvider({
     [repository, upsertState],
   );
 
+  const recordReadingAttempt = useCallback(
+    async (input: ReadingAttemptInput) => {
+      setError(null);
+      try {
+        return upsertState(await repository.recordReadingAttempt(input));
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not save this reading attempt.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, upsertState],
+  );
+
   const recordSpeakingAttempt = useCallback(
     async (input: SpeakingAttemptInput) => {
       setError(null);
@@ -175,6 +196,7 @@ export function LearningModelProvider({
         recordRetrievalAttempt,
         recordRepair,
         recordListeningAttempt,
+        recordReadingAttempt,
         recordSpeakingAttempt,
       }}
     >

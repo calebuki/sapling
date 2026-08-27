@@ -66,6 +66,17 @@ export interface RetrievalAttemptInput {
   context: Record<string, string | number | boolean | null>;
 }
 
+export interface ReadingAttemptInput {
+  conceptId: string;
+  questionId: string;
+  selectedAnswer: string;
+  expectedAnswer: string;
+  successful: boolean;
+  score: number;
+  latencyMs: number;
+  context: Record<string, string | number | boolean | null>;
+}
+
 export interface RepairInput {
   conceptId: string;
   responseText: string;

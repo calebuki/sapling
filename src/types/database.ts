@@ -177,6 +177,21 @@ export interface Database {
         };
         Returns: number;
       };
+      record_reading_attempt: {
+        Args: {
+          p_concept_id: string;
+          p_question_id: string;
+          p_selected_answer: string;
+          p_expected_answer: string;
+          p_successful: boolean;
+          p_score: number;
+          p_latency_ms: number;
+          p_context?: Json;
+          p_session_id?: string | null;
+          p_session_item_id?: string | null;
+        };
+        Returns: number;
+      };
       record_speaking_attempt: {
         Args: {
           p_concept_id: string;

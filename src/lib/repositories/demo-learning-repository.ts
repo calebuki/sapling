@@ -3,6 +3,7 @@ import {
   applyDemoRepair,
   applyDemoRetrievalAttempt,
   applyDemoListeningAttempt,
+  applyDemoReadingAttempt,
   applyDemoSpeakingAttempt,
   createEmptyState,
 } from "@/lib/learning/model";
@@ -10,6 +11,7 @@ import type { LearningRepository } from "@/lib/repositories/types";
 import type {
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -23,6 +25,7 @@ type DemoEvent = {
   occurredAt: string;
   eventType:
     | "retrieval_attempt"
+    | "reading_attempt"
     | "listening_attempt"
     | "speaking_attempt"
     | "error"
@@ -140,6 +143,20 @@ export function createDemoLearningRepository(): LearningRepository {
 
       appendEvent({
         eventType: "listening_attempt",
+        conceptId: input.conceptId,
+        payload: { ...input },
+      });
+
+      return replaceState(updated);
+    },
+    async recordReadingAttempt(input: ReadingAttemptInput) {
+      const current =
+        readStates().find((state) => state.conceptId === input.conceptId) ??
+        createEmptyState(input.conceptId);
+      const updated = applyDemoReadingAttempt(current, input);
+
+      appendEvent({
+        eventType: "reading_attempt",
         conceptId: input.conceptId,
         payload: { ...input },
       });

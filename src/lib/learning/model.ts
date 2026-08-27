@@ -3,6 +3,7 @@ import type {
   LearnerConceptState,
   LearningDimension,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
 } from "@/types/learning";
@@ -166,6 +167,26 @@ export function applyDemoListeningAttempt(
     speakerDiversity: clamp(
       (current.speakerDiversity ?? 0.08) +
         (attempt.playbackCount <= 2 ? 0.08 : 0.04),
+    ),
+    estimateConfidence: clamp(current.estimateConfidence + 0.07),
+    exposureCount: current.exposureCount + 1,
+    lastExposureAt: now,
+    algorithmVersion: 1,
+  };
+}
+
+export function applyDemoReadingAttempt(
+  current: LearnerConceptState,
+  attempt: ReadingAttemptInput,
+): LearnerConceptState {
+  const now = new Date().toISOString();
+  const currentText = current.recognitionText ?? 0.15;
+
+  return {
+    ...current,
+    recognitionText: clamp(currentText * 0.7 + attempt.score * 0.3),
+    contextDiversity: clamp(
+      (current.contextDiversity ?? 0.08) + (attempt.successful ? 0.06 : 0.02),
     ),
     estimateConfidence: clamp(current.estimateConfidence + 0.07),
     exposureCount: current.exposureCount + 1,

@@ -5,6 +5,7 @@ import type {
   Concept,
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -152,6 +153,26 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_latency_ms: input.latencyMs,
         p_speaker_id: input.speakerId,
         p_playback_count: input.playbackCount,
+        p_context: input.context as Json,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return loadState(input.conceptId, userId);
+    },
+    async recordReadingAttempt(input: ReadingAttemptInput) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase.rpc("record_reading_attempt", {
+        p_concept_id: input.conceptId,
+        p_question_id: input.questionId,
+        p_selected_answer: input.selectedAnswer,
+        p_expected_answer: input.expectedAnswer,
+        p_successful: input.successful,
+        p_score: input.score,
+        p_latency_ms: input.latencyMs,
         p_context: input.context as Json,
       });
 

@@ -50,13 +50,15 @@ aid, not a second production backend. It persists the same domain shape and raw
 event vocabulary in `localStorage`.
 
 When Supabase is configured, `@supabase/ssr` stores authentication in cookies.
-Next.js Proxy refreshes tokens and protects the four application routes. The
+Next.js Proxy refreshes tokens and protects the five application routes. The
 browser uses only Sapling's publishable key; RLS is the authorization boundary.
 There is deliberately no service-role client in the regular application path.
 
-AI, speech-to-text, text-to-speech, and pronunciation analysis are future
-adapters. Provider outputs will become evidence events and content artifacts;
-provider-specific IDs must not become core concept or learner-state IDs.
+AI, speech-to-text, text-to-speech, and pronunciation analysis are adapters.
+Provider outputs become evidence events and content artifacts; provider-specific
+IDs do not become core concept or learner-state IDs. Curated text exercises use
+AI only to evaluate open writing, with trusted exercise IDs resolved on the
+server and a deterministic local fallback.
 
 Learner speech recordings are ephemeral processing inputs, not stored content.
 The browser sends a recording to a server-side speech adapter, which returns a
@@ -110,6 +112,8 @@ that deserves validation and querying:
 
 - `retrieval_attempts` stores the response, expected response, self-assessed
   result, score, latency, and hints
+- `reading_attempts` stores the selected and expected answers, score, and
+  latency for text-comprehension evidence
 - `errors` stores one or more observed/target contrasts associated with an
   error event
 

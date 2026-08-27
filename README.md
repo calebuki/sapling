@@ -7,6 +7,8 @@ produce, pronounce, and understand across contexts and speakers.
 The first slice includes:
 
 - a small adaptive Learn loop built around attempt, reveal, compare, and repair
+- an adaptive Read & Write loop with five comprehension checks and five typed
+  responses per session
 - a My Danish view that keeps learning dimensions separate
 - a Supabase schema for concepts, learner state, and append-only evidence
 - focused placeholders for the future Ear and World systems

@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  BookOpenText,
   ChevronDown,
   CircleAlert,
   Ear,
@@ -68,6 +69,10 @@ type ModeledConcept = {
 };
 
 function nextAction(state: LearnerConceptState) {
+  if (state.recognitionText === null || state.recognitionText < 0.45) {
+    return { Icon: BookOpenText, label: "Read this next" };
+  }
+
   const strongestText = Math.max(state.recognitionText ?? 0, state.recall ?? 0);
 
   if (
@@ -236,8 +241,8 @@ export function MyDanishView() {
             Your first seed is ready.
           </h2>
           <p className="mt-2 text-sm leading-6 text-forest-900/55">
-            Finish one learning prompt or Listen &amp; Speak sentence and your
-            progress will appear here.
+            Finish one learning prompt, text exercise, or Listen &amp; Speak
+            sentence and your progress will appear here.
           </p>
         </section>
       ) : null}
