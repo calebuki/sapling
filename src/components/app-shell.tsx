@@ -41,7 +41,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[1720px] md:grid md:grid-cols-[220px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-forest-950/8 bg-cream-50/72 px-5 py-6 backdrop-blur-xl md:flex">
-        <Link href="/learn" className="flex items-center gap-3 rounded-2xl px-2 py-1">
+        <Link
+          href={targetLanguage.code === "sv" ? "/practice" : "/learn"}
+          className="flex items-center gap-3 rounded-2xl px-2 py-1"
+        >
           <span className="grid size-10 place-items-center rounded-[14px] bg-forest-950 text-cream-50 shadow-lg shadow-forest-950/12">
             <Leaf aria-hidden="true" size={20} strokeWidth={2.4} />
           </span>
@@ -116,7 +119,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <div className="min-w-0 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-forest-950/8 bg-cream-100/88 px-5 py-3.5 backdrop-blur-xl md:hidden">
-          <Link href="/learn" className="flex items-center gap-2.5">
+          <Link
+            href={targetLanguage.code === "sv" ? "/practice" : "/learn"}
+            className="flex items-center gap-2.5"
+          >
             <span className="grid size-9 place-items-center rounded-xl bg-forest-950 text-cream-50">
               <Leaf aria-hidden="true" size={18} />
             </span>

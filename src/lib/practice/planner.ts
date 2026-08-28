@@ -14,17 +14,22 @@ export function choosePracticeScenario({
   concepts,
   states,
   snapshot,
+  scenarioIds,
 }: {
   languageCode: TargetLanguageCode;
   concepts: Concept[];
   states: LearnerConceptState[];
   snapshot: PracticeSnapshot;
+  scenarioIds?: readonly string[];
 }): PracticeRecommendation {
   const conceptBySlug = new Map(concepts.map((concept) => [concept.slug, concept]));
   const stateByConceptId = new Map(states.map((state) => [state.conceptId, state]));
   const recent = new Set(snapshot.recentScenarioIds.slice(0, 2));
 
-  const ranked = getPracticeScenarios(languageCode)
+  const eligibleScenarios = getPracticeScenarios(languageCode).filter(
+    (scenario) => !scenarioIds || scenarioIds.includes(scenario.id),
+  );
+  const ranked = eligibleScenarios
     .map((scenario, index) => {
       const encounteredConceptSlugs = [
         ...scenario.requiredConceptSlugs,
@@ -85,7 +90,7 @@ export function choosePracticeScenario({
     return recommendation;
   }
 
-  const fallback = getPracticeScenarios(languageCode)[0];
+  const fallback = eligibleScenarios[0] ?? getPracticeScenarios(languageCode)[0];
   return {
     scenario: fallback,
     readiness: 0,

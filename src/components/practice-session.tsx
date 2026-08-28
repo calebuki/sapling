@@ -27,12 +27,30 @@ import type {
 
 type Phase = "ready" | "active" | "complete";
 
-export function PracticeSession() {
+export function PracticeSession({
+  scenarioIds,
+  onReturnToWorld,
+}: {
+  scenarioIds?: readonly string[];
+  onReturnToWorld?: () => void;
+} = {}) {
   const { targetLanguage } = useLearningModel();
-  return <LanguagePracticeSession key={targetLanguage.code} />;
+  return (
+    <LanguagePracticeSession
+      key={`${targetLanguage.code}:${scenarioIds?.join(",") ?? "adaptive"}`}
+      onReturnToWorld={onReturnToWorld}
+      scenarioIds={scenarioIds}
+    />
+  );
 }
 
-function LanguagePracticeSession() {
+function LanguagePracticeSession({
+  scenarioIds,
+  onReturnToWorld,
+}: {
+  scenarioIds?: readonly string[];
+  onReturnToWorld?: () => void;
+}) {
   const {
     concepts,
     states,
@@ -60,8 +78,9 @@ function LanguagePracticeSession() {
         concepts,
         states,
         snapshot: practiceSnapshot,
+        scenarioIds,
       }),
-    [concepts, practiceSnapshot, states, targetLanguage.code],
+    [concepts, practiceSnapshot, scenarioIds, states, targetLanguage.code],
   );
   const [activeRecommendation, setActiveRecommendation] =
     useState<PracticeRecommendation | null>(null);
@@ -94,21 +113,22 @@ function LanguagePracticeSession() {
     setActionError(null);
     setIsStarting(true);
     try {
+      const startingRecommendation = currentRecommendation;
       const id = await startPracticeSession({
         languageCode: targetLanguage.code,
-        scenarioId: recommendation.scenario.id,
-        characterId: recommendation.scenario.characterId,
-        readiness: recommendation.readiness,
-        encounteredConceptSlugs: recommendation.encounteredConceptSlugs,
+        scenarioId: startingRecommendation.scenario.id,
+        characterId: startingRecommendation.scenario.characterId,
+        readiness: startingRecommendation.readiness,
+        encounteredConceptSlugs: startingRecommendation.encounteredConceptSlugs,
       });
-      setActiveRecommendation(recommendation);
+      setActiveRecommendation(startingRecommendation);
       setSessionId(id);
       setMessages([
         {
           id: crypto.randomUUID(),
           role: "character",
-          text: recommendation.scenario.openingLine,
-          englishSupport: recommendation.scenario.openingEnglish,
+          text: startingRecommendation.scenario.openingLine,
+          englishSupport: startingRecommendation.scenario.openingEnglish,
         },
       ]);
       setTurnCount(0);
@@ -413,10 +433,10 @@ function LanguagePracticeSession() {
 
           <button
             className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-[15px] bg-forest-950 px-5 text-sm font-extrabold text-cream-50"
-            onClick={prepareNextPractice}
+            onClick={onReturnToWorld ?? prepareNextPractice}
             type="button"
           >
-            See what’s next
+            {onReturnToWorld ? "Back to Lindbacken" : "See what’s next"}
             <ArrowRight size={17} />
           </button>
         </section>

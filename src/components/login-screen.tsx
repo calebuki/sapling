@@ -38,7 +38,7 @@ export function LoginScreen() {
       return;
     }
 
-    router.push("/learn");
+    router.push("/");
     router.refresh();
   }
 

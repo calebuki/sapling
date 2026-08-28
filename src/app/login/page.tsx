@@ -8,14 +8,14 @@ export const metadata = { title: "Sign in or create an account" };
 
 export default async function LoginPage() {
   if (!hasSupabase) {
-    redirect("/learn");
+    redirect("/");
   }
 
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
 
   if (data?.claims) {
-    redirect("/learn");
+    redirect("/");
   }
 
   return <LoginScreen />;
