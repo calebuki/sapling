@@ -7,6 +7,8 @@ import {
   MessageCircle,
   Sprout,
   TreePine,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,10 +17,12 @@ import { hasSupabase } from "@/lib/env";
 import { supportedLanguageCodes, targetLanguages } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/client";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useUiSounds } from "@/components/providers/ui-sound-provider";
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isMuted, toggleMuted } = useUiSounds();
   const {
     isSwitchingLanguage,
     selectTargetLanguage,
@@ -97,6 +101,16 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
         </nav>
 
         <div className="mt-auto space-y-1.5">
+          <button
+            aria-label={isMuted ? "Turn on sounds" : "Mute sounds"}
+            aria-pressed={isMuted}
+            className="flex w-full items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
+            onClick={toggleMuted}
+            type="button"
+          >
+            {isMuted ? <VolumeX aria-hidden="true" size={18} /> : <Volume2 aria-hidden="true" size={18} />}
+            {isMuted ? "Sounds off" : "Sounds on"}
+          </button>
           <Link
             className="flex items-center gap-3 rounded-[14px] px-3.5 py-3 text-[13px] font-bold text-forest-900/58 transition hover:bg-white/75 hover:text-forest-950"
             href="/progress"
@@ -156,6 +170,15 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           >
             <TreePine aria-hidden="true" size={18} />
           </Link>
+          <button
+            aria-label={isMuted ? "Turn on sounds" : "Mute sounds"}
+            aria-pressed={isMuted}
+            className="rounded-xl p-2 text-forest-900/55 transition hover:bg-white/70 hover:text-forest-950"
+            onClick={toggleMuted}
+            type="button"
+          >
+            {isMuted ? <VolumeX aria-hidden="true" size={18} /> : <Volume2 aria-hidden="true" size={18} />}
+          </button>
           {hasSupabase ? (
             <button
               aria-label="Sign out"
@@ -168,7 +191,9 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           ) : null}
         </header>
 
-        <main>{children}</main>
+        <main className="route-enter" key={pathname}>
+          {children}
+        </main>
       </div>
 
       <nav

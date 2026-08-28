@@ -14,6 +14,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useUiSounds } from "@/components/providers/ui-sound-provider";
 import { useTargetSpeechRecognition } from "@/hooks/use-target-speech-recognition";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { practiceCharacters } from "@/lib/practice/scenarios";
@@ -51,6 +52,7 @@ function LanguagePracticeSession({
   scenarioIds?: readonly string[];
   onReturnToWorld?: () => void;
 }) {
+  const { playSound } = useUiSounds();
   const {
     concepts,
     states,
@@ -138,6 +140,7 @@ function LanguagePracticeSession({
       setRevealedTranslations([]);
       resetTranscript();
       setPhase("active");
+      playSound("advance");
     } catch (startError) {
       setActionError(
         startError instanceof Error
@@ -169,6 +172,7 @@ function LanguagePracticeSession({
         summary,
       });
       setPhase("complete");
+      playSound("complete");
     } catch (finishError) {
       setActionError(
         finishError instanceof Error
@@ -232,6 +236,9 @@ function LanguagePracticeSession({
       setTurnCount(nextTurnCount);
       setGoalProgress(body.goalProgress);
       setLastResponse(body);
+      if (!body.complete && body.meaningScore >= 0.7) {
+        playSound("correct");
+      }
       if (body.resolution.surfaceAfterSession) {
         setSurfacedResolutions((current) => [...current, body.resolution]);
       }
@@ -320,19 +327,11 @@ function LanguagePracticeSession({
 
   if (phase === "ready") {
     return (
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="interaction-stage grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="relative overflow-hidden rounded-[28px] bg-forest-950 p-6 text-cream-50 shadow-2xl shadow-forest-950/16 sm:p-9">
           <div className="absolute -right-20 -top-24 size-72 rounded-full border border-cream-100/8" />
           <div className="relative">
-            <div className="flex items-start justify-between gap-4">
-              <span className="grid size-12 place-items-center rounded-[16px] bg-cream-100/10 text-lg font-extrabold">
-                {character.name[0]}
-              </span>
-              <span className="rounded-full bg-cream-100/10 px-3 py-1.5 text-[10px] font-bold tracking-[0.08em] text-cream-100/70">
-                {currentRecommendation.reason}
-              </span>
-            </div>
-            <p className="mt-10 text-[11px] font-bold uppercase tracking-[0.16em] text-moss-300">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-moss-300">
               Next conversation
             </p>
             <h2 className="mt-2 font-display text-4xl leading-none sm:text-5xl">
@@ -382,9 +381,9 @@ function LanguagePracticeSession({
 
   if (phase === "complete") {
     return (
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="interaction-stage grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="paper-panel rounded-[28px] p-6 sm:p-9">
-          <span className="grid size-12 place-items-center rounded-[16px] bg-moss-400/22 text-forest-900">
+          <span className="success-pulse grid size-12 place-items-center rounded-[16px] bg-moss-400/22 text-forest-900">
             <Check size={21} />
           </span>
           <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/55">
@@ -455,7 +454,7 @@ function LanguagePracticeSession({
   }
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="interaction-stage grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <section className="paper-panel overflow-hidden rounded-[28px]">
         <div className="flex items-center justify-between gap-4 border-b border-forest-950/8 px-5 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -494,7 +493,7 @@ function LanguagePracticeSession({
             const translationVisible = revealedTranslations.includes(message.id);
             return (
               <div
-                className={`flex ${fromCharacter ? "justify-start" : "justify-end"}`}
+                className={`message-enter flex ${fromCharacter ? "justify-start" : "justify-end"}`}
                 key={message.id}
               >
                 <div

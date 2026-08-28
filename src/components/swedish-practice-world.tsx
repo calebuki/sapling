@@ -6,12 +6,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PracticeSession } from "@/components/practice-session";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useUiSounds } from "@/components/providers/ui-sound-provider";
 import { SwedishCity } from "@/components/world/swedish-city";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { swedishWorld } from "@/lib/worlds/swedish";
 
 export function SwedishPracticeWorld() {
   const router = useRouter();
+  const { playSound } = useUiSounds();
   const { concepts, states, practiceSnapshot, targetLanguage } = useLearningModel();
   const [enteringVenueId, setEnteringVenueId] = useState<string | null>(null);
   const [activeVenueId, setActiveVenueId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function SwedishPracticeWorld() {
     }
 
     setEnteringVenueId(venue.id);
+    playSound("advance");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     entryTimer.current = setTimeout(
       () => {
@@ -69,7 +72,7 @@ export function SwedishPracticeWorld() {
 
   if (activeVenue) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-5 py-5 sm:px-8 sm:py-9 lg:px-12 lg:py-12">
+      <div className="interaction-stage mx-auto w-full max-w-6xl px-5 py-5 sm:px-8 sm:py-9 lg:px-12 lg:py-12">
         <button
           className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-extrabold text-forest-900/58 transition hover:bg-white/60 hover:text-forest-950"
           onClick={() => setActiveVenueId(null)}
@@ -120,7 +123,7 @@ export function SwedishPracticeWorld() {
       />
 
       {enteringVenueId ? (
-        <div className="pointer-events-none absolute inset-x-0 top-5 z-20 flex justify-center">
+        <div className="venue-enter-overlay pointer-events-none absolute inset-0 z-20 flex items-start justify-center bg-forest-950/8 pt-5 backdrop-blur-[2px]">
           <div className="rounded-full bg-forest-950/88 px-4 py-2 text-xs font-extrabold text-cream-50 shadow-xl backdrop-blur-lg">
             Går in…
           </div>

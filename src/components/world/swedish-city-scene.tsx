@@ -2,7 +2,7 @@
 
 import { Html } from "@react-three/drei";
 import { Canvas, type ThreeEvent, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 
 import type { WorldVenue } from "@/lib/worlds/types";
@@ -16,7 +16,27 @@ type SwedishCitySceneProps = {
 
 const flatMaterial = { flatShading: true, roughness: 0.9 } as const;
 
+function subscribeToReducedMotion(onChange: () => void) {
+  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function getReducedMotionSnapshot() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function useReducedMotionPreference() {
+  return useSyncExternalStore(
+    subscribeToReducedMotion,
+    getReducedMotionSnapshot,
+    () => false,
+  );
+}
+
 export function SwedishCityScene(props: SwedishCitySceneProps) {
+  const reduceMotion = useReducedMotionPreference();
+
   return (
     <Canvas
       camera={{ far: 80, near: 0.1, position: [11, 12, 11], zoom: 50 }}
@@ -34,16 +54,23 @@ export function SwedishCityScene(props: SwedishCitySceneProps) {
         position={[-7, 13, 9]}
       />
       <CameraRig
+        reduceMotion={reduceMotion}
         selectedVenue={
           props.venues.find((venue) => venue.id === props.selectedVenueId) ?? null
         }
       />
-      <Town {...props} />
+      <Town {...props} reduceMotion={reduceMotion} />
     </Canvas>
   );
 }
 
-function CameraRig({ selectedVenue }: { selectedVenue: WorldVenue | null }) {
+function CameraRig({
+  selectedVenue,
+  reduceMotion,
+}: {
+  selectedVenue: WorldVenue | null;
+  reduceMotion: boolean;
+}) {
   const { camera, size } = useThree();
   const lookAt = useRef(new THREE.Vector3(0, 0.35, 0));
   const homePosition = useMemo(() => new THREE.Vector3(11, 12, 11), []);
@@ -70,11 +97,19 @@ function CameraRig({ selectedVenue }: { selectedVenue: WorldVenue | null }) {
     if (!(camera instanceof THREE.OrthographicCamera)) {
       return;
     }
-    camera.zoom = size.width < 520 ? 27 : size.width < 850 ? 39 : 50;
+    Object.assign(camera, {
+      zoom: size.width < 520 ? 27 : size.width < 850 ? 39 : 50,
+    });
     camera.updateProjectionMatrix();
   }, [camera, size.width]);
 
   useFrame((_, delta) => {
+    if (reduceMotion) {
+      camera.position.copy(desiredPosition);
+      lookAt.current.copy(desiredLookAt);
+      camera.lookAt(lookAt.current);
+      return;
+    }
     const amount = 1 - Math.exp(-delta * 3.8);
     camera.position.lerp(desiredPosition, amount);
     lookAt.current.lerp(desiredLookAt, amount);
@@ -89,7 +124,8 @@ function Town({
   recommendedVenueId,
   selectedVenueId,
   onSelectVenue,
-}: SwedishCitySceneProps) {
+  reduceMotion,
+}: SwedishCitySceneProps & { reduceMotion: boolean }) {
   return (
     <group>
       <mesh position={[0, -0.34, 0]} receiveShadow>
@@ -110,6 +146,7 @@ function Town({
           isSelected={venue.id === selectedVenueId}
           key={venue.id}
           onSelect={() => onSelectVenue(venue.id)}
+          reduceMotion={reduceMotion}
           venue={venue}
         />
       ))}
@@ -191,11 +228,13 @@ function Venue({
   isRecommended,
   isSelected,
   onSelect,
+  reduceMotion,
 }: {
   venue: WorldVenue;
   isRecommended: boolean;
   isSelected: boolean;
   onSelect: () => void;
+  reduceMotion: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const group = useRef<THREE.Group>(null);
@@ -211,7 +250,13 @@ function Venue({
     if (!group.current) {
       return;
     }
-    const targetScale = isSelected ? 1.055 : hovered ? 1.025 : 1;
+    const targetScale = reduceMotion
+      ? 1
+      : isSelected
+        ? 1.055
+        : hovered
+          ? 1.025
+          : 1;
     const nextScale = THREE.MathUtils.damp(
       group.current.scale.x,
       targetScale,
@@ -219,7 +264,7 @@ function Venue({
       delta,
     );
     group.current.scale.setScalar(nextScale);
-    group.current.position.y = isRecommended
+    group.current.position.y = isRecommended && !reduceMotion
       ? Math.sin(state.clock.elapsedTime * 2.2) * 0.035
       : 0;
   });
@@ -245,7 +290,9 @@ function Venue({
       ) : (
         <Building venue={venue} />
       )}
-      {isRecommended ? <RecommendationMarker venue={venue} /> : null}
+      {isRecommended ? (
+        <RecommendationMarker reduceMotion={reduceMotion} venue={venue} />
+      ) : null}
       <Html
         center
         position={[0, venue.id === "stadsparken" ? 2.15 : venue.size[1] + 1.05, 0]}
@@ -480,14 +527,22 @@ function StreetLamp({ position }: { position: [number, number, number] }) {
   );
 }
 
-function RecommendationMarker({ venue }: { venue: WorldVenue }) {
+function RecommendationMarker({
+  venue,
+  reduceMotion,
+}: {
+  venue: WorldVenue;
+  reduceMotion: boolean;
+}) {
   const marker = useRef<THREE.Group>(null);
   const height = venue.id === "stadsparken" ? 2.35 : venue.size[1] + 1.3;
 
   useFrame((state) => {
     if (marker.current) {
-      marker.current.position.y = height + Math.sin(state.clock.elapsedTime * 2.4) * 0.14;
-      marker.current.rotation.y = state.clock.elapsedTime * 0.65;
+      marker.current.position.y = reduceMotion
+        ? height
+        : height + Math.sin(state.clock.elapsedTime * 2.4) * 0.14;
+      marker.current.rotation.y = reduceMotion ? 0 : state.clock.elapsedTime * 0.65;
     }
   });
 

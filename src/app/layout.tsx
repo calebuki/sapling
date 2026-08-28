@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 
+import { UiSoundProvider } from "@/components/providers/ui-sound-provider";
 import { publicEnv } from "@/lib/env";
 import "./globals.css";
 
@@ -41,7 +42,9 @@ export default function RootLayout({
       lang="en"
       className={`${manrope.variable} antialiased`}
     >
-      <body>{children}</body>
+      <body>
+        <UiSoundProvider>{children}</UiSoundProvider>
+      </body>
     </html>
   );
 }

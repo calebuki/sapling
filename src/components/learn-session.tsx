@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useUiSounds } from "@/components/providers/ui-sound-provider";
 import { useTargetSpeechRecognition } from "@/hooks/use-target-speech-recognition";
 import { getCourse, type Lesson, type LessonSupport } from "@/lib/learning/course";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
@@ -44,6 +45,7 @@ export function LearnSession() {
 }
 
 function LanguageLearnSession() {
+  const { playSound } = useUiSounds();
   const {
     concepts,
     states,
@@ -171,6 +173,7 @@ function LanguageLearnSession() {
     setLessonIndex(index);
     setExerciseQueue(getPracticeQueue(index));
     resetExercise();
+    playSound("advance");
   }
 
   function moveForward() {
@@ -179,6 +182,7 @@ function LanguageLearnSession() {
         Math.max(current, Math.min(lessonIndex + 1, lessons.length - 1)),
       );
       setPhase("complete");
+      playSound("complete");
       return;
     }
     setQueuePosition((current) => current + 1);
@@ -190,6 +194,7 @@ function LanguageLearnSession() {
     resetTranscript();
     startedAt.current = null;
     attemptLatencyMs.current = 0;
+    playSound("advance");
   }
 
   async function markNotSure(event: React.MouseEvent<HTMLButtonElement>) {
@@ -306,6 +311,9 @@ function LanguageLearnSession() {
       });
 
       setEvaluation(evaluationBody);
+      if (evaluationBody.successful) {
+        playSound("correct");
+      }
       setPhase("feedback");
     } catch (voiceError) {
       setActionError(
@@ -495,7 +503,10 @@ function LanguageLearnSession() {
         onChoose={chooseLesson}
         unlockedLessonIndex={availableLessonIndex}
       />
-      <div className="paper-panel soft-enter overflow-hidden rounded-[24px]">
+      <div
+        className="paper-panel interaction-stage overflow-hidden rounded-[24px]"
+        key={`${lesson.id}:${exercise.audioId}:${phase}`}
+      >
         <div className="border-b border-forest-900/8 px-6 py-4 sm:px-8 sm:py-5">
           <div className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/65">
             Lesson {lesson.number} · {lesson.title}
@@ -759,7 +770,7 @@ function LanguageLearnSession() {
               <div
                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
                   evaluation.successful
-                    ? "bg-moss-400/18 text-forest-800"
+                    ? "success-pulse bg-moss-400/18 text-forest-800"
                     : "bg-amber-400/16 text-amber-500"
                 }`}
               >
