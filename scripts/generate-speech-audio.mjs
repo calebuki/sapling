@@ -4,14 +4,15 @@ import path from "node:path";
 import nextEnv from "@next/env";
 
 import { getSpeechClips } from "../src/lib/learning/course.ts";
+import { getTargetLanguage } from "../src/lib/learning/languages.ts";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-const outputDirectory = path.join(process.cwd(), "public", "audio", "danish");
-const manifestPath = path.join(outputDirectory, "manifest.json");
+const outputRoot = path.join(process.cwd(), "public", "audio");
 const sourceBaseUrl = process.env.SPEECH_AUDIO_SOURCE_BASE_URL?.replace(/\/$/, "");
 const speechKey = process.env.AZURE_SPEECH_KEY?.trim();
 const speechRegion = process.env.AZURE_SPEECH_REGION?.trim();
+const skipExisting = process.env.SPEECH_AUDIO_SKIP_EXISTING === "true";
 
 function escapeXml(value) {
   return value.replace(/[<>&'\"]/g, (character) => {
@@ -47,7 +48,7 @@ async function fileExists(filePath) {
   }
 }
 
-async function loadManifest() {
+async function loadManifest(manifestPath) {
   try {
     return JSON.parse(await readFile(manifestPath, "utf8"));
   } catch {
@@ -82,7 +83,7 @@ async function synthesize(clip) {
         "User-Agent": "SaplingAudioGenerator",
         "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
       },
-      body: `<?xml version="1.0" encoding="UTF-8"?><speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="da-DK"><voice name="${clip.voice}">${escapeXml(clip.text)}</voice></speak>`,
+      body: `<?xml version="1.0" encoding="UTF-8"?><speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${getTargetLanguage(clip.languageCode).locale}"><voice name="${clip.voice}">${escapeXml(clip.text)}</voice></speak>`,
     },
   );
 
@@ -93,29 +94,41 @@ async function synthesize(clip) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-await mkdir(outputDirectory, { recursive: true });
-
-const previousManifest = await loadManifest();
-const nextManifest = {};
 let generatedCount = 0;
 
-for (const clip of getSpeechClips()) {
-  const version = clipVersion(clip);
-  const outputPath = path.join(outputDirectory, `${clip.id}.mp3`);
-  nextManifest[clip.id] = version;
+for (const languageCode of ["da", "sv"]) {
+  const language = getTargetLanguage(languageCode);
+  const outputDirectory = path.join(outputRoot, language.audioDirectory);
+  const manifestPath = path.join(outputDirectory, "manifest.json");
+  await mkdir(outputDirectory, { recursive: true });
 
-  if (previousManifest[clip.id] === version && (await fileExists(outputPath))) {
-    continue;
+  const previousManifest = await loadManifest(manifestPath);
+  const nextManifest = {};
+  const clips = getSpeechClips().filter(
+    (clip) => clip.languageCode === languageCode,
+  );
+
+  for (const clip of clips) {
+    const version = clipVersion(clip);
+    const outputPath = path.join(outputDirectory, `${clip.id}.mp3`);
+    nextManifest[clip.id] = version;
+
+    if (
+      (await fileExists(outputPath)) &&
+      (skipExisting || previousManifest[clip.id] === version)
+    ) {
+      continue;
+    }
+
+    const audio = await synthesize(clip);
+    await writeFile(outputPath, audio);
+    generatedCount += 1;
   }
 
-  const audio = await synthesize(clip);
-  await writeFile(outputPath, audio);
-  generatedCount += 1;
+  await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`);
 }
-
-await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`);
 console.log(
   generatedCount === 0
-    ? "All Danish course audio is already current."
-    : `Generated ${generatedCount} Danish audio ${generatedCount === 1 ? "clip" : "clips"}.`,
+    ? "All course audio is already current."
+    : `Generated ${generatedCount} audio ${generatedCount === 1 ? "clip" : "clips"}.`,
 );

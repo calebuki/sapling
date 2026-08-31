@@ -59,7 +59,7 @@ const kindLabels: Record<ConceptKind, string> = {
   phonetic_contrast: "Sound contrast",
   communicative_function: "Conversation skill",
   pragmatic_convention: "Conversation habit",
-  listening_phenomenon: "Danish sound",
+  listening_phenomenon: "Language sound",
 };
 
 type ModeledConcept = {
@@ -100,8 +100,8 @@ function currentGrowthStage(progress: number) {
   );
 }
 
-export function MyDanishView() {
-  const { concepts, states, isLoading, error } = useLearningModel();
+export function ProgressView() {
+  const { concepts, states, isLoading, error, targetLanguage } = useLearningModel();
   const stateByConcept = new Map(
     states.map((state) => [state.conceptId, state]),
   );
@@ -165,25 +165,36 @@ export function MyDanishView() {
 
   return (
     <div className="space-y-7">
-      <section className="paper-panel overflow-hidden rounded-[28px] p-6 sm:p-8">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <section className="paper-panel overflow-hidden rounded-[24px] p-6 sm:p-8">
+        <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-start">
           <div>
-            <h2 className="font-display text-4xl text-forest-950 sm:text-5xl">
+            <p className="text-[11px] font-bold tracking-[0.12em] text-forest-700/58">Current stage</p>
+            <h2 className="mt-2 font-display text-3xl text-forest-950 sm:text-4xl">
               {growthStageLabels[overallStage.stage]}
             </h2>
-            <p className="mt-2 text-sm text-forest-900/55">
+            <p className="mt-2 text-sm font-semibold text-forest-900/58">
               {practiced.length} ideas practiced
             </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:min-w-64">
+            <div className="rounded-[15px] bg-moss-300/22 p-4">
+              <p className="text-2xl font-extrabold tracking-[-0.04em] text-forest-950">{needsAttention.length}</p>
+              <p className="mt-1 text-xs font-bold text-forest-900/58">Need attention</p>
+            </div>
+            <div className="rounded-[15px] bg-forest-950 p-4 text-cream-50">
+              <p className="text-2xl font-extrabold tracking-[-0.04em]">{growing.length + strong.length}</p>
+              <p className="mt-1 text-xs font-bold text-cream-100/68">Taking shape</p>
+            </div>
           </div>
         </div>
 
         <div className="mt-8">
-          <div className="flex items-center justify-between text-xs font-semibold text-forest-900/55">
-            <span>Toward near-fluent Danish</span>
+          <div className="flex items-center justify-between text-xs font-bold text-forest-900/58">
+            <span>Long-term progress</span>
             <span>{displayedProgress}%</span>
           </div>
           <div
-            aria-label="Progress toward near-fluent Danish"
+            aria-label={`Progress toward near-fluent ${targetLanguage.name}`}
             aria-valuemax={100}
             aria-valuemin={0}
             aria-valuenow={displayedProgress}
@@ -249,14 +260,19 @@ export function MyDanishView() {
 
       <ProgressGroup
         items={needsAttention}
+        languageName={targetLanguage.name}
         title="Needs attention"
       />
       <ProgressGroup
+        collapsed
         items={growing}
+        languageName={targetLanguage.name}
         title="Growing"
       />
       <ProgressGroup
+        collapsed
         items={strong}
+        languageName={targetLanguage.name}
         title="Strong"
       />
 
@@ -289,9 +305,13 @@ export function MyDanishView() {
 }
 
 function ProgressGroup({
+  collapsed = false,
+  languageName,
   title,
   items,
 }: {
+  collapsed?: boolean;
+  languageName: string;
   title: string;
   items: ModeledConcept[];
 }) {
@@ -299,36 +319,63 @@ function ProgressGroup({
     return null;
   }
 
+  const cards = (
+    <div className="grid gap-4 xl:grid-cols-2">
+      {items.map((item) => (
+        <ConceptCard item={item} key={item.concept.id} languageName={languageName} />
+      ))}
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <details className="paper-panel group rounded-[20px] p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold tracking-[-0.035em] text-forest-950">{title}</h2>
+            <p className="mt-1 text-xs font-semibold text-forest-900/52">{items.length} ideas</p>
+          </div>
+          <ChevronDown aria-hidden="true" className="text-forest-900/48 transition group-open:rotate-180" size={19} />
+        </summary>
+        <div className="mt-5 border-t border-forest-900/8 pt-5">{cards}</div>
+      </details>
+    );
+  }
+
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-1">
-        <h2 className="font-display text-3xl text-forest-950">{title}</h2>
+        <h2 className="text-2xl font-extrabold tracking-[-0.04em] text-forest-950">{title}</h2>
         <span className="rounded-full bg-white/55 px-3 py-1 text-xs font-bold text-forest-900/50">
           {items.length}
         </span>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        {items.map((item) => (
-          <ConceptCard item={item} key={item.concept.id} />
-        ))}
-      </div>
+      {cards}
     </section>
   );
 }
 
-function ConceptCard({ item }: { item: ModeledConcept }) {
+function ConceptCard({
+  item,
+  languageName,
+}: {
+  item: ModeledConcept;
+  languageName: string;
+}) {
   const { concept, state, stage } = item;
   const action = nextAction(state);
   const ActionIcon = action.Icon;
 
   return (
-    <article className="paper-panel rounded-[26px] p-5 sm:p-6">
+    <article className="paper-panel rounded-[20px] p-5 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-forest-700/48">
-            {kindLabels[concept.kind]}
+            {concept.kind === "listening_phenomenon"
+              ? `${languageName} sound`
+              : kindLabels[concept.kind]}
           </p>
-          <h3 className="mt-1 font-display text-3xl leading-tight text-forest-950">
+          <h3 className="mt-1 text-2xl font-extrabold leading-tight tracking-[-0.035em] text-forest-950">
             {concept.canonicalForm}
           </h3>
           <p className="mt-1 text-sm text-forest-900/55">{concept.gloss}</p>

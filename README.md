@@ -1,6 +1,7 @@
 # Sapling
 
-Sapling is a personal, retrieval-first Danish learning application. Its core
+Sapling is a personal, retrieval-first language learning application with
+separate Danish and Swedish learning tracks. Its core
 product is an evolving model of what a learner can recognize, retrieve,
 produce, pronounce, and understand across contexts and speakers.
 
@@ -9,7 +10,7 @@ The first slice includes:
 - a small adaptive Learn loop built around attempt, reveal, compare, and repair
 - an adaptive Read & Write loop with five comprehension checks and five typed
   responses per session
-- a My Danish view that keeps learning dimensions separate
+- a language-specific progress view that keeps learning dimensions separate
 - a Supabase schema for concepts, learner state, and append-only evidence
 - focused placeholders for the future Ear and World systems
 - local demo persistence when Sapling's Supabase project is not configured
@@ -44,7 +45,7 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). With no Supabase variables,
-Sapling uses a local demo repository in the browser so the Learn and My Danish
+Sapling uses a local demo repository in the browser so the Learn and progress
 flows can be exercised immediately.
 
 To connect a new Sapling Supabase project, create `.env.local` from the variable

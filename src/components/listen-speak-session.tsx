@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DanishAudioButton } from "@/components/danish-audio-button";
+import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { listenSpeakItems } from "@/lib/learning/course";
-import type { ListenSpeakItem } from "@/lib/learning/course";
+import { getCourse, type ListenSpeakItem } from "@/lib/learning/course";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
@@ -58,8 +58,6 @@ type SpeechTokenResponse = {
   error?: string;
 };
 
-const listenSpeakRoundStorageKey = "sapling.listen-speak.round.v1";
-
 function toUnitScore(score: number | null | undefined) {
   if (typeof score !== "number" || !Number.isFinite(score)) {
     return 0;
@@ -77,15 +75,16 @@ function resultLabel(result: SpeakingResult) {
   return "Clear and complete";
 }
 
-function getNextRound() {
+function getNextRound(languageCode: TargetLanguageCode) {
+  const storageKey = `sapling.listen-speak.round.${languageCode}.v2`;
   try {
     const stored = Number.parseInt(
-      window.localStorage.getItem(listenSpeakRoundStorageKey) ?? "0",
+      window.localStorage.getItem(storageKey) ?? "0",
       10,
     );
     const round = Number.isFinite(stored) && stored >= 0 ? stored : 0;
     window.localStorage.setItem(
-      listenSpeakRoundStorageKey,
+      storageKey,
       String(round + 1),
     );
     return round;
@@ -97,6 +96,7 @@ function getNextRound() {
 function buildSession(
   concepts: Concept[],
   states: LearnerConceptState[],
+  listenSpeakItems: ListenSpeakItem[],
   round: number,
 ) {
   const conceptBySlug = new Map(
@@ -143,14 +143,22 @@ function buildSession(
 }
 
 export function ListenSpeakSession() {
+  const { targetLanguage } = useLearningModel();
+
+  return <LanguageListenSpeakSession key={targetLanguage.code} />;
+}
+
+function LanguageListenSpeakSession() {
   const {
     concepts,
     states,
     isLoading,
     error: modelError,
+    targetLanguage,
     recordListeningAttempt,
     recordSpeakingAttempt,
   } = useLearningModel();
+  const { listenSpeakItems } = getCourse(targetLanguage.code);
   const [itemIndex, setItemIndex] = useState(0);
   const [sessionItems, setSessionItems] = useState<ListenSpeakItem[]>([]);
   const [phase, setPhase] = useState<Phase>("listen");
@@ -172,8 +180,14 @@ export function ListenSpeakSession() {
   const didPrepareSession = useRef(false);
 
   const prepareSession = useCallback(
-    () => buildSession(concepts, states, getNextRound()),
-    [concepts, states],
+    () =>
+      buildSession(
+        concepts,
+        states,
+        listenSpeakItems,
+        getNextRound(targetLanguage.code),
+      ),
+    [concepts, listenSpeakItems, states, targetLanguage.code],
   );
 
   useEffect(() => {
@@ -282,7 +296,7 @@ export function ListenSpeakSession() {
         credentials.token,
         credentials.region,
       );
-      speechConfig.speechRecognitionLanguage = "da-DK";
+      speechConfig.speechRecognitionLanguage = targetLanguage.locale;
       speechConfig.outputFormat = sdk.OutputFormat.Detailed;
       speechConfig.setProperty(
         sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs,
@@ -512,7 +526,7 @@ export function ListenSpeakSession() {
           itemId: item.id,
           provider: "azure-speech",
           rawPronunciationScore: scored.rawPronunciationScore,
-          locale: "da-DK",
+          locale: targetLanguage.locale,
           audioRetained: false,
           source: "listen-speak",
         },
@@ -590,7 +604,7 @@ export function ListenSpeakSession() {
 
   if (isLoading || sessionItems.length === 0) {
     return (
-      <div className="paper-panel grid min-h-[500px] animate-pulse place-items-center rounded-[30px] text-sm text-forest-900/50">
+      <div className="paper-panel grid min-h-[500px] animate-pulse place-items-center rounded-[24px] text-sm font-semibold text-forest-900/58">
         Tuning your listening practice…
       </div>
     );
@@ -634,7 +648,7 @@ export function ListenSpeakSession() {
   const meaningWasCorrect = selectedMeaning === item.meaning;
 
   return (
-    <div className="paper-panel soft-enter overflow-hidden rounded-[30px]">
+    <div className="paper-panel soft-enter overflow-hidden rounded-[24px]">
       <div className="border-b border-forest-900/8 px-6 py-5 sm:px-8">
         <div className="flex items-center justify-between gap-4 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
           <span>{phase === "listen" ? "Listen" : "Speak"}</span>
@@ -656,12 +670,13 @@ export function ListenSpeakSession() {
             <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/18 text-forest-800">
               <Volume2 aria-hidden="true" size={25} />
             </div>
-            <h2 className="mt-7 max-w-2xl font-display text-4xl leading-tight text-forest-950">
+            <h2 className="mt-7 max-w-2xl font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
               What does it mean?
             </h2>
             <div className="mt-6">
-              <DanishAudioButton
+              <TargetAudioButton
                 clipId={item.audioId}
+                languageName={targetLanguage.name}
                 label="Play sentence"
                 onPlay={notePlayback}
               />
@@ -669,7 +684,7 @@ export function ListenSpeakSession() {
             <div className="mt-8 grid gap-3">
               {item.options.map((option) => (
                 <button
-                  className="rounded-[20px] border border-forest-900/10 bg-white/60 px-5 py-4 text-left text-sm font-semibold text-forest-950 transition enabled:hover:border-moss-500/40 enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="rounded-[14px] border border-forest-900/12 bg-white/68 px-5 py-4 text-left text-sm font-bold text-forest-950 transition enabled:hover:border-moss-500/45 enabled:hover:bg-white disabled:cursor-not-allowed disabled:bg-forest-900/[0.025] disabled:text-forest-900/42"
                   disabled={playbackCount === 0 || isSaving}
                   key={option}
                   onClick={(event) => chooseMeaning(option, event.timeStamp)}
@@ -701,12 +716,13 @@ export function ListenSpeakSession() {
             <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
               {item.meaning}
             </p>
-            <h2 className="mt-2 font-display text-4xl leading-tight text-forest-950 sm:text-5xl">
+            <h2 className="mt-2 font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
               {item.text}
             </h2>
             <div className="mt-6">
-              <DanishAudioButton
+              <TargetAudioButton
                 clipId={item.audioId}
+                languageName={targetLanguage.name}
                 label="Hear it again"
                 onPlay={notePlayback}
                 showSlowControl
@@ -718,7 +734,7 @@ export function ListenSpeakSession() {
                 <p>Audio is scored, then discarded.</p>
               </div>
               <button
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3.5 text-sm font-extrabold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-wait disabled:opacity-70 sm:w-auto"
                 disabled={
                   recordingStatus === "starting" ||
                   recordingStatus === "stopping"
@@ -760,13 +776,13 @@ export function ListenSpeakSession() {
                         ? "Finishing your score"
                         : liveTranscript
                           ? "Sapling is hearing"
-                          : "Listening for Danish"}
+                          : `Listening for ${targetLanguage.name}`}
                   </p>
                   <p
                     className="mt-2 min-h-7 text-lg font-semibold text-forest-950"
-                    lang="da"
+                    lang={targetLanguage.code}
                   >
-                    {liveTranscript || "Sig sætningen…"}
+                    {liveTranscript || targetLanguage.speakPrompt}
                   </p>
                 </div>
               ) : null}

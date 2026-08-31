@@ -10,6 +10,11 @@ import {
 } from "react";
 
 import { createLearningRepository } from "@/lib/repositories";
+import {
+  getTargetLanguage,
+  type TargetLanguage,
+  type TargetLanguageCode,
+} from "@/lib/learning/languages";
 import type {
   Concept,
   LearnerConceptState,
@@ -23,9 +28,12 @@ import type {
 type LearningModelContextValue = {
   concepts: Concept[];
   states: LearnerConceptState[];
+  targetLanguage: TargetLanguage;
   mode: "local" | "supabase";
   isLoading: boolean;
+  isSwitchingLanguage: boolean;
   error: string | null;
+  selectTargetLanguage: (languageCode: TargetLanguageCode) => Promise<void>;
   recordRetrievalAttempt: (
     input: RetrievalAttemptInput,
   ) => Promise<LearnerConceptState>;
@@ -51,18 +59,26 @@ export function LearningModelProvider({
   const repository = useMemo(() => createLearningRepository(), []);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [states, setStates] = useState<LearnerConceptState[]>([]);
+  const [targetLanguageCode, setTargetLanguageCode] =
+    useState<TargetLanguageCode>("da");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSwitchingLanguage, setIsSwitchingLanguage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     repository
-      .loadSnapshot()
-      .then((snapshot) => {
+      .getTargetLanguage()
+      .then(async (languageCode) => ({
+        languageCode,
+        snapshot: await repository.loadSnapshot(languageCode),
+      }))
+      .then(({ languageCode, snapshot }) => {
         if (cancelled) {
           return;
         }
+        setTargetLanguageCode(languageCode);
         setConcepts(snapshot.concepts);
         setStates(snapshot.states);
       })
@@ -85,6 +101,34 @@ export function LearningModelProvider({
       cancelled = true;
     };
   }, [repository]);
+
+  const selectTargetLanguage = useCallback(
+    async (languageCode: TargetLanguageCode) => {
+      if (languageCode === targetLanguageCode || isSwitchingLanguage) {
+        return;
+      }
+
+      setError(null);
+      setIsSwitchingLanguage(true);
+      try {
+        await repository.setTargetLanguage(languageCode);
+        const snapshot = await repository.loadSnapshot(languageCode);
+        setTargetLanguageCode(languageCode);
+        setConcepts(snapshot.concepts);
+        setStates(snapshot.states);
+      } catch (languageError) {
+        const message =
+          languageError instanceof Error
+            ? languageError.message
+            : "Sapling could not switch languages.";
+        setError(message);
+        throw languageError;
+      } finally {
+        setIsSwitchingLanguage(false);
+      }
+    },
+    [isSwitchingLanguage, repository, targetLanguageCode],
+  );
 
   const upsertState = useCallback((updated: LearnerConceptState) => {
     setStates((current) => {
@@ -190,9 +234,12 @@ export function LearningModelProvider({
       value={{
         concepts,
         states,
+        targetLanguage: getTargetLanguage(targetLanguageCode),
         mode: repository.mode,
         isLoading,
+        isSwitchingLanguage,
         error,
+        selectTargetLanguage,
         recordRetrievalAttempt,
         recordRepair,
         recordListeningAttempt,

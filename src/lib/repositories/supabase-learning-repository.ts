@@ -1,4 +1,8 @@
 import { createClient } from "@/lib/supabase/client";
+import {
+  isTargetLanguageCode,
+  type TargetLanguageCode,
+} from "@/lib/learning/languages";
 import type { LearningRepository } from "@/lib/repositories/types";
 import type { Database, Json } from "@/types/database";
 import type {
@@ -80,25 +84,58 @@ async function loadState(conceptId: string, userId: string) {
 export function createSupabaseLearningRepository(): LearningRepository {
   return {
     mode: "supabase",
-    async loadSnapshot() {
+    async getTargetLanguage() {
       const supabase = createClient();
       const userId = await getCurrentUserId();
-      const [conceptResult, stateResult] = await Promise.all([
-        supabase
-          .from("concepts")
-          .select("*")
-          .eq("language_code", "da")
-          .eq("is_active", true)
-          .order("sort_order"),
-        supabase
-          .from("learner_concept_state")
-          .select("*")
-          .eq("user_id", userId),
-      ]);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("target_language_code")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return isTargetLanguageCode(data.target_language_code)
+        ? data.target_language_code
+        : "da";
+    },
+    async setTargetLanguage(languageCode: TargetLanguageCode) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ target_language_code: languageCode })
+        .eq("id", userId);
+
+      if (error) {
+        throw error;
+      }
+    },
+    async loadSnapshot(languageCode: TargetLanguageCode) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const conceptResult = await supabase
+        .from("concepts")
+        .select("*")
+        .eq("language_code", languageCode)
+        .eq("is_active", true)
+        .order("sort_order");
 
       if (conceptResult.error) {
         throw conceptResult.error;
       }
+
+      const conceptIds = conceptResult.data.map((concept) => concept.id);
+      const stateResult = conceptIds.length
+        ? await supabase
+            .from("learner_concept_state")
+            .select("*")
+            .eq("user_id", userId)
+            .in("concept_id", conceptIds)
+        : { data: [], error: null };
+
       if (stateResult.error) {
         throw stateResult.error;
       }

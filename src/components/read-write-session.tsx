@@ -355,7 +355,7 @@ export function ReadWriteSession() {
       return;
     }
 
-    if (normalize(repairResponse) !== normalize(feedback.evaluation.correctedDanish)) {
+    if (normalize(repairResponse) !== normalize(feedback.evaluation.correctedTargetText)) {
       setActionError("Write the corrected Danish once before continuing.");
       return;
     }
@@ -366,7 +366,7 @@ export function ReadWriteSession() {
       await recordRepair({
         conceptId: item.conceptId,
         responseText: repairResponse.trim(),
-        targetText: feedback.evaluation.correctedDanish,
+        targetText: feedback.evaluation.correctedTargetText,
         context: {
           source: "read-write",
           activityType: "writing-repair",
@@ -511,7 +511,7 @@ export function ReadWriteSession() {
 
         {phase === "repair" && feedback?.kind === "writing" && item.kind === "writing" ? (
           <RepairAttempt
-            correctedDanish={feedback.evaluation.correctedDanish}
+            correctedTargetText={feedback.evaluation.correctedTargetText}
             isSaving={isSaving}
             onChange={setRepairResponse}
             onSubmit={submitRepair}
@@ -712,7 +712,7 @@ function WritingResult({
         </div>
         <div className="rounded-[22px] bg-moss-400/10 p-5">
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">Natural Danish</p>
-          <p className="mt-3 text-lg font-semibold leading-8 text-forest-950" lang="da">{evaluation.correctedDanish}</p>
+          <p className="mt-3 text-lg font-semibold leading-8 text-forest-950" lang="da">{evaluation.correctedTargetText}</p>
         </div>
       </div>
       {evaluation.tips.length > 0 ? (
@@ -737,13 +737,13 @@ function WritingResult({
 }
 
 function RepairAttempt({
-  correctedDanish,
+  correctedTargetText,
   response,
   isSaving,
   onChange,
   onSubmit,
 }: {
-  correctedDanish: string;
+  correctedTargetText: string;
   response: string;
   isSaving: boolean;
   onChange: (value: string) => void;
@@ -753,7 +753,7 @@ function RepairAttempt({
     <form className="soft-enter" onSubmit={onSubmit}>
       <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/65">Write it once</p>
       <h2 className="mt-3 rounded-[22px] bg-moss-400/10 p-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl" lang="da">
-        {correctedDanish}
+        {correctedTargetText}
       </h2>
       <textarea
         aria-label="Rewrite the corrected Danish"

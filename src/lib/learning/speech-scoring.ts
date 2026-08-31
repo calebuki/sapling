@@ -1,7 +1,7 @@
 function speechWords(value: string) {
   return value
-    .toLocaleLowerCase("da-DK")
-    .replace(/[^a-zæøå0-9]+/g, " ")
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);

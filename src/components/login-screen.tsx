@@ -61,15 +61,15 @@ export function LoginScreen() {
 
           <div>
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-              {mode === "sign-in" ? "Godt at se dig igen" : "Start your journey"}
+              {mode === "sign-in" ? "Good to see you again" : "Start your journey"}
             </p>
             <h1 className="font-display text-[2.7rem] leading-[1.02] tracking-[-0.035em] text-forest-950 sm:text-5xl">
               {mode === "sign-in" ? "Welcome back." : "Create an account."}
             </h1>
             <p className="mt-3 text-sm leading-6 text-forest-900/58">
               {mode === "sign-in"
-                ? "Your next Danish lesson is waiting for you."
-                : "Build a Danish practice that grows with you."}
+                ? "Your next language lesson is waiting for you."
+                : "Build a language practice that grows with you."}
             </p>
           </div>
 
@@ -147,7 +147,7 @@ export function LoginScreen() {
         </div>
       </section>
 
-      <section aria-label="A moving illustration of a Danish village" className="order-first min-h-[310px] lg:order-none lg:m-3 lg:ml-0 lg:min-h-0 lg:rounded-[32px] lg:[clip-path:inset(0_round_32px)]">
+      <section aria-label="A moving illustration of a Scandinavian village" className="order-first min-h-[310px] lg:order-none lg:m-3 lg:ml-0 lg:min-h-0 lg:rounded-[32px] lg:[clip-path:inset(0_round_32px)]">
         <LoginScene />
       </section>
     </main>

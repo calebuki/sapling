@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { DanishSpeechResult } from "@/types/lesson-evaluation";
+import type { TargetSpeechResult } from "@/types/lesson-evaluation";
 
 export type RecordingStatus = "idle" | "starting" | "listening" | "stopping";
 
-export type DanishRecognitionOptions =
+export type TargetRecognitionOptions =
   | { mode: "open" }
   | { mode: "scripted"; referenceText: string };
 
@@ -57,7 +57,7 @@ function recognitionAlternatives(resultJson: string | undefined) {
   }
 }
 
-export function useDanishSpeechRecognition() {
+export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
   const [recordingStatus, setRecordingStatus] =
     useState<RecordingStatus>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
@@ -84,7 +84,7 @@ export function useDanishSpeechRecognition() {
     stopActiveRecognition.current?.();
   }, []);
 
-  const start = useCallback(async (options: DanishRecognitionOptions) => {
+  const start = useCallback(async (options: TargetRecognitionOptions) => {
     if (activeRecognizer.current) {
       throw new Error("The microphone is already listening.");
     }
@@ -119,7 +119,7 @@ export function useDanishSpeechRecognition() {
       const silenceBeforeStopMs = isOpenResponse ? 3_200 : 1_600;
       const maximumDurationMs = isOpenResponse ? 45_000 : 15_000;
 
-      speechConfig.speechRecognitionLanguage = "da-DK";
+      speechConfig.speechRecognitionLanguage = locale;
       speechConfig.outputFormat = sdk.OutputFormat.Detailed;
       speechConfig.setProperty(
         sdk.PropertyId.Speech_SegmentationSilenceTimeoutMs,
@@ -148,7 +148,7 @@ export function useDanishSpeechRecognition() {
         assessmentConfig.applyTo(recognizer);
       }
 
-      return await new Promise<DanishSpeechResult>((resolve, reject) => {
+      return await new Promise<TargetSpeechResult>((resolve, reject) => {
         let settled = false;
         let stopRequested = false;
         let heardSpeech = false;
@@ -156,7 +156,7 @@ export function useDanishSpeechRecognition() {
         let initialSilenceTimer: ReturnType<typeof setTimeout> | null = null;
         let maximumDurationTimer: ReturnType<typeof setTimeout> | null = null;
         let finalResultTimer: ReturnType<typeof setTimeout> | null = null;
-        const finalSegments: DanishSpeechResult[] = [];
+        const finalSegments: TargetSpeechResult[] = [];
         const alternativeTexts = new Set<string>();
 
         function clearTimer(timer: ReturnType<typeof setTimeout> | null) {
@@ -213,7 +213,7 @@ export function useDanishSpeechRecognition() {
           const completenessScore = average(
             finalSegments.map((segment) => segment.completenessScore),
           );
-          const result: DanishSpeechResult = {
+          const result: TargetSpeechResult = {
             recognizedText,
             durationMs: finalSegments.reduce(
               (total, segment) => total + segment.durationMs,
@@ -298,7 +298,7 @@ export function useDanishSpeechRecognition() {
           let fluencyScore = 0;
           let completenessScore = isOpenResponse ? 1 : 0;
           let pronunciationScore = 0;
-          let wordDetails: DanishSpeechResult["wordDetails"] = [];
+          let wordDetails: TargetSpeechResult["wordDetails"] = [];
 
           if (!isOpenResponse) {
             try {
@@ -385,7 +385,7 @@ export function useDanishSpeechRecognition() {
         setRecordingStatus("idle");
       }
     }
-  }, []);
+  }, [locale]);
 
   return {
     isRecording: recordingStatus !== "idle",

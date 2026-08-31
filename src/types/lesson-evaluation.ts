@@ -11,12 +11,12 @@ export type LessonEvaluation = {
   grammarScore: number;
   vocabularyScore: number;
   summary: string;
-  correctedDanish: string;
+  correctedTargetText: string;
   tips: LessonFeedbackTip[];
   source: "ai" | "fallback";
 };
 
-export type DanishSpeechResult = {
+export type TargetSpeechResult = {
   recognizedText: string;
   alternatives: string[];
   durationMs: number;

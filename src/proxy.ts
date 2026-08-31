@@ -12,6 +12,7 @@ export const config = {
     "/ear/:path*",
     "/text/:path*",
     "/my-danish/:path*",
+    "/progress/:path*",
     "/world/:path*",
     "/login",
   ],

@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-dm-sans);
-  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-manrope);
 
-  --color-cream-50: #fbfaf4;
-  --color-cream-100: #f3f0e4;
-  --color-cream-200: #e8e1cf;
-  --color-forest-700: #315c43;
-  --color-forest-800: #244a35;
-  --color-forest-900: #193a2a;
-  --color-forest-950: #10281d;
-  --color-moss-300: #a9c98c;
-  --color-moss-400: #82b56a;
-  --color-moss-500: #639a52;
-  --color-amber-400: #d9a447;
-  --color-amber-500: #bd8530;
+  --color-cream-50: #fdfcf8;
+  --color-cream-100: #f4f1ea;
+  --color-cream-200: #e0dccf;
+  --color-forest-700: #4d6453;
+  --color-forest-800: #364c3c;
+  --color-forest-900: #203527;
+  --color-forest-950: #1b3022;
+  --color-moss-300: #b4cdb8;
+  --color-moss-400: #99b19e;
+  --color-moss-500: #657d6b;
+  --color-amber-400: #e5a56e;
+  --color-amber-500: #a9652f;
   --color-clay-400: #c77f62;
 }
 
@@ -28,18 +28,19 @@
 }
 
 html {
-  background: #f3f0e4;
+  background: #f4f1ea;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 87% 8%, rgba(130, 181, 106, 0.14), transparent 27rem),
-    radial-gradient(circle at 8% 78%, rgba(217, 164, 71, 0.1), transparent 24rem),
-    #f3f0e4;
-  color: #10281d;
-  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+    radial-gradient(circle at 92% 7%, rgba(153, 177, 158, 0.17), transparent 30rem),
+    radial-gradient(circle at 6% 86%, rgba(229, 165, 110, 0.08), transparent 25rem),
+    #f4f1ea;
+  color: #1b3022;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 480;
 }
 
 button,
@@ -53,17 +54,41 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+a,
+input,
+summary {
+  outline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(27, 48, 34, 0.72);
+}
+
 ::selection {
   background: rgba(99, 154, 82, 0.25);
 }
 
 .paper-panel {
-  border: 1px solid rgba(16, 40, 29, 0.09);
-  background: rgba(251, 250, 244, 0.78);
+  border: 1px solid rgba(27, 48, 34, 0.09);
+  background: rgba(253, 252, 248, 0.92);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.8) inset,
-    0 22px 55px rgba(25, 58, 42, 0.07);
-  backdrop-filter: blur(18px);
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 18px 45px rgba(27, 48, 34, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.font-display {
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 .dimension-track {

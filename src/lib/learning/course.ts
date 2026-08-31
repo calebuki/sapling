@@ -1,9 +1,19 @@
-export type DanishVoice = "da-DK-ChristelNeural" | "da-DK-JeppeNeural";
+import { swedishLessons, swedishListenSpeakItems } from "./swedish-course.ts";
+import {
+  getTargetLanguage,
+  type TargetLanguageCode,
+} from "./languages.ts";
+
+export type SpeechVoice =
+  | "da-DK-ChristelNeural"
+  | "da-DK-JeppeNeural"
+  | "sv-SE-SofieNeural"
+  | "sv-SE-MattiasNeural";
 
 export type LessonExercise = {
   conceptSlug: string;
   audioId: string;
-  voice: DanishVoice;
+  voice: SpeechVoice;
   mode: "repeat" | "guided" | "open";
   eyebrow: string;
   prompt: string;
@@ -12,7 +22,7 @@ export type LessonExercise = {
 };
 
 export type ScenarioWord = {
-  danish: string;
+  target: string;
   english: string;
 };
 
@@ -36,7 +46,7 @@ export type ListenSpeakItem = {
   id: string;
   conceptSlug: string;
   audioId: string;
-  voice: DanishVoice;
+  voice: SpeechVoice;
   text: string;
   meaning: string;
   options: string[];
@@ -45,10 +55,11 @@ export type ListenSpeakItem = {
 export type SpeechClip = {
   id: string;
   text: string;
-  voice: DanishVoice;
+  voice: SpeechVoice;
+  languageCode: TargetLanguageCode;
 };
 
-export const lessons: Lesson[] = [
+const danishLessons: Lesson[] = [
   {
     id: "first-words",
     number: 1,
@@ -105,14 +116,14 @@ export const lessons: Lesson[] = [
     support: {
       title: "Introductions",
       words: [
-        { danish: "hej", english: "hello" },
-        { danish: "jeg", english: "I" },
-        { danish: "du", english: "you" },
-        { danish: "navn", english: "name" },
+        { target: "hej", english: "hello" },
+        { target: "jeg", english: "I" },
+        { target: "du", english: "you" },
+        { target: "navn", english: "name" },
       ],
       starters: [
-        { danish: "Jeg hedder …", english: "My name is …" },
-        { danish: "Hvad hedder du?", english: "What is your name?" },
+        { target: "Jeg hedder …", english: "My name is …" },
+        { target: "Hvad hedder du?", english: "What is your name?" },
       ],
     },
     exercises: [
@@ -156,11 +167,11 @@ export const lessons: Lesson[] = [
     support: {
       title: "Menu",
       words: [
-        { danish: "kaffe", english: "coffee" },
-        { danish: "te", english: "tea" },
-        { danish: "vand", english: "water" },
-        { danish: "mælk", english: "milk" },
-        { danish: "kanelsnegl", english: "cinnamon roll" },
+        { target: "kaffe", english: "coffee" },
+        { target: "te", english: "tea" },
+        { target: "vand", english: "water" },
+        { target: "mælk", english: "milk" },
+        { target: "kanelsnegl", english: "cinnamon roll" },
       ],
     },
     exercises: [
@@ -225,16 +236,16 @@ export const lessons: Lesson[] = [
       title: "Café",
       idea: "Try coffee with milk and a pastry.",
       words: [
-        { danish: "kaffe", english: "coffee" },
-        { danish: "te", english: "tea" },
-        { danish: "vand", english: "water" },
-        { danish: "mælk", english: "milk" },
-        { danish: "kanelsnegl", english: "cinnamon roll" },
+        { target: "kaffe", english: "coffee" },
+        { target: "te", english: "tea" },
+        { target: "vand", english: "water" },
+        { target: "mælk", english: "milk" },
+        { target: "kanelsnegl", english: "cinnamon roll" },
       ],
       starters: [
-        { danish: "Jeg vil gerne have …", english: "I would like …" },
-        { danish: "… med mælk", english: "… with milk" },
-        { danish: "Og en …", english: "And a …" },
+        { target: "Jeg vil gerne have …", english: "I would like …" },
+        { target: "… med mælk", english: "… with milk" },
+        { target: "Og en …", english: "And a …" },
       ],
     },
     exercises: [
@@ -279,16 +290,16 @@ export const lessons: Lesson[] = [
       title: "Menu",
       idea: "Try coffee with milk and a pastry.",
       words: [
-        { danish: "kaffe", english: "coffee" },
-        { danish: "te", english: "tea" },
-        { danish: "vand", english: "water" },
-        { danish: "mælk", english: "milk" },
-        { danish: "kanelsnegl", english: "cinnamon roll" },
+        { target: "kaffe", english: "coffee" },
+        { target: "te", english: "tea" },
+        { target: "vand", english: "water" },
+        { target: "mælk", english: "milk" },
+        { target: "kanelsnegl", english: "cinnamon roll" },
       ],
       starters: [
-        { danish: "Jeg vil gerne have …", english: "I would like …" },
-        { danish: "Kan jeg få …", english: "Can I have …" },
-        { danish: "Regningen, tak.", english: "The bill, please." },
+        { target: "Jeg vil gerne have …", english: "I would like …" },
+        { target: "Kan jeg få …", english: "Can I have …" },
+        { target: "Regningen, tak.", english: "The bill, please." },
       ],
     },
     exercises: [
@@ -332,14 +343,14 @@ export const lessons: Lesson[] = [
     support: {
       title: "Transport",
       words: [
-        { danish: "station", english: "station" },
-        { danish: "tog", english: "train" },
-        { danish: "billet", english: "ticket" },
-        { danish: "stop", english: "stop" },
+        { target: "station", english: "station" },
+        { target: "tog", english: "train" },
+        { target: "billet", english: "ticket" },
+        { target: "stop", english: "stop" },
       ],
       starters: [
-        { danish: "Hvor er …?", english: "Where is …?" },
-        { danish: "Går dette tog til …?", english: "Does this train go to …?" },
+        { target: "Hvor er …?", english: "Where is …?" },
+        { target: "Går dette tog til …?", english: "Does this train go to …?" },
       ],
     },
     exercises: [
@@ -383,13 +394,13 @@ export const lessons: Lesson[] = [
     support: {
       title: "Help",
       words: [
-        { danish: "forstår", english: "understand" },
-        { danish: "gentage", english: "repeat" },
-        { danish: "langsomt", english: "slowly" },
+        { target: "forstår", english: "understand" },
+        { target: "gentage", english: "repeat" },
+        { target: "langsomt", english: "slowly" },
       ],
       starters: [
-        { danish: "Jeg forstår ikke.", english: "I do not understand." },
-        { danish: "Kan du …?", english: "Can you …?" },
+        { target: "Jeg forstår ikke.", english: "I do not understand." },
+        { target: "Kan du …?", english: "Can you …?" },
       ],
     },
     exercises: [
@@ -433,13 +444,13 @@ export const lessons: Lesson[] = [
     support: {
       title: "Plans",
       words: [
-        { danish: "måske", english: "maybe" },
-        { danish: "tog", english: "train" },
-        { danish: "i morgen", english: "tomorrow" },
+        { target: "måske", english: "maybe" },
+        { target: "tog", english: "train" },
+        { target: "i morgen", english: "tomorrow" },
       ],
       starters: [
-        { danish: "Måske …", english: "Maybe …" },
-        { danish: "Skal vi …?", english: "Shall we …?" },
+        { target: "Måske …", english: "Maybe …" },
+        { target: "Skal vi …?", english: "Shall we …?" },
       ],
     },
     exercises: [
@@ -467,7 +478,7 @@ export const lessons: Lesson[] = [
   },
 ];
 
-export const listenSpeakItems: ListenSpeakItem[] = [
+const danishListenSpeakItems: ListenSpeakItem[] = [
   {
     id: "maybe-later",
     conceptSlug: "maaske",
@@ -648,18 +659,50 @@ export const listenSpeakItems: ListenSpeakItem[] = [
   },
 ];
 
-const speechClips = new Map<string, SpeechClip>([
-  ...lessons.flatMap((lesson) =>
-    lesson.exercises.map((exercise) => [
-      exercise.audioId,
-      { id: exercise.audioId, text: exercise.expected, voice: exercise.voice },
+export type Course = {
+  lessons: Lesson[];
+  listenSpeakItems: ListenSpeakItem[];
+};
+
+const courses: Record<TargetLanguageCode, Course> = {
+  da: {
+    lessons: danishLessons,
+    listenSpeakItems: danishListenSpeakItems,
+  },
+  sv: {
+    lessons: swedishLessons,
+    listenSpeakItems: swedishListenSpeakItems,
+  },
+};
+
+export function getCourse(languageCode: TargetLanguageCode) {
+  return courses[languageCode];
+}
+
+const speechClips = new Map<string, SpeechClip>(
+  Object.entries(courses).flatMap(([languageCode, course]) => [
+    ...course.lessons.flatMap((lesson) =>
+      lesson.exercises.map((exercise) => [
+        exercise.audioId,
+        {
+          id: exercise.audioId,
+          text: exercise.expected,
+          voice: exercise.voice,
+          languageCode: languageCode as TargetLanguageCode,
+        },
+      ] as const),
+    ),
+    ...course.listenSpeakItems.map((item) => [
+      item.audioId,
+      {
+        id: item.audioId,
+        text: item.text,
+        voice: item.voice,
+        languageCode: languageCode as TargetLanguageCode,
+      },
     ] as const),
-  ),
-  ...listenSpeakItems.map((item) => [
-    item.audioId,
-    { id: item.audioId, text: item.text, voice: item.voice },
-  ] as const),
-]);
+  ]),
+);
 
 function speechClipVersion(clip: SpeechClip) {
   const source = `${clip.voice}\0${clip.text}`;
@@ -688,5 +731,6 @@ export function getSpeechAudioUrl(id: string) {
     return null;
   }
 
-  return `/audio/danish/${encodeURIComponent(clip.id)}.mp3?v=${speechClipVersion(clip)}`;
+  const language = getTargetLanguage(clip.languageCode);
+  return `/audio/${language.audioDirectory}/${encodeURIComponent(clip.id)}.mp3?v=${speechClipVersion(clip)}`;
 }

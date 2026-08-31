@@ -8,6 +8,7 @@ const protectedPrefixes = [
   "/ear",
   "/text",
   "/my-danish",
+  "/progress",
   "/world",
 ];
 
