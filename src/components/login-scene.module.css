@@ -1,0 +1,133 @@
+.scene {
+  --scene-x: 0;
+  --scene-y: 0;
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  background: #cfded4;
+  color: #f8f4e8;
+}
+
+.artwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.skyTop { stop-color: #8db6b0; transition: stop-color 700ms ease; }
+.skyBottom { stop-color: #dfe2c8; transition: stop-color 700ms ease; }
+.sky { transition: fill 700ms ease; }
+.sun { fill: #f0c66d; transition: fill 700ms ease, transform 700ms ease; transform-origin: 722px 143px; }
+.cloud { fill: rgba(247, 244, 232, .75); }
+.cloudOne { animation: cloud-drift 24s ease-in-out infinite alternate; }
+.cloudTwo { animation: cloud-drift 31s ease-in-out -8s infinite alternate-reverse; }
+.farLayer { transform: translate(calc(var(--scene-x) * -7px), calc(var(--scene-y) * -4px)); transition: transform 180ms ease-out; }
+.farHill { fill: #779385; transition: fill 700ms ease; }
+.nearHill { fill: #537564; transition: fill 700ms ease; }
+.waterLayer { transform: translate(calc(var(--scene-x) * -3px), calc(var(--scene-y) * -2px)); transition: transform 180ms ease-out; }
+.waterLines { fill: none; stroke: rgba(240, 244, 229, .38); stroke-linecap: round; stroke-width: 4; }
+.wake { fill: none; stroke: rgba(246, 240, 223, .55); stroke-linecap: round; stroke-width: 4; }
+.ferry { animation: ferry-crossing 18s linear infinite; }
+.turbineBlades { animation: turbine-turn 9s linear infinite; transform-origin: 0 17px; }
+.landShadow { fill: rgba(30, 58, 46, .28); }
+.villageLayer { transform: translate(calc(var(--scene-x) * 8px), calc(var(--scene-y) * 5px)); transition: transform 180ms ease-out; }
+.pine { animation: tree-sway 4.5s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 100%; }
+.pineSlow { animation-duration: 6s; animation-delay: -2s; }
+.smoke { fill: rgba(247, 244, 232, .55); animation: smoke-rise 5s ease-in-out infinite; transform-origin: 341px 412px; }
+.window { fill: #d8e8d7; transition: fill 600ms ease, filter 600ms ease; }
+.flag { animation: flag-wave 1.8s ease-in-out infinite alternate; transform-origin: 530px 338px; }
+.bike { fill: none; stroke: #29423a; stroke-linecap: round; stroke-linejoin: round; stroke-width: 4; }
+.person { animation: person-walk 12s ease-in-out infinite alternate; }
+.birds { fill: none; stroke: #395c51; stroke-linecap: round; stroke-width: 4; animation: birds-fly 15s linear infinite; }
+
+.sceneCopy {
+  position: absolute;
+  z-index: 3;
+  top: clamp(2rem, 6vw, 5rem);
+  left: clamp(2rem, 5vw, 5rem);
+  max-width: 29rem;
+  text-shadow: 0 2px 18px rgba(21, 52, 43, .22);
+}
+
+.sceneCopy h2 {
+  max-width: 10ch;
+  margin: .55rem 0 .8rem;
+  font-family: var(--font-fraunces), serif;
+  font-size: clamp(2.7rem, 5vw, 5.4rem);
+  font-weight: 500;
+  letter-spacing: -.045em;
+  line-height: .94;
+}
+
+.sceneCopy > p:last-child {
+  max-width: 32rem;
+  margin: 0;
+  font-size: clamp(.9rem, 1.3vw, 1.05rem);
+  line-height: 1.55;
+  opacity: .82;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+}
+
+.lightSwitch {
+  position: absolute;
+  z-index: 4;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 999px;
+  padding: .65rem .9rem;
+  background: rgba(26, 58, 49, .28);
+  color: #fffdf5;
+  font-size: .75rem;
+  font-weight: 700;
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.lightSwitch:hover { background: rgba(26, 58, 49, .42); transform: translateY(-1px); }
+.lightSwitch:focus-visible { outline: 3px solid rgba(255, 255, 255, .8); outline-offset: 3px; }
+
+.evening .skyTop { stop-color: #263d52; }
+.evening .skyBottom { stop-color: #6e7880; }
+.evening .sun { fill: #f7edc0; transform: scale(.72); }
+.evening .farHill { fill: #3d554f; }
+.evening .nearHill { fill: #2d493f; }
+.evening .window { fill: #ffd878; filter: drop-shadow(0 0 9px rgba(255, 207, 92, .82)); }
+
+@keyframes cloud-drift { to { transform: translateX(50px); } }
+@keyframes turbine-turn { to { transform: rotate(360deg); } }
+@keyframes ferry-crossing { from { transform: translateX(-50px); } to { transform: translateX(950px); } }
+@keyframes smoke-rise { 0%, 100% { opacity: .2; transform: translateY(12px) scale(.8); } 50% { opacity: .75; transform: translate(-5px, -11px) scale(1.08); } }
+@keyframes tree-sway { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg); } }
+@keyframes flag-wave { from { transform: skewY(-3deg) scaleX(.94); } to { transform: skewY(4deg) scaleX(1.04); } }
+@keyframes person-walk { from { transform: translate(-24px, 0); } to { transform: translate(35px, -20px); } }
+@keyframes birds-fly { from { transform: translate(-130px, 30px); } to { transform: translate(850px, -35px); } }
+
+@media (max-width: 899px) {
+  .scene { min-height: 310px; }
+  .artwork { top: -55px; height: calc(100% + 95px); }
+  .sceneCopy { top: 2rem; left: 1.5rem; max-width: 19rem; }
+  .sceneCopy h2 { font-size: clamp(2.4rem, 10vw, 3.7rem); }
+  .sceneCopy > p:last-child { display: none; }
+  .lightSwitch { top: 1rem; right: 1rem; }
+  .lightSwitch span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud, .ferry, .turbineBlades, .pine, .smoke, .flag, .person, .birds { animation: none; }
+  .farLayer, .waterLayer, .villageLayer { transform: none; transition: none; }
+}
