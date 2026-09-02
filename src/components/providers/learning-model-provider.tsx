@@ -17,6 +17,8 @@ import {
 } from "@/lib/learning/languages";
 import type {
   Concept,
+  LearningSessionPlan,
+  LearningSessionPlanInput,
   LearnerConceptState,
   ListeningAttemptInput,
   ReadingAttemptInput,
@@ -34,6 +36,8 @@ type LearningModelContextValue = {
   isSwitchingLanguage: boolean;
   error: string | null;
   selectTargetLanguage: (languageCode: TargetLanguageCode) => Promise<void>;
+  startSession: (input: LearningSessionPlanInput) => Promise<LearningSessionPlan>;
+  completeSession: (sessionId: string | null) => Promise<void>;
   recordRetrievalAttempt: (
     input: RetrievalAttemptInput,
   ) => Promise<LearnerConceptState>;
@@ -161,6 +165,40 @@ export function LearningModelProvider({
     [repository, upsertState],
   );
 
+  const startSession = useCallback(
+    async (input: LearningSessionPlanInput) => {
+      setError(null);
+      try {
+        return await repository.startSession(input);
+      } catch (sessionError) {
+        const message =
+          sessionError instanceof Error
+            ? sessionError.message
+            : "Sapling could not start this session.";
+        setError(message);
+        throw sessionError;
+      }
+    },
+    [repository],
+  );
+
+  const completeSession = useCallback(
+    async (sessionId: string | null) => {
+      setError(null);
+      try {
+        await repository.completeSession(sessionId);
+      } catch (sessionError) {
+        const message =
+          sessionError instanceof Error
+            ? sessionError.message
+            : "Sapling could not finish this session.";
+        setError(message);
+        throw sessionError;
+      }
+    },
+    [repository],
+  );
+
   const recordRepair = useCallback(
     async (input: RepairInput) => {
       setError(null);
@@ -240,6 +278,8 @@ export function LearningModelProvider({
         isSwitchingLanguage,
         error,
         selectTargetLanguage,
+        startSession,
+        completeSession,
         recordRetrievalAttempt,
         recordRepair,
         recordListeningAttempt,

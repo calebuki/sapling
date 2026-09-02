@@ -28,6 +28,7 @@ import {
   type WritingPracticeItem,
   writingPracticeItems,
 } from "@/lib/learning/text-practice";
+import { SCORER_VERSION, scoreOpenResponse } from "@/lib/learning/scheduler";
 import type { LessonEvaluation } from "@/types/lesson-evaluation";
 import type { Concept, LearnerConceptState } from "@/types/learning";
 
@@ -42,6 +43,7 @@ type WritingFeedback = {
   kind: "writing";
   response: string;
   evaluation: LessonEvaluation;
+  successful: boolean;
 };
 type Feedback = ReadingFeedback | WritingFeedback;
 
@@ -246,6 +248,7 @@ export function ReadWriteSession() {
         successful,
         score: successful ? 1 : 0,
         latencyMs,
+        scorerVersion: SCORER_VERSION,
         context: {
           source: "read-write",
           activityType: "reading-comprehension",
@@ -300,7 +303,7 @@ export function ReadWriteSession() {
         | LessonEvaluation
         | { error?: string };
 
-      if (!evaluationResponse.ok || !("successful" in body)) {
+      if (!evaluationResponse.ok || !("meaningScore" in body)) {
         throw new Error(
           "error" in body && body.error
             ? body.error
@@ -308,12 +311,19 @@ export function ReadWriteSession() {
         );
       }
 
+      const scored = scoreOpenResponse(body);
+
       await recordRetrievalAttempt({
         conceptId: item.conceptId,
         responseText: response,
         expectedResponse: item.exampleAnswer,
-        successful: body.successful,
+        successful: scored.successful,
         latencyMs,
+        evidenceKind: "independent_recall",
+        answerVisible: false,
+        hintCount: 0,
+        evaluatorVersion: body.evaluatorVersion,
+        scorerVersion: scored.scorerVersion,
         context: {
           source: "read-write",
           activityType: "writing",
@@ -326,10 +336,15 @@ export function ReadWriteSession() {
         },
       });
 
-      if (body.successful) {
+      if (scored.successful) {
         setWritingSuccessful((current) => current + 1);
       }
-      setFeedback({ kind: "writing", response, evaluation: body });
+      setFeedback({
+        kind: "writing",
+        response,
+        evaluation: body,
+        successful: scored.successful,
+      });
       setPhase("feedback");
     } catch (error) {
       setActionError(
@@ -696,11 +711,11 @@ function WritingResult({
   onContinue: () => void;
   onRepair: () => void;
 }) {
-  const { evaluation } = feedback;
+  const { evaluation, successful } = feedback;
   return (
     <div className="soft-enter">
-      <div className={`grid size-12 place-items-center rounded-2xl ${evaluation.successful ? "bg-moss-400/20 text-forest-800" : "bg-clay-400/15 text-clay-400"}`}>
-        {evaluation.successful ? <CheckCircle2 aria-hidden="true" size={24} /> : <PenLine aria-hidden="true" size={23} />}
+      <div className={`grid size-12 place-items-center rounded-2xl ${successful ? "bg-moss-400/20 text-forest-800" : "bg-clay-400/15 text-clay-400"}`}>
+        {successful ? <CheckCircle2 aria-hidden="true" size={24} /> : <PenLine aria-hidden="true" size={23} />}
       </div>
       <h2 className="mt-6 font-display text-4xl leading-tight text-forest-950">
         {evaluation.summary}
@@ -726,10 +741,10 @@ function WritingResult({
       ) : null}
       <button
         className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-        onClick={evaluation.successful ? onContinue : onRepair}
+        onClick={successful ? onContinue : onRepair}
         type="button"
       >
-        {evaluation.successful ? "Continue" : "Rewrite it"}
+        {successful ? "Continue" : "Rewrite it"}
         <ArrowRight aria-hidden="true" size={17} />
       </button>
     </div>

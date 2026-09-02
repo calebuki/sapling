@@ -1,7 +1,7 @@
-import { WorldView } from "@/components/world-view";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "World" };
 
 export default function WorldPage() {
-  return <WorldView />;
+  redirect("/learn");
 }

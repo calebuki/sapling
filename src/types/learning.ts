@@ -19,6 +19,21 @@ export type LearningDimension =
   | "contextDiversity"
   | "speakerDiversity";
 
+export type EvidenceKind =
+  | "exposure"
+  | "imitation"
+  | "assisted_recall"
+  | "independent_recall"
+  | "pronunciation"
+  | "communicative_use";
+
+export type ReviewDimension =
+  | "recall"
+  | "recognitionAudio"
+  | "recognitionText"
+  | "pronunciation"
+  | "communicativeUse";
+
 export type GrowthStage =
   | "seed"
   | "sprout"
@@ -54,6 +69,18 @@ export interface LearnerConceptState {
   estimateConfidence: number;
   exposureCount: number;
   successfulRetrievalCount: number;
+  independentRetrievalCount: number;
+  delayedIndependentSuccessCount: number;
+  lastIndependentRetrievalAt: string | null;
+  recallDueAt: string | null;
+  listeningDueAt: string | null;
+  pronunciationDueAt: string | null;
+  recallIntervalHours: number;
+  listeningIntervalHours: number;
+  pronunciationIntervalHours: number;
+  recallLapses: number;
+  listeningLapses: number;
+  pronunciationLapses: number;
   algorithmVersion: number;
 }
 
@@ -63,6 +90,16 @@ export interface RetrievalAttemptInput {
   expectedResponse: string;
   successful: boolean;
   latencyMs: number;
+  evidenceKind: Extract<
+    EvidenceKind,
+    "exposure" | "imitation" | "assisted_recall" | "independent_recall" | "communicative_use"
+  >;
+  answerVisible: boolean;
+  hintCount: number;
+  evaluatorVersion: string;
+  scorerVersion: string;
+  sessionId?: string | null;
+  sessionItemId?: string | null;
   context: Record<string, string | number | boolean | null>;
 }
 
@@ -74,6 +111,9 @@ export interface ReadingAttemptInput {
   successful: boolean;
   score: number;
   latencyMs: number;
+  scorerVersion: string;
+  sessionId?: string | null;
+  sessionItemId?: string | null;
   context: Record<string, string | number | boolean | null>;
 }
 
@@ -81,6 +121,8 @@ export interface RepairInput {
   conceptId: string;
   responseText: string;
   targetText: string;
+  sessionId?: string | null;
+  sessionItemId?: string | null;
   context: Record<string, string | number | boolean | null>;
 }
 
@@ -90,7 +132,13 @@ export interface ListeningAttemptInput {
   score: number;
   latencyMs: number;
   speakerId: string;
+  contextId: string;
   playbackCount: number;
+  usedSlowPlayback: boolean;
+  taskType: "meaning_selection" | "phrase_discrimination" | "prediction" | "ordering" | "heard_selection";
+  scorerVersion: string;
+  sessionId?: string | null;
+  sessionItemId?: string | null;
   context: Record<string, string | number | boolean | null>;
 }
 
@@ -109,8 +157,30 @@ export interface SpeakingAttemptInput {
   completenessScore: number;
   pronunciationScore: number;
   successful: boolean;
+  evidenceKind: Extract<EvidenceKind, "imitation" | "pronunciation" | "communicative_use">;
+  scorerVersion: string;
+  sessionId?: string | null;
+  sessionItemId?: string | null;
   wordDetails: PronunciationWordDetail[];
   context: Record<string, string | number | boolean | null>;
+}
+
+export interface LearningSessionItemInput {
+  activityType: "cold_recall" | "listening" | "reading" | "writing" | "speaking" | "repair" | "transfer";
+  conceptId: string;
+  targetDimension: ReviewDimension;
+  prompt: Record<string, string | number | boolean | null>;
+}
+
+export interface LearningSessionPlanInput {
+  kind: "learn" | "practice";
+  plannerVersion: string;
+  items: LearningSessionItemInput[];
+}
+
+export interface LearningSessionPlan {
+  id: string | null;
+  itemIds: Array<string | null>;
 }
 
 export interface LearningSnapshot {

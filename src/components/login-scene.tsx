@@ -33,9 +33,7 @@ export function LoginScene() {
       ref={sceneRef}
     >
       <div className={styles.sceneCopy}>
-        <p className={styles.eyebrow}>A little Danish every day</p>
         <h2>Find your place in the language.</h2>
-        <p>Practice the words that turn a new city into somewhere familiar.</p>
       </div>
 
       <button

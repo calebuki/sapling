@@ -50,6 +50,18 @@ function mapState(row: StateRow): LearnerConceptState {
     estimateConfidence: row.estimate_confidence,
     exposureCount: row.exposure_count,
     successfulRetrievalCount: row.successful_retrieval_count,
+    independentRetrievalCount: row.independent_retrieval_count,
+    delayedIndependentSuccessCount: row.delayed_independent_success_count,
+    lastIndependentRetrievalAt: row.last_independent_retrieval_at,
+    recallDueAt: row.recall_due_at,
+    listeningDueAt: row.listening_due_at,
+    pronunciationDueAt: row.pronunciation_due_at,
+    recallIntervalHours: row.recall_interval_hours,
+    listeningIntervalHours: row.listening_interval_hours,
+    pronunciationIntervalHours: row.pronunciation_interval_hours,
+    recallLapses: row.recall_lapses,
+    listeningLapses: row.listening_lapses,
+    pronunciationLapses: row.pronunciation_lapses,
     algorithmVersion: row.algorithm_version,
   };
 }
@@ -146,6 +158,70 @@ export function createSupabaseLearningRepository(): LearningRepository {
         mode: "supabase",
       };
     },
+    async startSession(input) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { data: session, error: sessionError } = await supabase
+        .from("learning_sessions")
+        .insert({
+          user_id: userId,
+          kind: input.kind,
+          status: "active",
+          planner_version: input.plannerVersion,
+          configuration: { itemCount: input.items.length },
+        })
+        .select("id")
+        .single();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      const { data: items, error: itemError } = await supabase
+        .from("session_items")
+        .insert(
+          input.items.map((item, position) => ({
+            user_id: userId,
+            session_id: session.id,
+            position,
+            activity_type: item.activityType,
+            primary_concept_id: item.conceptId,
+            status: "planned",
+            prompt: {
+              ...item.prompt,
+              targetDimension: item.targetDimension,
+            },
+          })),
+        )
+        .select("id, position");
+
+      if (itemError) {
+        throw itemError;
+      }
+
+      return {
+        id: session.id,
+        itemIds: [...items]
+          .sort((left, right) => left.position - right.position)
+          .map((item) => item.id),
+      };
+    },
+    async completeSession(sessionId) {
+      if (!sessionId) {
+        return;
+      }
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase
+        .from("learning_sessions")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", sessionId)
+        .eq("user_id", userId);
+
+      if (error) {
+        throw error;
+      }
+    },
     async recordRetrievalAttempt(input: RetrievalAttemptInput) {
       const supabase = createClient();
       const userId = await getCurrentUserId();
@@ -155,7 +231,14 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_expected_response: input.expectedResponse,
         p_successful: input.successful,
         p_latency_ms: input.latencyMs,
+        p_evidence_kind: input.evidenceKind,
+        p_answer_visible: input.answerVisible,
+        p_hint_count: input.hintCount,
+        p_evaluator_version: input.evaluatorVersion,
+        p_scorer_version: input.scorerVersion,
         p_context: input.context as Json,
+        p_session_id: input.sessionId,
+        p_session_item_id: input.sessionItemId,
       });
 
       if (error) {
@@ -172,6 +255,8 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_response_text: input.responseText,
         p_target_text: input.targetText,
         p_context: input.context as Json,
+        p_session_id: input.sessionId,
+        p_session_item_id: input.sessionItemId,
       });
 
       if (error) {
@@ -189,8 +274,14 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_score: input.score,
         p_latency_ms: input.latencyMs,
         p_speaker_id: input.speakerId,
+        p_context_id: input.contextId,
         p_playback_count: input.playbackCount,
+        p_used_slow_playback: input.usedSlowPlayback,
+        p_task_type: input.taskType,
+        p_scorer_version: input.scorerVersion,
         p_context: input.context as Json,
+        p_session_id: input.sessionId,
+        p_session_item_id: input.sessionItemId,
       });
 
       if (error) {
@@ -210,7 +301,10 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_successful: input.successful,
         p_score: input.score,
         p_latency_ms: input.latencyMs,
+        p_scorer_version: input.scorerVersion,
         p_context: input.context as Json,
+        p_session_id: input.sessionId,
+        p_session_item_id: input.sessionItemId,
       });
 
       if (error) {
@@ -231,8 +325,12 @@ export function createSupabaseLearningRepository(): LearningRepository {
         p_completeness_score: input.completenessScore,
         p_pronunciation_score: input.pronunciationScore,
         p_successful: input.successful,
+        p_evidence_kind: input.evidenceKind,
+        p_scorer_version: input.scorerVersion,
         p_word_details: input.wordDetails as Json,
         p_context: input.context as Json,
+        p_session_id: input.sessionId,
+        p_session_item_id: input.sessionItemId,
       });
 
       if (error) {

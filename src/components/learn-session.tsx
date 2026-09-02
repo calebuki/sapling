@@ -3,76 +3,196 @@
 import {
   ArrowRight,
   Check,
-  CheckCircle2,
-  ChevronDown,
-  Circle,
   CircleAlert,
   CircleHelp,
+  Ear,
+  Keyboard,
   LoaderCircle,
-  LockKeyhole,
   Mic,
   RotateCcw,
   Sparkles,
   Square,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { TargetAudioButton } from "@/components/target-audio-button";
 import { useTargetSpeechRecognition } from "@/hooks/use-target-speech-recognition";
-import { getCourse, type Lesson, type LessonSupport } from "@/lib/learning/course";
-import type { TargetLanguageCode } from "@/lib/learning/languages";
+import {
+  getCourse,
+  type Lesson,
+  type LessonExercise,
+  type ListenSpeakItem,
+} from "@/lib/learning/course";
+import { createEmptyState } from "@/lib/learning/model";
+import {
+  EVALUATOR_VERSION,
+  planAdaptiveReview,
+  SCORER_VERSION,
+  SCHEDULER_VERSION,
+  scoreOpenResponse,
+} from "@/lib/learning/scheduler";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
-  pronunciationAttemptQuality,
   pronunciationBand,
 } from "@/lib/learning/speech-scoring";
-import type {
-  TargetSpeechResult,
-  LessonEvaluation,
-} from "@/types/lesson-evaluation";
+import type { LessonEvaluation, TargetSpeechResult } from "@/types/lesson-evaluation";
+import type { Concept, LearnerConceptState, LearningSessionPlan } from "@/types/learning";
 
-type Phase = "attempt" | "feedback" | "reveal" | "complete";
+type RetrievalPlanItem = {
+  id: string;
+  kind: "retrieval";
+  concept: Concept;
+  lesson: Lesson;
+  exercise: LessonExercise;
+};
 
-const GUIDED_PRONUNCIATION_TARGET = 0.7;
+type ListeningPlanItem = {
+  id: string;
+  kind: "listening";
+  concept: Concept;
+  item: ListenSpeakItem;
+};
+
+type PlanItem = RetrievalPlanItem | ListeningPlanItem;
+type Phase = "attempt" | "feedback" | "reveal" | "pronunciation" | "complete";
+
+type AttemptFeedback = {
+  evaluation: LessonEvaluation;
+  response: string;
+  successful: boolean;
+};
+
+const ITEMS_PER_SESSION = 7;
+const PRONUNCIATION_TARGET = 0.7;
+
+function interleave<T>(left: T[], right: T[]) {
+  return Array.from({ length: Math.max(left.length, right.length) }, (_, index) => [
+    left[index],
+    right[index],
+  ]).flatMap((pair) => pair.filter((item): item is T => Boolean(item)));
+}
+
+function buildPlan(
+  concepts: Concept[],
+  states: LearnerConceptState[],
+  lessons: Lesson[],
+  listeningItems: ListenSpeakItem[],
+) {
+  const conceptBySlug = new Map(concepts.map((concept) => [concept.slug, concept]));
+  const stateByConcept = new Map(states.map((state) => [state.conceptId, state]));
+  const retrievalVariants = new Map<string, Array<{ lesson: Lesson; exercise: LessonExercise }>>();
+  const listeningVariants = new Map<string, ListenSpeakItem[]>();
+
+  for (const lesson of lessons) {
+    for (const exercise of lesson.exercises) {
+      const variants = retrievalVariants.get(exercise.conceptSlug) ?? [];
+      variants.push({ lesson, exercise });
+      retrievalVariants.set(exercise.conceptSlug, variants);
+    }
+  }
+
+  for (const item of listeningItems) {
+    const variants = listeningVariants.get(item.conceptSlug) ?? [];
+    variants.push(item);
+    listeningVariants.set(item.conceptSlug, variants);
+  }
+
+  const retrieval = planAdaptiveReview(
+    [...retrievalVariants.entries()].flatMap(([slug, variants]) => {
+      const concept = conceptBySlug.get(slug);
+      if (!concept) return [];
+      const state = stateByConcept.get(concept.id) ?? createEmptyState(concept.id);
+      const variant = variants[state.independentRetrievalCount % variants.length];
+      return [{
+        id: `recall:${concept.id}`,
+        dimension: variant.exercise.mode === "open" ? "communicativeUse" as const : "recall" as const,
+        state,
+        sortOrder: concept.sortOrder,
+        value: {
+          id: `recall:${variant.exercise.audioId}`,
+          kind: "retrieval" as const,
+          concept,
+          ...variant,
+        },
+      }];
+    }),
+    { limit: 4 },
+  );
+
+  const listening = planAdaptiveReview(
+    [...listeningVariants.entries()].flatMap(([slug, variants]) => {
+      const concept = conceptBySlug.get(slug);
+      if (!concept) return [];
+      const state = stateByConcept.get(concept.id) ?? createEmptyState(concept.id);
+      const item = variants[state.exposureCount % variants.length];
+      return [{
+        id: `listen:${concept.id}`,
+        dimension: "recognitionAudio" as const,
+        state,
+        sortOrder: concept.sortOrder,
+        value: {
+          id: `listen:${item.id}`,
+          kind: "listening" as const,
+          concept,
+          item,
+        },
+      }];
+    }),
+    { limit: 3 },
+  );
+
+  return interleave<PlanItem>(retrieval, listening).slice(0, ITEMS_PER_SESSION);
+}
 
 export function LearnSession() {
   const { targetLanguage } = useLearningModel();
-
   return <LanguageLearnSession key={targetLanguage.code} />;
 }
 
 function LanguageLearnSession() {
   const {
+    completeSession,
     concepts,
-    states,
-    isLoading,
     error: modelError,
-    targetLanguage,
-    recordRetrievalAttempt,
+    isLoading,
+    recordListeningAttempt,
     recordRepair,
+    recordRetrievalAttempt,
     recordSpeakingAttempt,
+    startSession,
+    states,
+    targetLanguage,
   } = useLearningModel();
-  const { lessons } = getCourse(targetLanguage.code);
-  const [lessonIndex, setLessonIndex] = useState(0);
-  const [sessionUnlockedLessonIndex, setSessionUnlockedLessonIndex] =
-    useState(0);
-  const [exerciseQueue, setExerciseQueue] = useState<number[]>([0, 1, 2]);
-  const [queuePosition, setQueuePosition] = useState(0);
+  const course = getCourse(targetLanguage.code);
+  const [items, setItems] = useState<PlanItem[]>([]);
+  const [isPreparing, setIsPreparing] = useState(true);
+  const [session, setSession] = useState<LearningSessionPlan>({ id: null, itemIds: [] });
+  const [itemIndex, setItemIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("attempt");
-  const [evaluation, setEvaluation] = useState<LessonEvaluation | null>(null);
-  const [speechResult, setSpeechResult] = useState<TargetSpeechResult | null>(
-    null,
-  );
-  const [revealSpeechResult, setRevealSpeechResult] =
-    useState<TargetSpeechResult | null>(null);
+  const [response, setResponse] = useState("");
+  const [typedRepair, setTypedRepair] = useState("");
+  const [feedback, setFeedback] = useState<AttemptFeedback | null>(null);
+  const [selectedMeaning, setSelectedMeaning] = useState<string | null>(null);
+  const [playbackCount, setPlaybackCount] = useState(0);
+  const [usedSlowPlayback, setUsedSlowPlayback] = useState(false);
   const [usedAudioHint, setUsedAudioHint] = useState(false);
+  const [answerWasVisible, setAnswerWasVisible] = useState(false);
+  const [pronunciationResult, setPronunciationResult] = useState<TargetSpeechResult | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const didChooseStartingLesson = useRef(false);
-  const startedAt = useRef<number | null>(null);
-  const attemptLatencyMs = useRef(0);
+  const [independentSuccesses, setIndependentSuccesses] = useState(0);
+  const didPrepare = useRef(false);
+  const promptShownAt = useRef(0);
+  const responseStartedAt = useRef<number | null>(null);
+  const listeningStartedAt = useRef<number | null>(null);
   const {
     isRecording,
     liveTranscript,
@@ -82,970 +202,616 @@ function LanguageLearnSession() {
     stop: stopRecognition,
   } = useTargetSpeechRecognition(targetLanguage.locale);
 
-  const stateByConcept = useMemo(
-    () => new Map(states.map((state) => [state.conceptId, state])),
-    [states],
-  );
-  const conceptBySlug = useMemo(
-    () => new Map(concepts.map((concept) => [concept.slug, concept])),
-    [concepts],
-  );
-  const masteredExerciseCounts = lessons.map(
-    (lesson) =>
-      lesson.exercises.filter((exercise) => {
-        const concept = conceptBySlug.get(exercise.conceptSlug);
-        return concept
-          ? (stateByConcept.get(concept.id)?.successfulRetrievalCount ?? 0) > 0
-          : false;
-      }).length,
-  );
-  const completedLessons = lessons.map(
-    (lesson, index) => masteredExerciseCounts[index] === lesson.exercises.length,
-  );
-  const firstIncompleteLesson = completedLessons.findIndex(
-    (complete) => !complete,
-  );
-  const unlockedLessonIndex =
-    firstIncompleteLesson === -1 ? lessons.length - 1 : firstIncompleteLesson;
-  const availableLessonIndex = Math.max(
-    unlockedLessonIndex,
-    sessionUnlockedLessonIndex,
-  );
-
-  const getPracticeQueue = useCallback(
-    (index: number) => {
-      const targetLesson = lessons[index];
-      const unfinished = targetLesson.exercises.flatMap(
-        (exercise, exerciseIndex) => {
-          const concept = conceptBySlug.get(exercise.conceptSlug);
-          const mastered = concept
-            ? (stateByConcept.get(concept.id)?.successfulRetrievalCount ?? 0) > 0
-            : false;
-          return mastered ? [] : [exerciseIndex];
-        },
-      );
-
-      return unfinished.length > 0
-        ? unfinished
-        : targetLesson.exercises.map((_, exerciseIndex) => exerciseIndex);
-    },
-    [conceptBySlug, lessons, stateByConcept],
-  );
+  const prepare = useCallback(() =>
+    buildPlan(concepts, states, course.lessons, course.listenSpeakItems),
+  [concepts, course.lessons, course.listenSpeakItems, states]);
 
   useEffect(() => {
-    if (isLoading || didChooseStartingLesson.current) {
-      return;
+    if (isLoading || didPrepare.current) return;
+    didPrepare.current = true;
+    const nextItems = prepare();
+    setItems(nextItems);
+    setIsPreparing(false);
+    void startSession({
+      kind: "learn",
+      plannerVersion: SCHEDULER_VERSION,
+      items: nextItems.map((item) => ({
+        activityType: item.kind === "listening" ? "listening" : "cold_recall",
+        conceptId: item.concept.id,
+        targetDimension: item.kind === "listening"
+          ? "recognitionAudio"
+          : item.exercise.mode === "open"
+            ? "communicativeUse"
+            : "recall",
+        prompt: {
+          sourceId: item.kind === "listening" ? item.item.id : item.exercise.audioId,
+          source: "adaptive-learn",
+        },
+      })),
+    }).then(setSession).catch(() => undefined);
+  }, [isLoading, prepare, startSession]);
+
+  const item = items[itemIndex];
+  const sessionItemId = session.itemIds[itemIndex] ?? null;
+
+  useEffect(() => {
+    if (item && phase === "attempt") {
+      promptShownAt.current = performance.now();
+      responseStartedAt.current = null;
     }
+  }, [item, phase]);
 
-    const startingLesson =
-      firstIncompleteLesson === -1 ? lessons.length - 1 : firstIncompleteLesson;
-    setLessonIndex(startingLesson);
-    setExerciseQueue(getPracticeQueue(startingLesson));
-    setQueuePosition(0);
-    didChooseStartingLesson.current = true;
-  }, [firstIncompleteLesson, getPracticeQueue, isLoading, lessons.length]);
-
-  const lesson = lessons[lessonIndex];
-  const exerciseIndex = exerciseQueue[queuePosition] ?? 0;
-  const exercise = lesson?.exercises[exerciseIndex];
-  const concept = exercise ? conceptBySlug.get(exercise.conceptSlug) : undefined;
-
-  function resetExercise() {
-    setQueuePosition(0);
+  function resetAttempt() {
     setPhase("attempt");
-    setEvaluation(null);
-    setSpeechResult(null);
-    setRevealSpeechResult(null);
+    setResponse("");
+    setTypedRepair("");
+    setFeedback(null);
+    setSelectedMeaning(null);
+    setPlaybackCount(0);
+    setUsedSlowPlayback(false);
     setUsedAudioHint(false);
-    resetTranscript();
+    setAnswerWasVisible(false);
+    setPronunciationResult(null);
     setActionError(null);
-    startedAt.current = null;
-    attemptLatencyMs.current = 0;
-  }
-
-  function chooseLesson(index: number) {
-    if (index > availableLessonIndex) {
-      return;
-    }
-
-    setLessonIndex(index);
-    setExerciseQueue(getPracticeQueue(index));
-    resetExercise();
+    listeningStartedAt.current = null;
+    resetTranscript();
   }
 
   function moveForward() {
-    if (!lesson || queuePosition === exerciseQueue.length - 1) {
-      setSessionUnlockedLessonIndex((current) =>
-        Math.max(current, Math.min(lessonIndex + 1, lessons.length - 1)),
-      );
+    if (itemIndex >= items.length - 1) {
       setPhase("complete");
+      void completeSession(session.id).catch(() => undefined);
       return;
     }
-    setQueuePosition((current) => current + 1);
-    setPhase("attempt");
-    setEvaluation(null);
-    setSpeechResult(null);
-    setRevealSpeechResult(null);
-    setUsedAudioHint(false);
-    resetTranscript();
-    startedAt.current = null;
-    attemptLatencyMs.current = 0;
+    setItemIndex((current) => current + 1);
+    resetAttempt();
   }
 
-  async function markNotSure(event: React.MouseEvent<HTMLButtonElement>) {
-    if (!concept || !exercise || !lesson) {
-      return;
+  function restart() {
+    const nextItems = prepare();
+    setItems(nextItems);
+    setItemIndex(0);
+    setIndependentSuccesses(0);
+    resetAttempt();
+    void startSession({
+      kind: "learn",
+      plannerVersion: SCHEDULER_VERSION,
+      items: nextItems.map((nextItem) => ({
+        activityType: nextItem.kind === "listening" ? "listening" : "cold_recall",
+        conceptId: nextItem.concept.id,
+        targetDimension: nextItem.kind === "listening"
+          ? "recognitionAudio"
+          : nextItem.exercise.mode === "open"
+            ? "communicativeUse"
+            : "recall",
+        prompt: {
+          sourceId: nextItem.kind === "listening" ? nextItem.item.id : nextItem.exercise.audioId,
+          source: "adaptive-learn",
+        },
+      })),
+    }).then(setSession).catch(() => setSession({ id: null, itemIds: [] }));
+  }
+
+  async function evaluateRetrieval(
+    activeItem: RetrievalPlanItem,
+    answer: string,
+    latencyMs: number,
+  ) {
+    const evaluationResponse = await fetch("/api/learning/evaluate-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        languageCode: targetLanguage.code,
+        lessonId: activeItem.lesson.id,
+        exerciseId: activeItem.exercise.audioId,
+        transcript: answer,
+      }),
+    });
+    const body = (await evaluationResponse.json()) as LessonEvaluation | { error?: string };
+    if (!evaluationResponse.ok || !("meaningScore" in body)) {
+      throw new Error("error" in body && body.error ? body.error : "Sapling couldn’t check that answer.");
     }
 
-    attemptLatencyMs.current = Math.max(
+    const scored = scoreOpenResponse(body);
+    const assisted = usedAudioHint || answerWasVisible;
+    const evidenceKind = assisted
+      ? "assisted_recall" as const
+      : activeItem.exercise.mode === "open"
+        ? "communicative_use" as const
+        : "independent_recall" as const;
+
+    await recordRetrievalAttempt({
+      conceptId: activeItem.concept.id,
+      responseText: answer,
+      expectedResponse: activeItem.exercise.expected,
+      successful: scored.successful,
+      latencyMs,
+      evidenceKind,
+      answerVisible: answerWasVisible,
+      hintCount: usedAudioHint ? 1 : 0,
+      evaluatorVersion: body.evaluatorVersion,
+      scorerVersion: scored.scorerVersion,
+      sessionId: session.id,
+      sessionItemId,
+      context: {
+        source: "adaptive-learn",
+        lessonId: activeItem.lesson.id,
+        exerciseId: activeItem.exercise.audioId,
+        responseMode: "text",
+        evaluationProvider: body.source,
+        meaningScore: body.meaningScore,
+        grammarScore: body.grammarScore,
+        vocabularyScore: body.vocabularyScore,
+      },
+    });
+    if (!assisted && scored.successful) {
+      setIndependentSuccesses((current) => current + 1);
+    }
+    setFeedback({ evaluation: body, response: answer, successful: scored.successful });
+    setPhase("feedback");
+  }
+
+  async function submitTyped(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!item || item.kind !== "retrieval" || !response.trim() || isSaving) return;
+    const latencyMs = Math.max(
       0,
-      Math.round(event.timeStamp - (startedAt.current ?? event.timeStamp)),
+      Math.round((responseStartedAt.current ?? performance.now()) - promptShownAt.current),
     );
     setIsSaving(true);
     setActionError(null);
     try {
-      await recordRetrievalAttempt({
-        conceptId: concept.id,
-        responseText: "",
-        expectedResponse: exercise.expected,
-        successful: false,
-        latencyMs: attemptLatencyMs.current,
-        context: {
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          activityType: exercise.eyebrow,
-          responseMode: "not-sure",
-          source: "lesson-course",
-        },
-      });
-      resetTranscript();
-      setRevealSpeechResult(null);
-      setPhase("reveal");
-    } catch (saveError) {
-      setActionError(
-        saveError instanceof Error
-          ? saveError.message
-          : "This attempt could not be saved.",
-      );
+      await evaluateRetrieval(item, response.trim(), latencyMs);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "This answer could not be saved.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function startVoiceAttempt() {
-    if (!concept || !exercise || !lesson || isRecording || isSaving) {
-      return;
-    }
-
+  async function submitVoice() {
+    if (!item || item.kind !== "retrieval" || isRecording || isSaving) return;
+    const elapsedBeforeMic = Math.max(0, performance.now() - promptShownAt.current);
     setActionError(null);
-    setEvaluation(null);
-    setSpeechResult(null);
-
     try {
       const spoken = await startRecognition({ mode: "open" });
-      attemptLatencyMs.current = spoken.durationMs;
-      setSpeechResult(spoken);
+      setResponse(spoken.recognizedText);
       setIsSaving(true);
-
-      const evaluationResponse = await fetch("/api/learning/evaluate-answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          languageCode: targetLanguage.code,
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          transcript: spoken.recognizedText,
-          alternatives: spoken.alternatives,
-        }),
-      });
-      const evaluationBody = (await evaluationResponse.json()) as
-        | LessonEvaluation
-        | { error?: string };
-
-      if (!evaluationResponse.ok || !("successful" in evaluationBody)) {
-        throw new Error(
-          "error" in evaluationBody && evaluationBody.error
-            ? evaluationBody.error
-            : "Sapling couldn’t interpret that answer.",
-        );
-      }
-
-      const attemptContext = {
-        lessonId: lesson.id,
-        exerciseId: exercise.audioId,
-        activityType: exercise.eyebrow,
-        responseMode: "speech",
-        assisted: usedAudioHint,
-        evaluationProvider: evaluationBody.source,
-        meaningScore: evaluationBody.meaningScore,
-        grammarScore: evaluationBody.grammarScore,
-        vocabularyScore: evaluationBody.vocabularyScore,
-        feedbackSummary: evaluationBody.summary,
-        feedbackTips: evaluationBody.tips
-          .map((tip) => `${tip.area}: ${tip.message}`)
-          .join(" | "),
-        source: "lesson-course",
-      };
-
-      if (usedAudioHint) {
-        await recordRepair({
-          conceptId: concept.id,
-          responseText: spoken.recognizedText,
-          targetText: evaluationBody.correctedTargetText,
-          context: attemptContext,
-        });
-      }
-
-      await recordRetrievalAttempt({
-        conceptId: concept.id,
-        responseText: spoken.recognizedText,
-        expectedResponse: exercise.expected,
-        successful: evaluationBody.successful,
-        latencyMs: attemptLatencyMs.current,
-        context: attemptContext,
-      });
-
-      setEvaluation(evaluationBody);
-      setPhase("feedback");
-    } catch (voiceError) {
-      setActionError(
-        voiceError instanceof Error
-          ? voiceError.message
-          : "Sapling couldn’t score that answer.",
+      await evaluateRetrieval(
+        item,
+        spoken.recognizedText,
+        Math.round(elapsedBeforeMic + spoken.responseStartLatencyMs),
       );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Speaking is temporarily unavailable.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  function retryVoiceAttempt() {
-    setEvaluation(null);
-    setSpeechResult(null);
-    resetTranscript();
+  async function showAnswer() {
+    if (!item || item.kind !== "retrieval" || isSaving) return;
+    const latencyMs = Math.max(0, Math.round(performance.now() - promptShownAt.current));
+    setIsSaving(true);
     setActionError(null);
-    setPhase("attempt");
-    startedAt.current = null;
-    attemptLatencyMs.current = 0;
-  }
-
-  function showAnswer() {
-    setRevealSpeechResult(null);
-    resetTranscript();
-    setActionError(null);
-    setPhase("reveal");
-  }
-
-  async function startGuidedPronunciation() {
-    if (!concept || !exercise || !lesson || isRecording || isSaving) {
-      return;
+    try {
+      await recordRetrievalAttempt({
+        conceptId: item.concept.id,
+        responseText: response.trim(),
+        expectedResponse: item.exercise.expected,
+        successful: false,
+        latencyMs,
+        evidenceKind: usedAudioHint ? "assisted_recall" : "independent_recall",
+        answerVisible: false,
+        hintCount: usedAudioHint ? 1 : 0,
+        evaluatorVersion: EVALUATOR_VERSION,
+        scorerVersion: SCORER_VERSION,
+        sessionId: session.id,
+        sessionItemId,
+        context: { source: "adaptive-learn", responseMode: "not-sure" },
+      });
+      setAnswerWasVisible(true);
+      setPhase("reveal");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "This attempt could not be saved.");
+    } finally {
+      setIsSaving(false);
     }
+  }
 
+  async function chooseMeaning(option: string, eventTimestamp: number) {
+    if (!item || item.kind !== "listening" || playbackCount === 0 || isSaving) return;
+    const successful = option === item.item.meaning;
+    const latencyMs = Math.max(
+      0,
+      Math.round(eventTimestamp - (listeningStartedAt.current ?? eventTimestamp)),
+    );
+    setSelectedMeaning(option);
+    setIsSaving(true);
     setActionError(null);
-    resetTranscript();
+    try {
+      await recordListeningAttempt({
+        conceptId: item.concept.id,
+        successful,
+        score: successful ? 1 : 0,
+        latencyMs,
+        speakerId: item.item.voice,
+        contextId: item.item.id,
+        playbackCount,
+        usedSlowPlayback,
+        taskType: "meaning_selection",
+        scorerVersion: SCORER_VERSION,
+        sessionId: session.id,
+        sessionItemId,
+        context: {
+          source: "adaptive-learn",
+          itemId: item.item.id,
+          selectedMeaning: option,
+        },
+      });
+      if (successful && playbackCount === 1 && !usedSlowPlayback) {
+        setIndependentSuccesses((current) => current + 1);
+      }
+      setPhase("feedback");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "This listening answer could not be saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
+  async function scorePronunciation() {
+    if (!item || item.kind !== "listening" || isSaving || isRecording) return;
+    setActionError(null);
     try {
       const spoken = await startRecognition({
         mode: "scripted",
-        referenceText: exercise.expected,
+        referenceText: item.item.text,
       });
-      const rawPronunciationScore = spoken.pronunciationScore;
-      const completenessScore = calculatePhraseCoverage(
-        exercise.expected,
-        spoken.recognizedText,
-      );
+      const completenessScore = calculatePhraseCoverage(item.item.text, spoken.recognizedText);
       const pronunciationScore = calculateBeginnerPronunciationScore({
         accuracyScore: spoken.accuracyScore,
         wordDetails: spoken.wordDetails,
       });
-      const successful =
-        pronunciationScore >= GUIDED_PRONUNCIATION_TARGET &&
-        completenessScore >= 0.8;
-      const scoredAttempt = {
+      const scored = {
         ...spoken,
         completenessScore,
-        fluencyScore: spoken.fluencyScore * completenessScore,
         pronunciationScore,
-        successful,
+        fluencyScore: spoken.fluencyScore * completenessScore,
+        successful: pronunciationScore >= PRONUNCIATION_TARGET && completenessScore >= 0.8,
       };
-      setRevealSpeechResult((current) =>
-        !current ||
-        pronunciationAttemptQuality(scoredAttempt) >
-          pronunciationAttemptQuality(current)
-          ? scoredAttempt
-          : current,
-      );
+      setPronunciationResult(scored);
       setIsSaving(true);
-
       await recordSpeakingAttempt({
-        conceptId: concept.id,
-        referenceText: exercise.expected,
-        ...scoredAttempt,
+        conceptId: item.concept.id,
+        referenceText: item.item.text,
+        ...scored,
+        evidenceKind: "imitation",
+        scorerVersion: SCORER_VERSION,
+        sessionId: session.id,
+        sessionItemId,
         context: {
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
+          source: "adaptive-learn",
+          itemId: item.item.id,
           provider: "azure-speech",
-          locale: targetLanguage.locale,
-          assessmentMode: "scripted-repair",
-          rawPronunciationScore,
+          assessmentMode: "scripted",
           audioRetained: false,
-          source: "lesson-course",
         },
       });
-    } catch (voiceError) {
-      setActionError(
-        voiceError instanceof Error
-          ? voiceError.message
-          : "Sapling couldn’t score that pronunciation.",
-      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Pronunciation scoring is unavailable.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  if (isLoading) {
+  async function submitTypedImitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!item || item.kind !== "listening" || !typedRepair.trim() || isSaving) return;
+    setIsSaving(true);
+    setActionError(null);
+    try {
+      await recordRepair({
+        conceptId: item.concept.id,
+        responseText: typedRepair.trim(),
+        targetText: item.item.text,
+        sessionId: session.id,
+        sessionItemId,
+        context: {
+          source: "adaptive-learn",
+          activityType: "typed-imitation",
+          pronunciationInferred: false,
+        },
+      });
+      moveForward();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "This response could not be saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (isLoading || isPreparing) {
     return (
-      <div className="paper-panel grid min-h-[430px] animate-pulse place-items-center rounded-[30px] p-8 text-sm text-forest-900/50">
-        Preparing your next lesson…
+      <div className="paper-panel grid min-h-[420px] animate-pulse place-items-center rounded-[24px] text-sm font-semibold text-forest-900/55">
+        Preparing today’s review…
       </div>
     );
   }
 
-  if (phase === "complete" && lesson) {
-    const lessonMastered = completedLessons[lessonIndex];
-    const remainingIdeas =
-      lesson.exercises.length - masteredExerciseCounts[lessonIndex];
-    const nextLessonIndex = lessonIndex + 1;
-    const hasNextLesson = nextLessonIndex < lessons.length;
+  if (phase === "complete") {
     return (
-      <div className="space-y-5">
-        <LessonRail
-          completedLessons={completedLessons}
-          lessonIndex={lessonIndex}
-          lessons={lessons}
-          masteredExerciseCounts={masteredExerciseCounts}
-          onChoose={chooseLesson}
-          unlockedLessonIndex={availableLessonIndex}
-        />
-        <div className="paper-panel soft-enter rounded-[30px] p-7 sm:p-10">
-          <div className="grid size-14 place-items-center rounded-2xl bg-moss-400/20 text-forest-800">
-            <Sparkles aria-hidden="true" size={25} />
-          </div>
-          <h2 className="mt-8 max-w-xl font-display text-4xl leading-[1.06] text-forest-950 sm:text-5xl">
-            {lessonMastered
-              ? `${lesson.title} complete.`
-              : `${remainingIdeas} ${remainingIdeas === 1 ? "idea" : "ideas"} left.`}
-          </h2>
-          <div className="mt-8 flex flex-wrap gap-3">
-            {hasNextLesson ? (
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                onClick={() => chooseLesson(nextLessonIndex)}
-                type="button"
-              >
-                Start lesson {lessons[nextLessonIndex].number}
-                <ArrowRight aria-hidden="true" size={17} />
-              </button>
-            ) : null}
-            {!lessonMastered ? (
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                onClick={() => chooseLesson(lessonIndex)}
-                type="button"
-              >
-                <RotateCcw aria-hidden="true" size={17} />
-                Review {remainingIdeas === 1 ? "that idea" : "those ideas"}
-              </button>
-            ) : (
-              <button
-                className="inline-flex items-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900 transition hover:bg-white"
-                onClick={() => chooseLesson(lessonIndex)}
-                type="button"
-              >
-                <RotateCcw aria-hidden="true" size={17} />
-                Practice this lesson
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="paper-panel rounded-[24px] p-7 sm:p-9">
+        <Sparkles className="text-moss-500" aria-hidden="true" size={28} />
+        <h2 className="mt-5 font-display text-4xl text-forest-950">Review complete.</h2>
+        <p className="mt-3 text-sm text-forest-900/60">
+          {independentSuccesses} unassisted {independentSuccesses === 1 ? "success" : "successes"}; assisted work stays separate.
+        </p>
+        <button
+          className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50"
+          onClick={restart}
+          type="button"
+        >
+          <RotateCcw aria-hidden="true" size={17} />
+          Build another review
+        </button>
       </div>
     );
   }
 
-  if (!lesson || !exercise || !concept) {
+  if (!item) {
     return (
-      <div className="paper-panel rounded-[30px] p-8">
-        <CircleAlert className="text-clay-400" size={24} />
-        <h2 className="mt-4 font-display text-3xl">Lessons are updating.</h2>
-        <p className="mt-2 text-sm text-forest-900/60">Try again soon.</p>
+      <div className="paper-panel rounded-[24px] p-7">
+        <CircleAlert className="text-clay-400" size={22} />
+        <h2 className="mt-4 font-display text-3xl">No review items are available.</h2>
       </div>
     );
   }
 
-  const progress =
-    ((queuePosition + (phase === "attempt" ? 0 : 0.45)) /
-      exerciseQueue.length) *
-    100;
+  const progress = ((itemIndex + (phase === "attempt" ? 0 : 0.55)) / items.length) * 100;
+  const error = actionError ?? modelError;
+
   return (
-    <div className="space-y-5">
-      <LessonRail
-        completedLessons={completedLessons}
-        lessonIndex={lessonIndex}
-        lessons={lessons}
-        masteredExerciseCounts={masteredExerciseCounts}
-        onChoose={chooseLesson}
-        unlockedLessonIndex={availableLessonIndex}
-      />
-      <div className="paper-panel soft-enter overflow-hidden rounded-[24px]">
-        <div className="border-b border-forest-900/8 px-6 py-4 sm:px-8 sm:py-5">
-          <div className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/65">
-            Lesson {lesson.number} · {lesson.title}
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
-            <div
-              className="h-full rounded-full bg-moss-500 transition-[width] duration-500"
-              style={{ width: `${Math.max(4, progress)}%` }}
-            />
-          </div>
+    <div className="paper-panel overflow-hidden rounded-[24px]">
+      <div className="border-b border-forest-900/8 px-6 py-4 sm:px-8">
+        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] text-forest-700/58">
+          <span className="flex items-center gap-2">
+            {item.kind === "listening" ? <Ear size={15} /> : <Sparkles size={15} />}
+            {item.kind === "listening" ? "Listening" : "Recall"}
+          </span>
+          <span>{itemIndex + 1} of {items.length}</span>
         </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
+          <div className="h-full rounded-full bg-moss-500" style={{ width: `${Math.max(4, progress)}%` }} />
+        </div>
+      </div>
 
-        <div className="p-5 sm:p-8 lg:p-10">
-          {lesson.support ? (
-            <div className="mb-6 lg:hidden">
-              <ScenarioSupportPanel
-                compact
-                languageCode={targetLanguage.code}
-                support={lesson.support}
+      <div className="p-6 sm:p-8 lg:p-10">
+        {item.kind === "retrieval" && phase === "attempt" ? (
+          <form onSubmit={submitTyped}>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">
+              {item.lesson.title}
+            </p>
+            <h2 className="mt-3 max-w-3xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
+              {item.exercise.prompt}
+            </h2>
+            <div className="mt-5">
+              <TargetAudioButton
+                clipId={item.exercise.audioId}
+                languageName={targetLanguage.name}
+                label="Hear a hint"
+                onPlay={() => setUsedAudioHint(true)}
+                showSlowControl
               />
             </div>
-          ) : null}
-          <div
-            className={
-              lesson.support
-                ? "grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]"
-                : undefined
-            }
-          >
-            <div className="min-w-0">
-          {phase === "attempt" ? (
-            <div>
-              {exercise.mode === "repeat" ? (
-                <div>
-                  <h2
-                    className="font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl"
-                    lang={targetLanguage.code}
-                  >
-                    {exercise.expected}
-                  </h2>
-                  <p className="mt-2 text-sm font-semibold text-forest-900/52">
-                    {exercise.prompt}
-                  </p>
-                </div>
-              ) : (
-                <h2 className="max-w-3xl font-display text-3xl leading-[1.08] text-forest-950 sm:text-4xl">
-                  {exercise.prompt}
-                </h2>
-              )}
-              <div className="mt-4 sm:mt-5">
-                <TargetAudioButton
-                  clipId={exercise.audioId}
-                  languageName={targetLanguage.name}
-                  label={
-                    exercise.mode === "repeat" ? "Hear it" : "Hear an example"
-                  }
-                  onPlay={() => setUsedAudioHint(true)}
-                  showSlowControl
-                />
-              </div>
-              <div
-                aria-live="polite"
-                className={`mt-6 rounded-[18px] border p-5 sm:mt-8 ${
-                  isRecording || isSaving
-                    ? "border-moss-500/25 bg-moss-400/10"
-                    : "border-forest-900/10 bg-white/55"
-                }`}
+            <label className="mt-7 block text-sm font-bold text-forest-900/68" htmlFor="learn-answer">
+              Your answer
+            </label>
+            <textarea
+              id="learn-answer"
+              className="mt-2 min-h-28 w-full resize-y rounded-[18px] border border-forest-900/12 bg-white/65 p-4 text-lg text-forest-950 outline-none focus:border-moss-500"
+              disabled={isSaving || isRecording}
+              lang={targetLanguage.code}
+              onChange={(event) => {
+                if (!responseStartedAt.current && event.target.value.length > 0) {
+                  responseStartedAt.current = performance.now();
+                }
+                setResponse(event.target.value);
+              }}
+              placeholder={targetLanguage.speakPrompt}
+              value={response || liveTranscript}
+            />
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                className="inline-flex items-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3 text-sm font-bold text-cream-50 disabled:opacity-45"
+                disabled={!response.trim() || isSaving || isRecording}
+                type="submit"
               >
-                <div className="flex items-center gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/65 text-forest-800">
-                    {isSaving ? (
-                      <Sparkles className="animate-pulse" aria-hidden="true" size={19} />
-                    ) : (
-                      <Mic aria-hidden="true" size={19} />
-                    )}
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">
-                      {isSaving
-                        ? "Understanding your answer"
-                        : recordingStatus === "starting"
-                          ? "Opening microphone"
-                          : recordingStatus === "stopping"
-                            ? "Finishing transcript"
-                            : recordingStatus === "listening"
-                              ? "Listening"
-                              : `Answer in ${targetLanguage.name}`}
-                    </p>
-                    <p className="mt-1 min-h-7 text-lg font-semibold text-forest-950" lang={targetLanguage.code}>
-                      {liveTranscript || (isRecording ? "Sig dit svar…" : "Tap Start speaking when you’re ready.")}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5 grid gap-3 sm:flex">
-                <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-forest-900/14 bg-white/75 px-5 py-3.5 text-sm font-bold text-forest-900 transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-                  disabled={isSaving || isRecording}
-                  onClick={markNotSure}
-                  type="button"
-                >
-                  <CircleHelp aria-hidden="true" size={17} />
-                  Not sure
-                </button>
-                <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3.5 text-sm font-extrabold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-                  disabled={isSaving || recordingStatus === "starting" || recordingStatus === "stopping"}
-                  onClick={
-                    recordingStatus === "listening"
-                      ? stopRecognition
-                      : startVoiceAttempt
-                  }
-                  type="button"
-                >
-                  {isSaving || recordingStatus === "starting" || recordingStatus === "stopping" ? (
-                    <LoaderCircle className="animate-spin" aria-hidden="true" size={18} />
-                  ) : recordingStatus === "listening" ? (
-                    <Square aria-hidden="true" fill="currentColor" size={15} />
-                  ) : (
-                    <Mic aria-hidden="true" size={18} />
-                  )}
-                  {isSaving
-                    ? "Checking answer…"
-                    : recordingStatus === "starting"
-                      ? "Preparing…"
-                      : recordingStatus === "listening"
-                        ? "Stop & check"
-                        : recordingStatus === "stopping"
-                          ? "Finishing…"
-                          : "Start speaking"}
-                </button>
-                <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-[14px] px-5 py-3.5 text-sm font-bold text-forest-900/62 transition enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-45 sm:ml-auto sm:w-auto"
-                  disabled={isSaving || isRecording}
-                  onClick={moveForward}
-                  type="button"
-                >
-                  Move on
-                  <ArrowRight aria-hidden="true" size={17} />
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {phase === "reveal" ? (
-            <div className="soft-enter">
-              <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/70">
-                A natural answer
-              </p>
-              <h2 className="mt-3 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
-                {exercise.expected}
-              </h2>
-              <div className="mt-4">
-                <TargetAudioButton
-                  clipId={exercise.audioId}
-                  languageName={targetLanguage.name}
-                  label="Hear the answer"
-                  showSlowControl
-                />
-              </div>
-              <div className="mt-5 flex items-start gap-3 rounded-2xl bg-forest-900/[0.055] p-5 text-base leading-7 text-forest-900/78">
-                <Sparkles className="mt-1 shrink-0 text-moss-500" size={18} />
-                <span>{exercise.note}</span>
-              </div>
-
-              <div className="mt-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5 sm:p-6">
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-forest-700/70">
-                  Repeat it
-                </p>
-                <div aria-live="polite" className="mt-3">
-                  <p className="min-h-7 text-lg font-semibold leading-8 text-forest-950" lang={targetLanguage.code}>
-                    {liveTranscript ||
-                      (isRecording
-                        ? "Sig sætningen…"
-                        : "Listen, then say the phrase aloud.")}
-                  </p>
-                </div>
-
-                {revealSpeechResult && !isRecording ? (
-                  <div
-                    className={`mt-4 rounded-2xl p-4 ${
-                      revealSpeechResult.successful
-                        ? "bg-moss-400/16"
-                        : "bg-amber-400/12"
-                    }`}
-                  >
-                    <p className="text-base font-bold text-forest-950">
-                      {revealSpeechResult.successful
-                        ? "Good pronunciation — keep going."
-                        : `${pronunciationBand(revealSpeechResult.pronunciationScore)} — listen and try once more.`}
-                    </p>
-                    <p className="mt-2 text-base leading-7 text-forest-900/78">
-                      Best attempt · Pronunciation {Math.round(revealSpeechResult.pronunciationScore * 100)}
-                      · Phrase {Math.round(revealSpeechResult.completenessScore * 100)}
-                    </p>
-                  </div>
-                ) : null}
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition enabled:hover:bg-forest-800 disabled:cursor-not-allowed disabled:opacity-45"
-                    disabled={
-                      isSaving ||
-                      recordingStatus === "starting" ||
-                      recordingStatus === "stopping"
-                    }
-                    onClick={
-                      recordingStatus === "listening"
-                        ? stopRecognition
-                        : startGuidedPronunciation
-                    }
-                    type="button"
-                  >
-                    {isSaving ||
-                    recordingStatus === "starting" ||
-                    recordingStatus === "stopping" ? (
-                      <LoaderCircle className="animate-spin" aria-hidden="true" size={18} />
-                    ) : recordingStatus === "listening" ? (
-                      <Square aria-hidden="true" fill="currentColor" size={15} />
-                    ) : (
-                      <Mic aria-hidden="true" size={18} />
-                    )}
-                    {isSaving
-                      ? "Saving…"
-                      : recordingStatus === "starting"
-                        ? "Preparing…"
-                        : recordingStatus === "listening"
-                          ? "Stop & score"
-                          : recordingStatus === "stopping"
-                            ? "Scoring…"
-                            : revealSpeechResult
-                              ? "Try again"
-                              : "Start speaking"}
-                  </button>
-
-                  {revealSpeechResult?.successful ? (
-                    <button
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-moss-500 px-5 py-3.5 text-sm font-bold text-white transition hover:bg-moss-600"
-                      onClick={moveForward}
-                      type="button"
-                    >
-                      Continue
-                      <ArrowRight aria-hidden="true" size={17} />
-                    </button>
-                  ) : (
-                    <button
-                      className="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
-                      onClick={moveForward}
-                      type="button"
-                    >
-                      Move on
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {phase === "feedback" && evaluation && speechResult ? (
-            <div className="soft-enter">
-              <div
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
-                  evaluation.successful
-                    ? "bg-moss-400/18 text-forest-800"
-                    : "bg-amber-400/16 text-amber-500"
-                }`}
+                {isSaving ? <LoaderCircle className="animate-spin" size={17} /> : <Keyboard size={17} />}
+                Check answer
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-[14px] border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900 disabled:opacity-45"
+                disabled={isSaving || recordingStatus === "starting" || recordingStatus === "stopping"}
+                onClick={recordingStatus === "listening" ? stopRecognition : submitVoice}
+                type="button"
               >
-                {evaluation.successful ? (
-                  <Check aria-hidden="true" size={15} />
-                ) : (
-                  <RotateCcw aria-hidden="true" size={15} />
-                )}
-                {evaluation.successful ? "Meaning understood" : "Try once more"}
+                {recordingStatus === "listening" ? <Square fill="currentColor" size={14} /> : <Mic size={17} />}
+                {recordingStatus === "listening" ? "Stop & check" : "Speak instead"}
+              </button>
+              <button
+                className="inline-flex items-center gap-2 px-3 py-3 text-sm font-bold text-forest-900/60 disabled:opacity-45"
+                disabled={isSaving || isRecording}
+                onClick={showAnswer}
+                type="button"
+              >
+                <CircleHelp size={17} />
+                Not sure
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {item.kind === "retrieval" && phase === "feedback" && feedback ? (
+          <div>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${feedback.successful ? "bg-moss-400/18 text-forest-800" : "bg-amber-400/16 text-amber-600"}`}>
+              {feedback.successful ? <Check size={15} /> : <RotateCcw size={15} />}
+              {feedback.successful ? "Meaning understood" : "Review and try later"}
+            </span>
+            <h2 className="mt-5 font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
+              {feedback.evaluation.summary}
+            </h2>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[18px] bg-white/60 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-forest-700/55">Your answer</p>
+                <p className="mt-2 text-lg text-forest-950" lang={targetLanguage.code}>{feedback.response}</p>
               </div>
-              <h2 className="mt-5 max-w-2xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
-                {evaluation.summary}
-              </h2>
-
-              <div className="mt-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
-                  Sapling heard
-                </p>
-                <p className="mt-3 text-xl font-medium leading-8 text-forest-950" lang={targetLanguage.code}>
-                  {speechResult.recognizedText}
-                </p>
+              <div className="rounded-[18px] bg-moss-400/10 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-forest-700/55">Natural version</p>
+                <p className="mt-2 text-lg font-semibold text-forest-950" lang={targetLanguage.code}>{feedback.evaluation.correctedTargetText}</p>
               </div>
-
-              {evaluation.correctedTargetText !== speechResult.recognizedText ||
-              evaluation.tips.length > 0 ? (
-                <div className="mt-4 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
-                    A natural version
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold leading-9 text-forest-950" lang={targetLanguage.code}>
-                    {evaluation.correctedTargetText}
-                  </p>
-                  <div className="mt-4">
-                    <TargetAudioButton
-                      clipId={exercise.audioId}
-                      languageName={targetLanguage.name}
-                      label="Hear an example"
-                      showSlowControl
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {evaluation.tips.length > 0 ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {evaluation.tips.map((tip) => (
-                    <div className="rounded-2xl bg-white/65 p-5" key={`${tip.area}-${tip.message}`}>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
-                        {tip.area}
-                      </p>
-                      <p className="mt-2 text-base leading-7 text-forest-950">
-                        {tip.message}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="mt-7 grid gap-3 sm:flex">
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button className="inline-flex items-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3 text-sm font-bold text-cream-50" onClick={moveForward} type="button">
+                Continue <ArrowRight size={17} />
+              </button>
+              {!feedback.successful ? (
                 <button
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-forest-900/12 bg-white/70 px-5 py-3.5 text-sm font-bold text-forest-900 transition hover:bg-white disabled:opacity-50"
-                  onClick={retryVoiceAttempt}
+                  className="inline-flex items-center gap-2 rounded-[14px] border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900"
+                  onClick={() => {
+                    setAnswerWasVisible(true);
+                    setResponse("");
+                    setFeedback(null);
+                    setPhase("attempt");
+                  }}
                   type="button"
                 >
-                  <RotateCcw aria-hidden="true" size={17} />
-                  Try again
+                  <RotateCcw size={17} /> Try again with help
                 </button>
-                {evaluation.successful ? (
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                    onClick={moveForward}
-                    type="button"
-                  >
-                    Continue
-                    <ArrowRight aria-hidden="true" size={17} />
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-forest-900 px-5 py-3.5 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
-                      onClick={showAnswer}
-                      type="button"
-                    >
-                      Show answer
-                      <ArrowRight aria-hidden="true" size={17} />
-                    </button>
-                    <button
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-sm font-bold text-forest-900/65 transition hover:bg-white/70"
-                      onClick={moveForward}
-                      type="button"
-                    >
-                      Move on
-                      <ArrowRight aria-hidden="true" size={17} />
-                    </button>
-                  </>
-                )}
-              </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          {actionError || modelError ? (
-            <p className="mt-5 flex items-start gap-2 rounded-xl bg-clay-400/10 p-3 text-sm text-forest-900">
-              <CircleAlert className="mt-0.5 shrink-0 text-clay-400" size={16} />
-              {actionError ?? modelError}
-            </p>
-          ) : null}
+        {item.kind === "retrieval" && phase === "reveal" ? (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">Natural answer</p>
+            <h2 className="mt-3 rounded-[20px] bg-moss-400/10 p-5 font-display text-3xl text-forest-950 sm:text-4xl" lang={targetLanguage.code}>
+              {item.exercise.expected}
+            </h2>
+            <p className="mt-4 text-sm text-forest-900/64">{item.exercise.note}</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button className="inline-flex items-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3 text-sm font-bold text-cream-50" onClick={moveForward} type="button">
+                Continue <ArrowRight size={17} />
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-[14px] border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900"
+                onClick={() => setPhase("attempt")}
+                type="button"
+              >
+                <RotateCcw size={17} /> Try with the answer visible
+              </button>
             </div>
-            {lesson.support ? (
-              <div className="hidden lg:block">
-                <ScenarioSupportPanel
-                  languageCode={targetLanguage.code}
-                  support={lesson.support}
-                />
+          </div>
+        ) : null}
+
+        {item.kind === "listening" && phase === "attempt" ? (
+          <div>
+            <h2 className="font-display text-3xl text-forest-950 sm:text-4xl">What did you hear?</h2>
+            <div className="mt-6">
+              <TargetAudioButton
+                clipId={item.item.audioId}
+                languageName={targetLanguage.name}
+                label="Play sentence"
+                onAssistanceChange={setUsedSlowPlayback}
+                onPlay={() => {
+                  listeningStartedAt.current ??= performance.now();
+                  setPlaybackCount((current) => current + 1);
+                }}
+                showSlowControl
+              />
+            </div>
+            <div className="mt-7 grid gap-3">
+              {item.item.options.map((option) => (
+                <button
+                  className="rounded-[14px] border border-forest-900/12 bg-white/68 px-5 py-4 text-left text-sm font-bold text-forest-950 disabled:opacity-40"
+                  disabled={playbackCount === 0 || isSaving}
+                  key={option}
+                  onClick={(event) => chooseMeaning(option, event.timeStamp)}
+                  type="button"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {item.kind === "listening" && phase === "feedback" ? (
+          <div>
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${selectedMeaning === item.item.meaning ? "bg-moss-400/18 text-forest-800" : "bg-amber-400/16 text-amber-600"}`}>
+              {selectedMeaning === item.item.meaning ? <Check size={15} /> : <RotateCcw size={15} />}
+              {selectedMeaning === item.item.meaning ? "You heard it" : "Listen again later"}
+            </span>
+            <p className="mt-6 text-sm font-bold text-forest-900/55">{item.item.meaning}</p>
+            <h2 className="mt-2 font-display text-3xl text-forest-950 sm:text-4xl" lang={targetLanguage.code}>{item.item.text}</h2>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button className="inline-flex items-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3 text-sm font-bold text-cream-50" onClick={moveForward} type="button">
+                Continue <ArrowRight size={17} />
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-[14px] border border-forest-900/12 bg-white/70 px-5 py-3 text-sm font-bold text-forest-900" onClick={() => setPhase("pronunciation")} type="button">
+                <Mic size={17} /> Repeat the phrase
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {item.kind === "listening" && phase === "pronunciation" ? (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/55">Optional pronunciation</p>
+            <h2 className="mt-3 font-display text-3xl text-forest-950 sm:text-4xl" lang={targetLanguage.code}>{item.item.text}</h2>
+            <p className="mt-3 text-sm text-forest-900/60">Microphone audio is scored, then discarded.</p>
+            {pronunciationResult ? (
+              <div className="mt-5 rounded-[18px] bg-moss-400/10 p-5">
+                <p className="font-bold text-forest-950">{pronunciationBand(pronunciationResult.pronunciationScore)}</p>
+                <p className="mt-1 text-sm text-forest-900/60">Pronunciation {Math.round(pronunciationResult.pronunciationScore * 100)} · phrase {Math.round(pronunciationResult.completenessScore * 100)}</p>
               </div>
             ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                className="inline-flex items-center gap-2 rounded-[14px] bg-forest-950 px-5 py-3 text-sm font-bold text-cream-50 disabled:opacity-45"
+                disabled={isSaving || recordingStatus === "starting" || recordingStatus === "stopping"}
+                onClick={recordingStatus === "listening" ? stopRecognition : scorePronunciation}
+                type="button"
+              >
+                {isSaving ? <LoaderCircle className="animate-spin" size={17} /> : recordingStatus === "listening" ? <Square fill="currentColor" size={14} /> : <Mic size={17} />}
+                {recordingStatus === "listening" ? "Stop & score" : pronunciationResult ? "Try again" : "Start speaking"}
+              </button>
+              <button className="px-3 py-3 text-sm font-bold text-forest-900/62" onClick={moveForward} type="button">
+                {actionError ? "I said it correctly — move on" : "Move on"}
+              </button>
+            </div>
+            <form className="mt-6 border-t border-forest-900/8 pt-5" onSubmit={submitTypedImitation}>
+              <label className="text-sm font-bold text-forest-900/65" htmlFor="typed-imitation">Type instead</label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  id="typed-imitation"
+                  className="min-w-0 flex-1 rounded-[14px] border border-forest-900/12 bg-white/65 px-4 py-3 text-forest-950 outline-none focus:border-moss-500"
+                  onChange={(event) => setTypedRepair(event.target.value)}
+                  value={typedRepair}
+                />
+                <button className="rounded-[14px] border border-forest-900/12 bg-white/70 px-4 py-3 text-sm font-bold text-forest-900 disabled:opacity-40" disabled={!typedRepair.trim() || isSaving} type="submit">Continue</button>
+              </div>
+            </form>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+        ) : null}
 
-function ScenarioSupportPanel({
-  compact = false,
-  languageCode,
-  support,
-}: {
-  compact?: boolean;
-  languageCode: TargetLanguageCode;
-  support: LessonSupport;
-}) {
-  if (compact) {
-    return (
-      <details className="group rounded-2xl border border-forest-900/10 bg-white/55">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-forest-950">
-          Words &amp; ideas
-          <ChevronDown
-            aria-hidden="true"
-            className="transition group-open:rotate-180"
-            size={17}
-          />
-        </summary>
-        <div className="border-t border-forest-900/8 p-4">
-          <ScenarioSupportContent languageCode={languageCode} support={support} />
-        </div>
-      </details>
-    );
-  }
-
-  return (
-    <aside className="sticky top-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
-      <ScenarioSupportContent languageCode={languageCode} support={support} />
-    </aside>
-  );
-}
-
-function ScenarioSupportContent({
-  languageCode,
-  support,
-}: {
-  languageCode: TargetLanguageCode;
-  support: LessonSupport;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/58">
-        {support.title}
-      </p>
-      {support.idea ? (
-        <p className="mt-2 text-sm leading-6 text-forest-900/62">{support.idea}</p>
-      ) : null}
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        {support.words.map((word) => (
-          <ScenarioWord
-            key={`${word.target}-${word.english}`}
-            languageCode={languageCode}
-            word={word}
-          />
-        ))}
-      </div>
-      {support.starters?.length ? (
-        <div className="mt-5 space-y-2 border-t border-forest-900/8 pt-4">
-          {support.starters.map((starter) => (
-            <ScenarioWord
-              key={`${starter.target}-${starter.english}`}
-              languageCode={languageCode}
-              wide
-              word={starter}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ScenarioWord({
-  languageCode,
-  wide = false,
-  word,
-}: {
-  languageCode: TargetLanguageCode;
-  wide?: boolean;
-  word: LessonSupport["words"][number];
-}) {
-  return (
-    <button
-      aria-label={`${word.target}: ${word.english}`}
-      className={`group/word rounded-xl bg-forest-900/[0.045] px-3 py-2 text-left outline-none transition hover:bg-moss-400/12 focus-visible:ring-2 focus-visible:ring-moss-500/50 ${
-        wide ? "block w-full" : "min-w-0"
-      }`}
-      type="button"
-    >
-      <span className="block truncate text-sm font-bold text-forest-950" lang={languageCode}>
-        {word.target}
-      </span>
-      <span className="block truncate text-xs text-forest-900/0 transition group-hover/word:text-forest-900/52 group-focus/word:text-forest-900/52">
-        {word.english}
-      </span>
-    </button>
-  );
-}
-
-function LessonRail({
-  completedLessons,
-  lessonIndex,
-  lessons,
-  masteredExerciseCounts,
-  onChoose,
-  unlockedLessonIndex,
-}: {
-  completedLessons: boolean[];
-  lessonIndex: number;
-  lessons: Lesson[];
-  masteredExerciseCounts: number[];
-  onChoose: (index: number) => void;
-  unlockedLessonIndex: number;
-}) {
-  return (
-    <div className="paper-panel scrollbar-hidden overflow-x-auto rounded-[18px] p-2.5 [scroll-snap-type:x_mandatory]">
-      <div className="flex min-w-max gap-1.5">
-        {lessons.map((lesson, index) => {
-          const active = index === lessonIndex;
-          const complete = completedLessons[index];
-          const locked = index > unlockedLessonIndex;
-          const next = index === unlockedLessonIndex && !complete;
-          return (
-            <button
-              aria-current={active ? "step" : undefined}
-              aria-label={
-                locked
-                  ? `${lesson.title} locked. Complete lesson ${index} first.`
-                  : `${lesson.title}, ${masteredExerciseCounts[index]} of ${lesson.exercises.length} ideas retrieved`
-              }
-              className={`flex min-w-[9.5rem] snap-start items-center gap-2 rounded-[13px] px-3.5 py-3 text-left text-xs font-bold transition ${
-                active
-                  ? "bg-forest-900 text-cream-50"
-                  : locked
-                    ? "cursor-not-allowed bg-forest-900/[0.035] text-forest-900/38"
-                    : "bg-white/48 text-forest-900/68 hover:bg-white/82"
-              }`}
-              disabled={locked}
-              key={lesson.id}
-              onClick={() => onChoose(index)}
-              title={
-                locked
-                  ? `Complete ${lessons[index - 1]?.title ?? "the prior lesson"} to unlock this lesson.`
-                  : undefined
-              }
-              type="button"
-            >
-              {complete ? (
-                <CheckCircle2 aria-hidden="true" size={16} />
-              ) : next ? (
-                <Sparkles aria-hidden="true" size={16} />
-              ) : locked ? (
-                <LockKeyhole aria-hidden="true" size={15} />
-              ) : (
-                <Circle aria-hidden="true" size={15} />
-              )}
-              <span>
-                {lesson.number}. {lesson.title}
-              </span>
-            </button>
-          );
-        })}
+        {error ? (
+          <p className="mt-5 flex items-start gap-2 rounded-xl bg-clay-400/10 p-3 text-sm text-forest-900">
+            <CircleAlert className="mt-0.5 shrink-0 text-clay-400" size={16} />
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

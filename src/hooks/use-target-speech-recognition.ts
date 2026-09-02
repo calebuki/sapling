@@ -90,6 +90,7 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
     }
 
     const runId = recognitionRunId.current + 1;
+    const attemptStartedAt = performance.now();
     recognitionRunId.current = runId;
     setLiveTranscript("");
     setRecordingStatus("starting");
@@ -152,6 +153,7 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
         let settled = false;
         let stopRequested = false;
         let heardSpeech = false;
+        let firstSpeechStartedAt: number | null = null;
         let silenceTimer: ReturnType<typeof setTimeout> | null = null;
         let initialSilenceTimer: ReturnType<typeof setTimeout> | null = null;
         let maximumDurationTimer: ReturnType<typeof setTimeout> | null = null;
@@ -215,6 +217,10 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
           );
           const result: TargetSpeechResult = {
             recognizedText,
+            responseStartLatencyMs: Math.max(
+              0,
+              Math.round((firstSpeechStartedAt ?? attemptStartedAt) - attemptStartedAt),
+            ),
             durationMs: finalSegments.reduce(
               (total, segment) => total + segment.durationMs,
               0,
@@ -266,6 +272,7 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
           }
 
           heardSpeech = true;
+          firstSpeechStartedAt ??= performance.now();
           clearTimer(initialSilenceTimer);
           clearTimer(silenceTimer);
           setLiveTranscript(combinedTranscript(transcript));
@@ -289,6 +296,7 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
           }
 
           heardSpeech = true;
+          firstSpeechStartedAt ??= performance.now();
           const recognizedText = event.result.text.trim();
           for (const alternative of recognitionAlternatives(event.result.json)) {
             alternativeTexts.add(alternative);
@@ -325,6 +333,10 @@ export function useTargetSpeechRecognition(locale: "da-DK" | "sv-SE") {
 
           finalSegments.push({
             recognizedText,
+            responseStartLatencyMs: Math.max(
+              0,
+              Math.round((firstSpeechStartedAt ?? attemptStartedAt) - attemptStartedAt),
+            ),
             durationMs: Math.round(event.result.duration / 10_000),
             accuracyScore,
             fluencyScore,

@@ -60,17 +60,9 @@ export function LoginScreen() {
           </div>
 
           <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-forest-700/55">
-              {mode === "sign-in" ? "Good to see you again" : "Start your journey"}
-            </p>
             <h1 className="font-display text-[2.7rem] leading-[1.02] tracking-[-0.035em] text-forest-950 sm:text-5xl">
               {mode === "sign-in" ? "Welcome back." : "Create an account."}
             </h1>
-            <p className="mt-3 text-sm leading-6 text-forest-900/58">
-              {mode === "sign-in"
-                ? "Your next language lesson is waiting for you."
-                : "Build a language practice that grows with you."}
-            </p>
           </div>
 
           <form className="mt-8 space-y-4" onSubmit={authenticate}>
@@ -141,9 +133,6 @@ export function LoginScreen() {
             {mode === "sign-in" ? "New here? Create an account" : "Already have an account? Sign in"}
           </button>
 
-          <p className="mt-10 text-center text-xs text-forest-900/38">
-            Small lessons. Strong roots.
-          </p>
         </div>
       </section>
 

@@ -6,20 +6,21 @@ export type LessonFeedbackTip = {
 };
 
 export type LessonEvaluation = {
-  successful: boolean;
   meaningScore: number;
   grammarScore: number;
   vocabularyScore: number;
   summary: string;
   correctedTargetText: string;
   tips: LessonFeedbackTip[];
-  source: "ai" | "fallback";
+  source: "ai" | "deterministic";
+  evaluatorVersion: string;
 };
 
 export type TargetSpeechResult = {
   recognizedText: string;
   alternatives: string[];
   durationMs: number;
+  responseStartLatencyMs: number;
   accuracyScore: number;
   fluencyScore: number;
   completenessScore: number;

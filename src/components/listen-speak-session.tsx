@@ -12,12 +12,13 @@ import {
   Square,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { getCourse, type ListenSpeakItem } from "@/lib/learning/course";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
+import { SCORER_VERSION } from "@/lib/learning/scheduler";
 import {
   calculateBeginnerPronunciationScore,
   calculatePhraseCoverage,
@@ -156,6 +157,7 @@ function LanguageListenSpeakSession() {
     error: modelError,
     targetLanguage,
     recordListeningAttempt,
+    recordRepair,
     recordSpeakingAttempt,
   } = useLearningModel();
   const { listenSpeakItems } = getCourse(targetLanguage.code);
@@ -164,10 +166,12 @@ function LanguageListenSpeakSession() {
   const [phase, setPhase] = useState<Phase>("listen");
   const [selectedMeaning, setSelectedMeaning] = useState<string | null>(null);
   const [playbackCount, setPlaybackCount] = useState(0);
+  const [usedSlowPlayback, setUsedSlowPlayback] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [recordingStatus, setRecordingStatus] =
     useState<RecordingStatus>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
+  const [typedAlternative, setTypedAlternative] = useState("");
   const [speakingResult, setSpeakingResult] = useState<SpeakingResult | null>(null);
   const [bestSpeakingResult, setBestSpeakingResult] =
     useState<SpeakingResult | null>(null);
@@ -244,7 +248,11 @@ function LanguageListenSpeakSession() {
         score: successful ? 1 : 0,
         latencyMs,
         speakerId: item.voice,
+        contextId: item.id,
         playbackCount,
+        usedSlowPlayback,
+        taskType: "meaning_selection",
+        scorerVersion: SCORER_VERSION,
         context: {
           itemId: item.id,
           selectedMeaning: option,
@@ -522,6 +530,8 @@ function LanguageListenSpeakSession() {
         conceptId: concept.id,
         referenceText: item.text,
         ...scored,
+        evidenceKind: "imitation",
+        scorerVersion: SCORER_VERSION,
         context: {
           itemId: item.id,
           provider: "azure-speech",
@@ -565,9 +575,42 @@ function LanguageListenSpeakSession() {
     stopActiveRecognition.current?.();
   }
 
+  async function submitTypedAlternative(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!item || !concept || !typedAlternative.trim() || isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    setActionError(null);
+    try {
+      await recordRepair({
+        conceptId: concept.id,
+        responseText: typedAlternative.trim(),
+        targetText: item.text,
+        context: {
+          itemId: item.id,
+          source: "listen-speak",
+          activityType: "typed-imitation",
+          pronunciationInferred: false,
+        },
+      });
+      moveForward();
+    } catch (saveError) {
+      setActionError(
+        saveError instanceof Error
+          ? saveError.message
+          : "This response could not be saved.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   function retrySpeaking() {
     setSpeakingResult(null);
     setLiveTranscript("");
+    setTypedAlternative("");
     setActionError(null);
     setPhase("repeat");
   }
@@ -582,9 +625,11 @@ function LanguageListenSpeakSession() {
     setPhase("listen");
     setSelectedMeaning(null);
     setPlaybackCount(0);
+    setUsedSlowPlayback(false);
     setSpeakingResult(null);
     setBestSpeakingResult(null);
     setLiveTranscript("");
+    setTypedAlternative("");
     setActionError(null);
     listeningStartedAt.current = null;
   }
@@ -595,6 +640,7 @@ function LanguageListenSpeakSession() {
     setPhase("listen");
     setSelectedMeaning(null);
     setPlaybackCount(0);
+    setUsedSlowPlayback(false);
     setSpeakingResult(null);
     setBestSpeakingResult(null);
     setLiveTranscript("");
@@ -678,7 +724,9 @@ function LanguageListenSpeakSession() {
                 clipId={item.audioId}
                 languageName={targetLanguage.name}
                 label="Play sentence"
+                onAssistanceChange={setUsedSlowPlayback}
                 onPlay={notePlayback}
+                showSlowControl
               />
             </div>
             <div className="mt-8 grid gap-3">
@@ -724,6 +772,7 @@ function LanguageListenSpeakSession() {
                 clipId={item.audioId}
                 languageName={targetLanguage.name}
                 label="Hear it again"
+                onAssistanceChange={setUsedSlowPlayback}
                 onPlay={notePlayback}
                 showSlowControl
               />
@@ -762,6 +811,13 @@ function LanguageListenSpeakSession() {
                       ? "Finishing transcript…"
                       : "Start speaking"}
               </button>
+              <button
+                className="mt-5 ml-2 rounded-[14px] px-4 py-3 text-sm font-bold text-forest-900/62 hover:bg-white/60"
+                onClick={moveForward}
+                type="button"
+              >
+                {actionError ? "I said it correctly — move on" : "Move on"}
+              </button>
               {isRecording ? (
                 <div
                   aria-live="polite"
@@ -786,6 +842,27 @@ function LanguageListenSpeakSession() {
                   </p>
                 </div>
               ) : null}
+              <form className="mt-5 border-t border-forest-900/8 pt-5" onSubmit={submitTypedAlternative}>
+                <label className="text-sm font-bold text-forest-900/62" htmlFor="listen-speak-typed">
+                  Type instead
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 rounded-[14px] border border-forest-900/12 bg-white/65 px-4 py-3 text-forest-950 outline-none focus:border-moss-500"
+                    id="listen-speak-typed"
+                    lang={targetLanguage.code}
+                    onChange={(event) => setTypedAlternative(event.target.value)}
+                    value={typedAlternative}
+                  />
+                  <button
+                    className="rounded-[14px] border border-forest-900/12 bg-white/75 px-4 py-3 text-sm font-bold text-forest-900 disabled:opacity-40"
+                    disabled={!typedAlternative.trim() || isSaving}
+                    type="submit"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         ) : null}

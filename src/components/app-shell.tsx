@@ -2,13 +2,10 @@
 
 import {
   AudioLines,
-  BookOpenText,
   Languages,
   Leaf,
   LogOut,
-  MessageCircle,
   Sprout,
-  TreePine,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -28,15 +25,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   } = useLearningModel();
   const destinations = [
     { href: "/learn", label: "Learn", mobileLabel: "Learn", icon: Sprout },
-    { href: "/ear", label: "Listen & Speak", mobileLabel: "Listen", icon: AudioLines },
-    { href: "/text", label: "Read & Write", mobileLabel: "Text", icon: BookOpenText },
-    {
-      href: "/progress",
-      label: `My ${targetLanguage.name}`,
-      mobileLabel: targetLanguage.name,
-      icon: TreePine,
-    },
-    { href: "/world", label: "World", mobileLabel: "World", icon: MessageCircle },
+    { href: "/practice", label: "Practice", mobileLabel: "Practice", icon: AudioLines },
   ];
 
   async function signOut() {
@@ -161,7 +150,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
 
       <nav
         aria-label="Primary"
-        className="fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-5 rounded-[20px] border border-forest-950/10 bg-forest-950/96 p-1.5 shadow-2xl shadow-forest-950/24 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-3 bottom-[calc(.75rem+env(safe-area-inset-bottom))] z-40 grid grid-cols-2 rounded-[20px] border border-forest-950/10 bg-forest-950/96 p-1.5 shadow-2xl shadow-forest-950/24 backdrop-blur-xl md:hidden"
       >
         {destinations.map(({ href, mobileLabel, icon: Icon }) => {
           const active = pathname.startsWith(href);

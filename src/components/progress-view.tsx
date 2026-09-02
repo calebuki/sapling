@@ -6,10 +6,8 @@ import {
   ChevronDown,
   CircleAlert,
   Ear,
-  Leaf,
   Mic,
   Sprout,
-  TreePine,
 } from "lucide-react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
@@ -20,27 +18,13 @@ import {
   growthStageLabels,
   learningDimensions,
 } from "@/lib/learning/model";
+import { dueReviewCount } from "@/lib/learning/scheduler";
 import type {
   Concept,
   ConceptKind,
   GrowthStage,
   LearnerConceptState,
 } from "@/types/learning";
-
-const growthPath: Array<{
-  stage: GrowthStage;
-  percent: number;
-  Icon: typeof Sprout;
-}> = [
-  { stage: "seed", percent: 0, Icon: Leaf },
-  { stage: "sprout", percent: 10, Icon: Sprout },
-  { stage: "growing", percent: 25, Icon: Sprout },
-  { stage: "established", percent: 50, Icon: TreePine },
-  { stage: "automatic", percent: 75, Icon: TreePine },
-];
-
-const nearFluencyTarget = 10_000;
-const maxPointsPerConcept = 10;
 
 const stageStyles: Record<GrowthStage, string> = {
   seed: "bg-amber-400/15 text-amber-500",
@@ -93,13 +77,6 @@ function nextAction(state: LearnerConceptState) {
   return { Icon: Sprout, label: "Use it in a new situation" };
 }
 
-function currentGrowthStage(progress: number) {
-  return (
-    [...growthPath].reverse().find((step) => progress >= step.percent) ??
-    growthPath[0]
-  );
-}
-
 export function ProgressView() {
   const { concepts, states, isLoading, error, targetLanguage } = useLearningModel();
   const stateByConcept = new Map(
@@ -111,29 +88,24 @@ export function ProgressView() {
   });
   const practiced = modeled.filter(({ state }) => state.exposureCount > 0);
   const newConcepts = modeled.filter(({ state }) => state.exposureCount === 0);
-  const growthPoints = practiced.reduce(
-    (total, { state }) =>
-      total +
-      Math.min(
-        maxPointsPerConcept,
-        state.exposureCount + state.successfulRetrievalCount * 2,
-      ),
-    0,
+  const courseCoverage = concepts.length === 0
+    ? 0
+    : Math.round((practiced.length / concepts.length) * 100);
+  const ready = practiced.filter(({ state }) =>
+    state.delayedIndependentSuccessCount >= 2 &&
+    (state.recall ?? 0) >= 0.58 &&
+    Math.max(state.recognitionText ?? 0, state.recognitionAudio ?? 0) >= 0.66,
   );
-  const journeyProgress = Math.min(
-    100,
-    (growthPoints / nearFluencyTarget) * 100,
-  );
-  const displayedProgress =
-    practiced.length > 0 ? Math.max(1, Math.round(journeyProgress)) : 0;
-  const overallStage = currentGrowthStage(displayedProgress);
+  const dueCount = dueReviewCount(states);
 
   const needsAttention = practiced.filter(({ state, stage }) => {
     const audioGap =
       state.recognitionText !== null &&
       state.recognitionAudio !== null &&
       state.recognitionText - state.recognitionAudio >= 0.16;
-    return stage === "seed" || stage === "sprout" || audioGap;
+    const isDue = [state.recallDueAt, state.listeningDueAt, state.pronunciationDueAt]
+      .some((dueAt) => dueAt !== null && Date.parse(dueAt) <= Date.now());
+    return stage === "seed" || stage === "sprout" || audioGap || isDue;
   });
   const attentionIds = new Set(needsAttention.map(({ concept }) => concept.id));
   const strong = practiced.filter(
@@ -168,74 +140,48 @@ export function ProgressView() {
       <section className="paper-panel overflow-hidden rounded-[24px] p-6 sm:p-8">
         <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-start">
           <div>
-            <p className="text-[11px] font-bold tracking-[0.12em] text-forest-700/58">Current stage</p>
+            <p className="text-[11px] font-bold tracking-[0.12em] text-forest-700/58">Course coverage</p>
             <h2 className="mt-2 font-display text-3xl text-forest-950 sm:text-4xl">
-              {growthStageLabels[overallStage.stage]}
+              {courseCoverage}% explored
             </h2>
             <p className="mt-2 text-sm font-semibold text-forest-900/58">
-              {practiced.length} ideas practiced
+              {practiced.length} of {concepts.length} ideas practiced
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 md:min-w-64">
             <div className="rounded-[15px] bg-moss-300/22 p-4">
-              <p className="text-2xl font-extrabold tracking-[-0.04em] text-forest-950">{needsAttention.length}</p>
-              <p className="mt-1 text-xs font-bold text-forest-900/58">Need attention</p>
+              <p className="text-2xl font-extrabold tracking-[-0.04em] text-forest-950">{dueCount}</p>
+              <p className="mt-1 text-xs font-bold text-forest-900/58">Due now</p>
             </div>
             <div className="rounded-[15px] bg-forest-950 p-4 text-cream-50">
-              <p className="text-2xl font-extrabold tracking-[-0.04em]">{growing.length + strong.length}</p>
-              <p className="mt-1 text-xs font-bold text-cream-100/68">Taking shape</p>
+              <p className="text-2xl font-extrabold tracking-[-0.04em]">{ready.length}</p>
+              <p className="mt-1 text-xs font-bold text-cream-100/68">Capability-ready</p>
             </div>
           </div>
         </div>
 
         <div className="mt-8">
           <div className="flex items-center justify-between text-xs font-bold text-forest-900/58">
-            <span>Long-term progress</span>
-            <span>{displayedProgress}%</span>
+            <span>Course coverage</span>
+            <span>{courseCoverage}%</span>
           </div>
           <div
-            aria-label={`Progress toward near-fluent ${targetLanguage.name}`}
+            aria-label={`${targetLanguage.name} course coverage`}
             aria-valuemax={100}
             aria-valuemin={0}
-            aria-valuenow={displayedProgress}
+            aria-valuenow={courseCoverage}
             className="mt-2 h-3 overflow-hidden rounded-full bg-forest-900/8"
             role="progressbar"
           >
             <div
               className="h-full rounded-full bg-gradient-to-r from-moss-400 to-forest-700 transition-[width] duration-500"
-              style={{ width: `${displayedProgress}%` }}
+              style={{ width: `${courseCoverage}%` }}
             />
           </div>
+          <p className="mt-3 text-xs leading-5 text-forest-900/52">
+            Capability-ready means repeated independent recall on different days plus strong comprehension evidence.
+          </p>
         </div>
-
-        <ol className="mt-8 grid grid-cols-5 gap-2">
-          {growthPath.map(({ stage, percent, Icon }, index) => {
-            const reached = displayedProgress >= percent;
-            const active = stage === overallStage.stage;
-            return (
-              <li className="min-w-0 text-center" key={stage}>
-                <span
-                  className={`mx-auto grid size-9 place-items-center rounded-full transition sm:size-11 ${
-                    active
-                      ? "bg-forest-900 text-cream-50 shadow-lg shadow-forest-900/15"
-                      : reached
-                        ? "bg-moss-400/22 text-forest-800"
-                        : "bg-forest-900/6 text-forest-900/28"
-                  }`}
-                >
-                  <Icon aria-hidden="true" size={index >= 3 ? 19 : 17} />
-                </span>
-                <p
-                  className={`mt-2 truncate text-[9px] font-bold uppercase tracking-[0.08em] sm:text-[10px] ${
-                    active ? "text-forest-950" : "text-forest-800/45"
-                  }`}
-                >
-                  {growthStageLabels[stage]}
-                </p>
-              </li>
-            );
-          })}
-        </ol>
       </section>
 
       {error ? (
@@ -252,8 +198,7 @@ export function ProgressView() {
             Your first seed is ready.
           </h2>
           <p className="mt-2 text-sm leading-6 text-forest-900/55">
-            Finish one learning prompt, text exercise, or Listen &amp; Speak
-            sentence and your progress will appear here.
+            Complete one Learn or Practice item to begin.
           </p>
         </section>
       ) : null}

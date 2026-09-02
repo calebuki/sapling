@@ -10,6 +10,7 @@ type TargetAudioButtonProps = {
   languageName: string;
   label?: string;
   onPlay?: () => void;
+  onAssistanceChange?: (usedSlowPlayback: boolean) => void;
   showSlowControl?: boolean;
 };
 
@@ -18,6 +19,7 @@ export function TargetAudioButton({
   languageName,
   label = "Hear it",
   onPlay,
+  onAssistanceChange,
   showSlowControl = false,
 }: TargetAudioButtonProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -99,7 +101,13 @@ export function TargetAudioButton({
               ? "bg-moss-400/20 text-forest-900"
               : "text-forest-900/55 hover:bg-white/60"
           }`}
-          onClick={() => setIsSlow((current) => !current)}
+          onClick={() =>
+            setIsSlow((current) => {
+              const next = !current;
+              onAssistanceChange?.(next);
+              return next;
+            })
+          }
           type="button"
         >
           <Gauge aria-hidden="true" size={15} />
