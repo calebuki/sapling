@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { SwedishPracticeWorld } from "@/components/swedish-practice-world";
+import { StorybookHome } from "@/components/storybook-home";
 
 export function HomeLanding() {
   const router = useRouter();
@@ -17,8 +17,8 @@ export function HomeLanding() {
   }, [isLoading, router, targetLanguage.code]);
 
   if (isLoading || targetLanguage.code !== "sv") {
-    return <div className="min-h-[70dvh] animate-pulse bg-moss-300/10" />;
+    return <div className="min-h-dvh animate-pulse bg-[#d6e4df]" />;
   }
 
-  return <SwedishPracticeWorld />;
+  return <StorybookHome />;
 }

@@ -42,6 +42,96 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
     router.refresh();
   }
 
+  if (pathname === "/") {
+    return (
+      <div className="min-h-dvh w-full bg-forest-950">
+        <header className="fixed inset-x-3 top-3 z-50 flex h-14 items-center gap-2 rounded-[18px] border border-white/45 bg-cream-50/82 px-2.5 shadow-xl shadow-forest-950/10 backdrop-blur-xl sm:inset-x-5 sm:top-5 sm:h-16 sm:px-3.5">
+          <Link className="flex shrink-0 items-center gap-2" href="/">
+            <span className="grid size-9 place-items-center rounded-[12px] bg-forest-950 text-cream-50 sm:size-10 sm:rounded-[14px]">
+              <Leaf aria-hidden="true" size={18} strokeWidth={2.3} />
+            </span>
+            <span className="hidden text-lg font-extrabold tracking-[-0.045em] text-forest-950 min-[390px]:inline sm:text-xl">
+              Sapling
+            </span>
+          </Link>
+
+          <nav
+            aria-label="Primary"
+            className="ml-1 flex h-10 items-center rounded-[13px] border border-forest-950/9 bg-white/48 p-1 sm:ml-3"
+          >
+            {destinations.map(({ href, label }) => (
+              <Link
+                className="grid h-8 place-items-center rounded-[9px] px-2.5 text-[11px] font-extrabold text-forest-900/72 transition hover:bg-white/75 hover:text-forest-950 sm:px-4 sm:text-xs"
+                href={href}
+                key={href}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="ml-auto flex min-w-0 items-center gap-0.5 sm:gap-1">
+            <label className="hidden min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-forest-900/64 hover:bg-white/60 sm:flex">
+              <Languages aria-hidden="true" className="shrink-0" size={16} />
+              <span className="sr-only">Learning language</span>
+              <select
+                aria-label="Learning language"
+                className="w-[3.7rem] appearance-none truncate bg-transparent text-[10px] font-extrabold text-forest-950 outline-none disabled:cursor-wait disabled:opacity-55 sm:w-auto sm:text-[11px]"
+                disabled={isSwitchingLanguage}
+                onChange={(event) => {
+                  void selectTargetLanguage(
+                    event.target.value as (typeof supportedLanguageCodes)[number],
+                  ).catch(() => undefined);
+                }}
+                value={targetLanguage.code}
+              >
+                {supportedLanguageCodes.map((languageCode) => (
+                  <option key={languageCode} value={languageCode}>
+                    {targetLanguages[languageCode].endonym}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Link
+              aria-label={`My ${targetLanguage.name}`}
+              className="rounded-xl p-2 text-forest-900/58 transition hover:bg-white/70 hover:text-forest-950"
+              href="/progress"
+            >
+              <TreePine aria-hidden="true" size={17} />
+            </Link>
+            <button
+              aria-label={isMuted ? "Turn on sounds" : "Mute sounds"}
+              aria-pressed={isMuted}
+              className="rounded-xl p-2 text-forest-900/58 transition hover:bg-white/70 hover:text-forest-950"
+              onClick={toggleMuted}
+              type="button"
+            >
+              {isMuted ? (
+                <VolumeX aria-hidden="true" size={17} />
+              ) : (
+                <Volume2 aria-hidden="true" size={17} />
+              )}
+            </button>
+            {hasSupabase ? (
+              <button
+                aria-label="Sign out"
+                className="hidden rounded-xl p-2 text-forest-900/58 transition hover:bg-white/70 hover:text-forest-950 min-[430px]:block"
+                onClick={signOut}
+                type="button"
+              >
+                <LogOut aria-hidden="true" size={17} />
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <main className="route-enter" key={pathname}>
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[1720px] md:grid md:grid-cols-[220px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-forest-950/8 bg-cream-50/72 px-5 py-6 backdrop-blur-xl md:flex">

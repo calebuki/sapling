@@ -11,7 +11,7 @@ import { SwedishCity } from "@/components/world/swedish-city";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { swedishWorld } from "@/lib/worlds/swedish";
 
-export function SwedishPracticeWorld() {
+export function SwedishPracticeWorld({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const { playSound } = useUiSounds();
   const { concepts, states, practiceSnapshot, targetLanguage } = useLearningModel();
@@ -101,7 +101,13 @@ export function SwedishPracticeWorld() {
   }
 
   return (
-    <div className="relative -mb-[calc(7rem+env(safe-area-inset-bottom))] md:mb-0">
+    <div
+      className={
+        embedded
+          ? "relative"
+          : "relative -mb-[calc(7rem+env(safe-area-inset-bottom))] md:mb-0"
+      }
+    >
       <div className="pointer-events-none absolute left-5 top-5 z-10 max-w-[16rem] sm:left-8 sm:top-8 sm:max-w-sm lg:left-12 lg:top-12">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/55 bg-cream-50/78 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-forest-800 shadow-sm backdrop-blur-xl">
           <Leaf aria-hidden="true" size={13} />
