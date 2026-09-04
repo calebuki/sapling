@@ -17,6 +17,7 @@ import { hasSupabase } from "@/lib/env";
 import { supportedLanguageCodes, targetLanguages } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/client";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { StorybookBackdrop } from "@/components/storybook-backdrop";
 import { useUiSounds } from "@/components/providers/ui-sound-provider";
 
 export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -42,9 +43,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
     router.refresh();
   }
 
-  if (pathname === "/") {
+  if (pathname === "/" || targetLanguage.code === "sv") {
     return (
-      <div className="min-h-dvh w-full bg-forest-950">
+      <div className="relative isolate min-h-dvh w-full bg-forest-950">
+        <StorybookBackdrop fixed />
         <header className="fixed inset-x-3 top-3 z-50 flex h-14 items-center gap-2 rounded-[18px] border border-white/45 bg-cream-50/82 px-2.5 shadow-xl shadow-forest-950/10 backdrop-blur-xl sm:inset-x-5 sm:top-5 sm:h-16 sm:px-3.5">
           <Link className="flex shrink-0 items-center gap-2" href="/">
             <span className="grid size-9 place-items-center rounded-[12px] bg-forest-950 text-cream-50 sm:size-10 sm:rounded-[14px]">
@@ -59,15 +61,23 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             aria-label="Primary"
             className="ml-1 flex h-10 items-center rounded-[13px] border border-forest-950/9 bg-white/48 p-1 sm:ml-3"
           >
-            {destinations.map(({ href, label }) => (
-              <Link
-                className="grid h-8 place-items-center rounded-[9px] px-2.5 text-[11px] font-extrabold text-forest-900/72 transition hover:bg-white/75 hover:text-forest-950 sm:px-4 sm:text-xs"
-                href={href}
-                key={href}
-              >
-                {label}
-              </Link>
-            ))}
+            {destinations.map(({ href, label }) => {
+              const active = pathname.startsWith(href);
+              return (
+                <Link
+                  aria-current={active ? "page" : undefined}
+                  className={`grid h-8 place-items-center rounded-[9px] px-2.5 text-[11px] font-extrabold transition sm:px-4 sm:text-xs ${
+                    active
+                      ? "bg-forest-950 text-cream-50 shadow-sm"
+                      : "text-forest-900/72 hover:bg-white/75 hover:text-forest-950"
+                  }`}
+                  href={href}
+                  key={href}
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="ml-auto flex min-w-0 items-center gap-0.5 sm:gap-1">
@@ -125,7 +135,14 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           </div>
         </header>
 
-        <main className="route-enter" key={pathname}>
+        <main
+          className={`route-enter relative z-10 ${
+            pathname === "/" || pathname.startsWith("/practice")
+              ? ""
+              : "min-h-dvh pt-20 sm:pt-24"
+          }`}
+          key={pathname}
+        >
           {children}
         </main>
       </div>
@@ -136,7 +153,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
     <div className="mx-auto min-h-dvh w-full max-w-[1720px] md:grid md:grid-cols-[220px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-forest-950/8 bg-cream-50/72 px-5 py-6 backdrop-blur-xl md:flex">
         <Link
-          href={targetLanguage.code === "sv" ? "/practice" : "/learn"}
+          href="/learn"
           className="flex items-center gap-3 rounded-2xl px-2 py-1"
         >
           <span className="grid size-10 place-items-center rounded-[14px] bg-forest-950 text-cream-50 shadow-lg shadow-forest-950/12">
@@ -224,7 +241,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
       <div className="min-w-0 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-forest-950/8 bg-cream-100/88 px-5 py-3.5 backdrop-blur-xl md:hidden">
           <Link
-            href={targetLanguage.code === "sv" ? "/practice" : "/learn"}
+            href="/learn"
             className="flex items-center gap-2.5"
           >
             <span className="grid size-9 place-items-center rounded-xl bg-forest-950 text-cream-50">

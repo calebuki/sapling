@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowLeft, Leaf, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PracticeSession } from "@/components/practice-session";
+import { IllustratedSwedishTown } from "@/components/illustrated-swedish-town";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { StorybookBackdrop } from "@/components/storybook-backdrop";
 import { useUiSounds } from "@/components/providers/ui-sound-provider";
-import { SwedishCity } from "@/components/world/swedish-city";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { swedishWorld } from "@/lib/worlds/swedish";
 
@@ -72,30 +73,33 @@ export function SwedishPracticeWorld({ embedded = false }: { embedded?: boolean 
 
   if (activeVenue) {
     return (
-      <div className="interaction-stage mx-auto w-full max-w-6xl px-5 py-5 sm:px-8 sm:py-9 lg:px-12 lg:py-12">
-        <button
-          className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-extrabold text-forest-900/58 transition hover:bg-white/60 hover:text-forest-950"
-          onClick={() => setActiveVenueId(null)}
-          type="button"
-        >
-          <ArrowLeft aria-hidden="true" size={16} />
-          Tillbaka till Lindbacken
-        </button>
-        <div className="mb-5 flex items-end justify-between gap-4 sm:mb-7">
-          <div>
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/65">
-              <MapPin aria-hidden="true" size={13} />
-              {activeVenue.label}
-            </p>
-            <h1 className="font-display text-4xl leading-[1.03] text-forest-950 sm:text-5xl">
-              Use what you know.
-            </h1>
+      <div className="relative isolate min-h-dvh overflow-hidden px-5 pb-10 pt-24 sm:px-8 sm:pb-14 sm:pt-28 lg:px-12">
+        <StorybookBackdrop />
+        <div className="interaction-stage relative z-10 mx-auto w-full max-w-6xl rounded-[30px] border border-white/55 bg-cream-50/88 p-4 shadow-2xl shadow-forest-950/20 backdrop-blur-xl sm:p-7 lg:p-9">
+          <button
+            className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-extrabold text-forest-900/58 transition hover:bg-white/60 hover:text-forest-950"
+            onClick={() => setActiveVenueId(null)}
+            type="button"
+          >
+            <ArrowLeft aria-hidden="true" size={16} />
+            Tillbaka till Lindbacken
+          </button>
+          <div className="mb-5 flex items-end justify-between gap-4 sm:mb-7">
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-forest-700/65">
+                <MapPin aria-hidden="true" size={13} />
+                {activeVenue.label}
+              </p>
+              <h1 className="font-display text-4xl leading-[1.03] text-forest-950 sm:text-5xl">
+                Use what you know.
+              </h1>
+            </div>
           </div>
+          <PracticeSession
+            onReturnToWorld={() => setActiveVenueId(null)}
+            scenarioIds={activeVenue.scenarioIds}
+          />
         </div>
-        <PracticeSession
-          onReturnToWorld={() => setActiveVenueId(null)}
-          scenarioIds={activeVenue.scenarioIds}
-        />
       </div>
     );
   }
@@ -108,20 +112,7 @@ export function SwedishPracticeWorld({ embedded = false }: { embedded?: boolean 
           : "relative -mb-[calc(7rem+env(safe-area-inset-bottom))] md:mb-0"
       }
     >
-      <div className="pointer-events-none absolute left-5 top-5 z-10 max-w-[16rem] sm:left-8 sm:top-8 sm:max-w-sm lg:left-12 lg:top-12">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/55 bg-cream-50/78 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-forest-800 shadow-sm backdrop-blur-xl">
-          <Leaf aria-hidden="true" size={13} />
-          Svenska
-        </div>
-        <h1 className="mt-3 font-display text-4xl leading-[0.95] text-forest-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.6)] sm:text-6xl">
-          Lindbacken
-        </h1>
-        <p className="mt-3 hidden max-w-xs text-sm font-bold leading-6 text-forest-900/58 sm:block">
-          Choose a place and step into Swedish.
-        </p>
-      </div>
-
-      <SwedishCity
+      <IllustratedSwedishTown
         onSelectVenue={selectVenue}
         recommendedVenueId={recommendedVenueId}
         selectedVenueId={enteringVenueId}
@@ -129,7 +120,7 @@ export function SwedishPracticeWorld({ embedded = false }: { embedded?: boolean 
       />
 
       {enteringVenueId ? (
-        <div className="venue-enter-overlay pointer-events-none absolute inset-0 z-20 flex items-start justify-center bg-forest-950/8 pt-5 backdrop-blur-[2px]">
+        <div className="venue-enter-overlay pointer-events-none absolute inset-0 z-20 flex items-start justify-center bg-forest-950/8 pt-24 backdrop-blur-[2px]">
           <div className="rounded-full bg-forest-950/88 px-4 py-2 text-xs font-extrabold text-cream-50 shadow-xl backdrop-blur-lg">
             Går in…
           </div>
