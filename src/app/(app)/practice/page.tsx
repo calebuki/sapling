@@ -2,6 +2,11 @@ import { PracticeHome } from "@/components/practice-home";
 
 export const metadata = { title: "Practice" };
 
-export default function PracticePage() {
-  return <PracticeHome />;
+export default async function PracticePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scene?: string }>;
+}) {
+  const { scene } = await searchParams;
+  return <PracticeHome initialScenarioId={scene} />;
 }

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { StorybookHome } from "@/components/storybook-home";
+import { TownHome } from "@/components/town-home";
 
 export function HomeLanding() {
   const router = useRouter();
@@ -20,5 +20,5 @@ export function HomeLanding() {
     return <div className="min-h-dvh animate-pulse bg-[#d6e4df]" />;
   }
 
-  return <StorybookHome />;
+  return <TownHome />;
 }

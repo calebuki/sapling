@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getPracticeScenarios } from "@/lib/practice/scenarios";
 import {
   isTargetLanguageCode,
   type TargetLanguageCode,
@@ -21,8 +22,7 @@ import type {
 } from "@/types/practice";
 
 type ConceptRow = Database["public"]["Tables"]["concepts"]["Row"];
-type StateRow =
-  Database["public"]["Tables"]["learner_concept_state"]["Row"];
+type StateRow = Database["public"]["Tables"]["learner_concept_state"]["Row"];
 
 function mapConcept(row: ConceptRow): Concept {
   return {
@@ -129,41 +129,68 @@ async function loadPracticeSnapshot(
   languageCode: TargetLanguageCode,
 ): Promise<PracticeSnapshot> {
   const supabase = createClient();
-  const [memoryResult, continuityResult, sessionResult] = await Promise.all([
-    supabase
-      .from("learner_memories")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("language_code", languageCode)
-      .order("last_confirmed_at", { ascending: false }),
-    supabase
-      .from("character_continuity")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("language_code", languageCode)
-      .order("last_met_at", { ascending: false }),
-    supabase
-      .from("learning_sessions")
-      .select("configuration")
-      .eq("user_id", userId)
-      .eq("kind", "practice")
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(6),
-  ]);
+  const [memoryResult, continuityResult, sessionResult, completedResults] =
+    await Promise.all([
+      supabase
+        .from("learner_memories")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("language_code", languageCode)
+        .order("last_confirmed_at", { ascending: false }),
+      supabase
+        .from("character_continuity")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("language_code", languageCode)
+        .order("last_met_at", { ascending: false }),
+      supabase
+        .from("learning_sessions")
+        .select("configuration")
+        .eq("user_id", userId)
+        .eq("kind", "practice")
+        .eq("status", "completed")
+        .eq("configuration->>language_code", languageCode)
+        .order("completed_at", { ascending: false })
+        .limit(6),
+      Promise.all(
+        getPracticeScenarios(languageCode).map((scenario) =>
+          supabase
+            .from("learning_sessions")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("kind", "practice")
+            .eq("status", "completed")
+            .eq("configuration->>language_code", languageCode)
+            .eq("configuration->>scenario_id", scenario.id)
+            .gte("configuration->goal_progress", 1)
+            .gte("configuration->turn_count", scenario.minimumTurns)
+            .limit(1)
+            .then((result) => ({ ...result, scenarioId: scenario.id })),
+        ),
+      ),
+    ]);
 
-  const error = memoryResult.error ?? continuityResult.error ?? sessionResult.error;
+  const error =
+    memoryResult.error ??
+    continuityResult.error ??
+    sessionResult.error ??
+    completedResults.find((result) => result.error)?.error;
   if (error) {
     throw error;
   }
 
   return {
     memories: (memoryResult.data ?? []).map(mapMemory),
+    completedScenarioIds: completedResults
+      .filter((result) => result.data?.length)
+      .map((result) => result.scenarioId),
     continuity: (continuityResult.data ?? []).map(mapContinuity),
-    recentScenarioIds: (sessionResult.data ?? []).flatMap(({ configuration }) => {
-      const scenarioId = jsonRecord(configuration).scenario_id;
-      return typeof scenarioId === "string" ? [scenarioId] : [];
-    }),
+    recentScenarioIds: (sessionResult.data ?? []).flatMap(
+      ({ configuration }) => {
+        const scenarioId = jsonRecord(configuration).scenario_id;
+        return typeof scenarioId === "string" ? [scenarioId] : [];
+      },
+    ),
   };
 }
 
@@ -452,8 +479,7 @@ export function createSupabaseLearningRepository(): LearningRepository {
             user_id: userId,
             language_code: input.languageCode,
             character_id: input.characterId,
-            encounter_count:
-              (continuityResult.data?.encounter_count ?? 0) + 1,
+            encounter_count: (continuityResult.data?.encounter_count ?? 0) + 1,
             last_scenario_id: input.scenarioId,
             summary: input.summary,
             last_met_at: completedAt,

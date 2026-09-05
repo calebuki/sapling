@@ -4,7 +4,7 @@ import { PracticeSession } from "@/components/practice-session";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { SwedishPracticeWorld } from "@/components/swedish-practice-world";
 
-export function PracticeHome() {
+export function PracticeHome({ initialScenarioId }: { initialScenarioId?: string }) {
   const { isLoading, targetLanguage } = useLearningModel();
 
   if (isLoading) {
@@ -12,7 +12,7 @@ export function PracticeHome() {
   }
 
   if (targetLanguage.code === "sv") {
-    return <SwedishPracticeWorld />;
+    return <SwedishPracticeWorld initialScenarioId={initialScenarioId} />;
   }
 
   return (

@@ -1,5 +1,6 @@
 import { demoConcepts, initialDemoStates } from "@/lib/learning/demo-data";
 import { swedishDemoConcepts } from "@/lib/learning/swedish-demo-data";
+import { getPracticeScenario } from "@/lib/practice/scenarios";
 import {
   isTargetLanguageCode,
   type TargetLanguageCode,
@@ -63,13 +64,25 @@ type DemoEvent = {
 };
 
 function emptyPracticeSnapshot(): PracticeSnapshot {
-  return { memories: [], continuity: [], recentScenarioIds: [] };
+  return {
+    memories: [],
+    continuity: [],
+    recentScenarioIds: [],
+    completedScenarioIds: [],
+  };
 }
 
 function readPracticeSnapshot(languageCode: TargetLanguageCode) {
   try {
-    const stored = window.localStorage.getItem(practiceStorageKey(languageCode));
-    return stored ? (JSON.parse(stored) as PracticeSnapshot) : emptyPracticeSnapshot();
+    const stored = window.localStorage.getItem(
+      practiceStorageKey(languageCode),
+    );
+    return stored
+      ? ({
+          ...emptyPracticeSnapshot(),
+          ...JSON.parse(stored),
+        } as PracticeSnapshot)
+      : emptyPracticeSnapshot();
   } catch {
     return emptyPracticeSnapshot();
   }
@@ -141,7 +154,9 @@ function appendEvent(event: Omit<DemoEvent, "id" | "occurredAt">) {
 function replaceState(updated: LearnerConceptState) {
   const languageCode = languageForConcept(updated.conceptId);
   const states = readStates(languageCode);
-  const index = states.findIndex((state) => state.conceptId === updated.conceptId);
+  const index = states.findIndex(
+    (state) => state.conceptId === updated.conceptId,
+  );
 
   if (index === -1) {
     states.push(updated);
@@ -165,9 +180,10 @@ export function createDemoLearningRepository(): LearningRepository {
     },
     async loadSnapshot(languageCode: TargetLanguageCode) {
       return {
-        concepts: (languageCode === "da" ? demoConcepts : swedishDemoConcepts).map(
-          (concept) => ({ ...concept }),
-        ),
+        concepts: (languageCode === "da"
+          ? demoConcepts
+          : swedishDemoConcepts
+        ).map((concept) => ({ ...concept })),
         states: readStates(languageCode),
         mode: "local",
       };
@@ -176,8 +192,7 @@ export function createDemoLearningRepository(): LearningRepository {
       const current =
         readStates(languageForConcept(input.conceptId)).find(
           (state) => state.conceptId === input.conceptId,
-        ) ??
-        createEmptyState(input.conceptId);
+        ) ?? createEmptyState(input.conceptId);
       const updated = applyDemoRetrievalAttempt(current, input);
 
       appendEvent({
@@ -204,8 +219,7 @@ export function createDemoLearningRepository(): LearningRepository {
       const current =
         readStates(languageForConcept(input.conceptId)).find(
           (state) => state.conceptId === input.conceptId,
-        ) ??
-        createEmptyState(input.conceptId);
+        ) ?? createEmptyState(input.conceptId);
       const updated = applyDemoRepair(current);
 
       appendEvent({
@@ -220,8 +234,7 @@ export function createDemoLearningRepository(): LearningRepository {
       const current =
         readStates(languageForConcept(input.conceptId)).find(
           (state) => state.conceptId === input.conceptId,
-        ) ??
-        createEmptyState(input.conceptId);
+        ) ?? createEmptyState(input.conceptId);
       const updated = applyDemoListeningAttempt(current, input);
 
       appendEvent({
@@ -236,8 +249,7 @@ export function createDemoLearningRepository(): LearningRepository {
       const current =
         readStates(languageForConcept(input.conceptId)).find(
           (state) => state.conceptId === input.conceptId,
-        ) ??
-        createEmptyState(input.conceptId);
+        ) ?? createEmptyState(input.conceptId);
       const updated = applyDemoSpeakingAttempt(current, input);
 
       appendEvent({
@@ -268,8 +280,11 @@ export function createDemoLearningRepository(): LearningRepository {
         if (!concept) {
           continue;
         }
-        const index = states.findIndex((state) => state.conceptId === concept.id);
-        const current = index === -1 ? createEmptyState(concept.id) : states[index];
+        const index = states.findIndex(
+          (state) => state.conceptId === concept.id,
+        );
+        const current =
+          index === -1 ? createEmptyState(concept.id) : states[index];
         const updated = applyDemoPracticeEvidence(
           current,
           evidence,
@@ -284,7 +299,9 @@ export function createDemoLearningRepository(): LearningRepository {
       }
 
       writeStates(input.languageCode, states);
-      const primaryConcept = conceptBySlug.get(input.evidence[0]?.conceptSlug ?? "");
+      const primaryConcept = conceptBySlug.get(
+        input.evidence[0]?.conceptSlug ?? "",
+      );
       if (primaryConcept) {
         appendEvent({
           eventType: "conversation_turn",
@@ -298,7 +315,9 @@ export function createDemoLearningRepository(): LearningRepository {
         const now = new Date().toISOString();
         const memories = [...snapshot.memories];
         for (const draft of input.memories) {
-          const index = memories.findIndex((memory) => memory.key === draft.key);
+          const index = memories.findIndex(
+            (memory) => memory.key === draft.key,
+          );
           const memory: LearnerMemory = {
             ...draft,
             id: index === -1 ? crypto.randomUUID() : memories[index].id,
@@ -339,6 +358,17 @@ export function createDemoLearningRepository(): LearningRepository {
       return writePracticeSnapshot(input.languageCode, {
         ...snapshot,
         continuity,
+        completedScenarioIds: [
+          ...new Set([
+            ...snapshot.completedScenarioIds,
+            ...(input.goalProgress >= 1 &&
+            input.turnCount >=
+              (getPracticeScenario(input.languageCode, input.scenarioId)
+                ?.minimumTurns ?? Infinity)
+              ? [input.scenarioId]
+              : []),
+          ]),
+        ],
         recentScenarioIds: [
           input.scenarioId,
           ...snapshot.recentScenarioIds.filter(

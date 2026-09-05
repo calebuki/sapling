@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./sapling-life.css";
 
 @theme inline {
   --font-sans: var(--font-manrope);

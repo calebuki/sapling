@@ -2,9 +2,21 @@
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { ProgressView } from "@/components/progress-view";
+import { TownJournal } from "@/components/town-journal";
 
 export function ProgressPageContent() {
   const { targetLanguage } = useLearningModel();
+
+  if (targetLanguage.code === "sv")
+    return (
+      <div className="life-page">
+        <TownJournal />
+        <details className="life-learning-details">
+          <summary>Explore your language skills</summary>
+          <ProgressView />
+        </details>
+      </div>
+    );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-7 sm:px-8 sm:py-9 lg:px-12 lg:py-12">

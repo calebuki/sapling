@@ -13,7 +13,7 @@ export type LessonEvaluation = {
   summary: string;
   correctedTargetText: string;
   tips: LessonFeedbackTip[];
-  source: "ai" | "fallback";
+  source: "ai" | "fallback" | "guided";
 };
 
 export type TargetSpeechResult = {

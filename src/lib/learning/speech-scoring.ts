@@ -11,7 +11,19 @@ function clamp(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-type WordScore = { accuracyScore: number };
+type WordScore = {
+  accuracyScore: number;
+  errorType?: string;
+};
+
+export type GuidedSpeechOutcome = "mastered" | "close" | "retry";
+
+export type GuidedSpeechMatch = {
+  accuracyScore: number;
+  completenessScore: number;
+  pronunciationScore: number;
+  outcome: GuidedSpeechOutcome;
+};
 
 export function calculateBeginnerPronunciationScore({
   accuracyScore,
@@ -38,6 +50,66 @@ export function calculateBeginnerPronunciationScore({
       : wordScores[middle];
 
   return Math.sqrt(clamp(average * 0.75 + median * 0.25));
+}
+
+export function calculateAssessmentCoverage({
+  assessmentScore,
+  referenceText,
+  wordDetails,
+}: {
+  assessmentScore: number;
+  referenceText: string;
+  wordDetails: WordScore[];
+}) {
+  const referenceWordCount = speechWords(referenceText).length;
+  if (referenceWordCount === 0 || wordDetails.length === 0) {
+    return clamp(assessmentScore);
+  }
+
+  const attemptedWordCount = wordDetails.filter(
+    (word) => word.errorType?.toLocaleLowerCase() !== "omission",
+  ).length;
+
+  return Math.max(
+    clamp(assessmentScore),
+    clamp(attemptedWordCount / referenceWordCount),
+  );
+}
+
+export function evaluateGuidedSpeechMatch({
+  accuracyScore,
+  assessmentCompletenessScore,
+  referenceText,
+  wordDetails,
+}: {
+  accuracyScore: number;
+  assessmentCompletenessScore: number;
+  referenceText: string;
+  wordDetails: WordScore[];
+}): GuidedSpeechMatch {
+  const pronunciationScore = calculateBeginnerPronunciationScore({
+    accuracyScore,
+    wordDetails,
+  });
+  const completenessScore = calculateAssessmentCoverage({
+    assessmentScore: assessmentCompletenessScore,
+    referenceText,
+    wordDetails,
+  });
+
+  const outcome =
+    pronunciationScore >= 0.7 && completenessScore >= 0.7
+      ? "mastered"
+      : pronunciationScore >= 0.55 && completenessScore >= 0.5
+        ? "close"
+        : "retry";
+
+  return {
+    accuracyScore: clamp(accuracyScore),
+    completenessScore,
+    pronunciationScore,
+    outcome,
+  };
 }
 
 export function pronunciationBand(score: number) {

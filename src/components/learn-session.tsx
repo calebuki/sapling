@@ -16,6 +16,7 @@ import {
   Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
 import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
@@ -24,8 +25,8 @@ import { useTargetSpeechRecognition } from "@/hooks/use-target-speech-recognitio
 import { getCourse, type Lesson, type LessonSupport } from "@/lib/learning/course";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import {
-  calculateBeginnerPronunciationScore,
-  calculatePhraseCoverage,
+  evaluateGuidedSpeechMatch,
+  type GuidedSpeechOutcome,
   pronunciationAttemptQuality,
   pronunciationBand,
 } from "@/lib/learning/speech-scoring";
@@ -35,8 +36,6 @@ import type {
 } from "@/types/lesson-evaluation";
 
 type Phase = "attempt" | "feedback" | "reveal" | "complete";
-
-const GUIDED_PRONUNCIATION_TARGET = 0.7;
 
 export function LearnSession() {
   const { targetLanguage } = useLearningModel();
@@ -67,6 +66,8 @@ function LanguageLearnSession() {
   const [speechResult, setSpeechResult] = useState<TargetSpeechResult | null>(
     null,
   );
+  const [guidedSpeechOutcome, setGuidedSpeechOutcome] =
+    useState<GuidedSpeechOutcome | null>(null);
   const [revealSpeechResult, setRevealSpeechResult] =
     useState<TargetSpeechResult | null>(null);
   const [usedAudioHint, setUsedAudioHint] = useState(false);
@@ -157,6 +158,7 @@ function LanguageLearnSession() {
     setPhase("attempt");
     setEvaluation(null);
     setSpeechResult(null);
+    setGuidedSpeechOutcome(null);
     setRevealSpeechResult(null);
     setUsedAudioHint(false);
     resetTranscript();
@@ -189,6 +191,7 @@ function LanguageLearnSession() {
     setPhase("attempt");
     setEvaluation(null);
     setSpeechResult(null);
+    setGuidedSpeechOutcome(null);
     setRevealSpeechResult(null);
     setUsedAudioHint(false);
     resetTranscript();
@@ -245,35 +248,83 @@ function LanguageLearnSession() {
     setActionError(null);
     setEvaluation(null);
     setSpeechResult(null);
+    setGuidedSpeechOutcome(null);
 
     try {
-      const spoken = await startRecognition({ mode: "open" });
+      const isVocabularyRecall = exercise.mode === "repeat";
+      const spoken = await startRecognition(
+        isVocabularyRecall
+          ? { mode: "scripted", referenceText: exercise.expected }
+          : { mode: "open" },
+      );
       attemptLatencyMs.current = spoken.durationMs;
-      setSpeechResult(spoken);
       setIsSaving(true);
 
-      const evaluationResponse = await fetch("/api/learning/evaluate-answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          languageCode: targetLanguage.code,
-          lessonId: lesson.id,
-          exerciseId: exercise.audioId,
-          transcript: spoken.recognizedText,
-          alternatives: spoken.alternatives,
-        }),
-      });
-      const evaluationBody = (await evaluationResponse.json()) as
-        | LessonEvaluation
-        | { error?: string };
+      let evaluationBody: LessonEvaluation;
+      let guidedOutcomeForAttempt: GuidedSpeechOutcome | null = null;
+      let retrievalSuccessful: boolean;
+      let scoredSpeech = spoken;
 
-      if (!evaluationResponse.ok || !("successful" in evaluationBody)) {
-        throw new Error(
-          "error" in evaluationBody && evaluationBody.error
-            ? evaluationBody.error
-            : "Sapling couldn’t interpret that answer.",
-        );
+      if (isVocabularyRecall) {
+        const guidedMatch = evaluateGuidedSpeechMatch({
+          accuracyScore: spoken.accuracyScore,
+          assessmentCompletenessScore: spoken.completenessScore,
+          referenceText: exercise.expected,
+          wordDetails: spoken.wordDetails,
+        });
+        const accepted = guidedMatch.outcome !== "retry";
+        guidedOutcomeForAttempt = guidedMatch.outcome;
+        scoredSpeech = {
+          ...spoken,
+          completenessScore: guidedMatch.completenessScore,
+          pronunciationScore: guidedMatch.pronunciationScore,
+          successful: accepted,
+        };
+        evaluationBody = {
+          successful: accepted,
+          meaningScore: guidedMatch.pronunciationScore,
+          grammarScore: guidedMatch.pronunciationScore,
+          vocabularyScore: guidedMatch.pronunciationScore,
+          summary:
+            guidedMatch.outcome === "mastered"
+              ? "That pronunciation came through clearly."
+              : guidedMatch.outcome === "close"
+                ? "Close enough — keep going."
+                : "I matched part of it — listen and try once more.",
+          correctedTargetText: exercise.expected,
+          tips: [],
+          source: "guided",
+        };
+        retrievalSuccessful = guidedMatch.outcome === "mastered";
+      } else {
+        const evaluationResponse = await fetch("/api/learning/evaluate-answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            languageCode: targetLanguage.code,
+            lessonId: lesson.id,
+            exerciseId: exercise.audioId,
+            transcript: spoken.recognizedText,
+            alternatives: spoken.alternatives,
+          }),
+        });
+        const responseBody = (await evaluationResponse.json()) as
+          | LessonEvaluation
+          | { error?: string };
+
+        if (!evaluationResponse.ok || !("successful" in responseBody)) {
+          throw new Error(
+            "error" in responseBody && responseBody.error
+              ? responseBody.error
+              : "Sapling couldn’t interpret that answer.",
+          );
+        }
+        evaluationBody = responseBody;
+        retrievalSuccessful = responseBody.successful;
       }
+
+      setSpeechResult(scoredSpeech);
+      setGuidedSpeechOutcome(guidedOutcomeForAttempt);
 
       const attemptContext = {
         lessonId: lesson.id,
@@ -289,13 +340,17 @@ function LanguageLearnSession() {
         feedbackTips: evaluationBody.tips
           .map((tip) => `${tip.area}: ${tip.message}`)
           .join(" | "),
+        targetGuided: isVocabularyRecall,
+        guidedSpeechOutcome: guidedOutcomeForAttempt,
+        pronunciationScore: scoredSpeech.pronunciationScore,
+        completenessScore: scoredSpeech.completenessScore,
         source: "lesson-course",
       };
 
       if (usedAudioHint) {
         await recordRepair({
           conceptId: concept.id,
-          responseText: spoken.recognizedText,
+          responseText: scoredSpeech.recognizedText,
           targetText: evaluationBody.correctedTargetText,
           context: attemptContext,
         });
@@ -303,9 +358,9 @@ function LanguageLearnSession() {
 
       await recordRetrievalAttempt({
         conceptId: concept.id,
-        responseText: spoken.recognizedText,
+        responseText: scoredSpeech.recognizedText,
         expectedResponse: exercise.expected,
-        successful: evaluationBody.successful,
+        successful: retrievalSuccessful,
         latencyMs: attemptLatencyMs.current,
         context: attemptContext,
       });
@@ -329,6 +384,7 @@ function LanguageLearnSession() {
   function retryVoiceAttempt() {
     setEvaluation(null);
     setSpeechResult(null);
+    setGuidedSpeechOutcome(null);
     resetTranscript();
     setActionError(null);
     setPhase("attempt");
@@ -357,23 +413,19 @@ function LanguageLearnSession() {
         referenceText: exercise.expected,
       });
       const rawPronunciationScore = spoken.pronunciationScore;
-      const completenessScore = calculatePhraseCoverage(
-        exercise.expected,
-        spoken.recognizedText,
-      );
-      const pronunciationScore = calculateBeginnerPronunciationScore({
+      const guidedMatch = evaluateGuidedSpeechMatch({
         accuracyScore: spoken.accuracyScore,
+        assessmentCompletenessScore: spoken.completenessScore,
+        referenceText: exercise.expected,
         wordDetails: spoken.wordDetails,
       });
-      const successful =
-        pronunciationScore >= GUIDED_PRONUNCIATION_TARGET &&
-        completenessScore >= 0.8;
+      const accepted = guidedMatch.outcome !== "retry";
       const scoredAttempt = {
         ...spoken,
-        completenessScore,
-        fluencyScore: spoken.fluencyScore * completenessScore,
-        pronunciationScore,
-        successful,
+        completenessScore: guidedMatch.completenessScore,
+        fluencyScore: spoken.fluencyScore * guidedMatch.completenessScore,
+        pronunciationScore: guidedMatch.pronunciationScore,
+        successful: accepted,
       };
       setRevealSpeechResult((current) =>
         !current ||
@@ -388,12 +440,14 @@ function LanguageLearnSession() {
         conceptId: concept.id,
         referenceText: exercise.expected,
         ...scoredAttempt,
+        successful: guidedMatch.outcome === "mastered",
         context: {
           lessonId: lesson.id,
           exerciseId: exercise.audioId,
           provider: "azure-speech",
           locale: targetLanguage.locale,
           assessmentMode: "scripted-repair",
+          guidedSpeechOutcome: guidedMatch.outcome,
           rawPronunciationScore,
           audioRetained: false,
           source: "lesson-course",
@@ -444,6 +498,7 @@ function LanguageLearnSession() {
               : `${remainingIdeas} ${remainingIdeas === 1 ? "idea" : "ideas"} left.`}
           </h2>
           <div className="mt-8 flex flex-wrap gap-3">
+            {targetLanguage.code === "sv" ? <Link className="life-button" href={`/practice?scene=${lesson.id.includes("cafe") || lesson.id.includes("order") ? "fika-order" : lesson.id.includes("around") ? "centralstation-change" : lesson.id.includes("plans") ? "make-weekend-plans" : "meet-elin"}`}>Use it around town<ArrowRight size={17} /></Link> : null}
             {hasNextLesson ? (
               <button
                 className="inline-flex items-center gap-2 rounded-2xl bg-forest-900 px-5 py-3 text-sm font-bold text-cream-50 transition hover:bg-forest-800"
@@ -511,7 +566,7 @@ function LanguageLearnSession() {
           <div className="text-xs font-bold uppercase tracking-[0.16em] text-forest-700/65">
             Lesson {lesson.number} · {lesson.title}
           </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8">
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-forest-900/8" role="progressbar" aria-label="Lesson progress" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
             <div
               className="h-full rounded-full bg-moss-500 transition-[width] duration-500"
               style={{ width: `${Math.max(4, progress)}%` }}
@@ -695,7 +750,9 @@ function LanguageLearnSession() {
                   >
                     <p className="text-base font-bold text-forest-950">
                       {revealSpeechResult.successful
-                        ? "Good pronunciation — keep going."
+                        ? revealSpeechResult.pronunciationScore >= 0.7
+                          ? "Good pronunciation — keep going."
+                          : "Close enough — keep going."
                         : `${pronunciationBand(revealSpeechResult.pronunciationScore)} — listen and try once more.`}
                     </p>
                     <p className="mt-2 text-base leading-7 text-forest-900/78">
@@ -779,7 +836,13 @@ function LanguageLearnSession() {
                 ) : (
                   <RotateCcw aria-hidden="true" size={15} />
                 )}
-                {evaluation.successful ? "Meaning understood" : "Try once more"}
+                {guidedSpeechOutcome === "mastered"
+                  ? "Matched"
+                  : guidedSpeechOutcome === "close"
+                    ? "Close enough"
+                    : evaluation.successful
+                      ? "Meaning understood"
+                      : "Try once more"}
               </div>
               <h2 className="mt-5 max-w-2xl font-display text-3xl leading-tight text-forest-950 sm:text-4xl">
                 {evaluation.summary}
@@ -787,15 +850,23 @@ function LanguageLearnSession() {
 
               <div className="mt-6 rounded-[22px] border border-forest-900/10 bg-white/55 p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
-                  Sapling heard
+                  {guidedSpeechOutcome ? "Sapling matched" : "Sapling heard"}
                 </p>
                 <p className="mt-3 text-xl font-medium leading-8 text-forest-950" lang={targetLanguage.code}>
-                  {speechResult.recognizedText}
+                  {guidedSpeechOutcome
+                    ? exercise.expected
+                    : speechResult.recognizedText}
                 </p>
+                {guidedSpeechOutcome ? (
+                  <p className="mt-2 text-sm font-semibold text-forest-900/58">
+                    Pronunciation match {Math.round(speechResult.pronunciationScore * 100)}
+                  </p>
+                ) : null}
               </div>
 
-              {evaluation.correctedTargetText !== speechResult.recognizedText ||
-              evaluation.tips.length > 0 ? (
+              {!guidedSpeechOutcome &&
+              (evaluation.correctedTargetText !== speechResult.recognizedText ||
+                evaluation.tips.length > 0) ? (
                 <div className="mt-4 rounded-[22px] border border-moss-500/20 bg-moss-400/10 p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-forest-700/68">
                     A natural version
@@ -1010,7 +1081,7 @@ function LessonRail({
   unlockedLessonIndex: number;
 }) {
   return (
-    <div className="paper-panel scrollbar-hidden overflow-x-auto rounded-[18px] p-2.5 [scroll-snap-type:x_mandatory]">
+    <div className="life-lesson-rail paper-panel scrollbar-hidden overflow-x-auto rounded-[18px] p-2.5 [scroll-snap-type:x_mandatory]">
       <div className="flex min-w-max gap-1.5">
         {lessons.map((lesson, index) => {
           const active = index === lessonIndex;

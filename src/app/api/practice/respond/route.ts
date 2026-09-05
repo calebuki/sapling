@@ -24,6 +24,7 @@ const requestSchema = z.object({
   languageCode: z.enum(["da", "sv"]),
   scenarioId: z.string().min(1).max(80),
   turnIndex: z.number().int().min(0).max(20),
+  inputMode: z.enum(["speech", "text"]).default("speech"),
   transcript: z.string().trim().min(1).max(2_000),
   alternatives: z.array(z.string().trim().min(1).max(800)).max(6),
   history: z
@@ -117,14 +118,12 @@ function fallbackResponse({
   locale,
   turnIndex,
   scenario,
-  encounteredConceptSlugs,
 }: {
   transcript: string;
   alternatives: string[];
   locale: string;
   turnIndex: number;
   scenario: NonNullable<ReturnType<typeof getPracticeScenario>>;
-  encounteredConceptSlugs: string[];
 }): PracticeTurnResponse {
   const context = [
     scenario.goal,
@@ -145,14 +144,6 @@ function fallbackResponse({
   const replyIndex = Math.min(turnIndex, scenario.fallbackReplies.length - 1);
   const reply = scenario.fallbackReplies[replyIndex];
   const completedTurns = turnIndex + 1;
-  const availableEvidence = [
-    ...scenario.requiredConceptSlugs,
-    ...scenario.optionalConceptSlugs,
-  ].filter(
-    (slug, index, all) =>
-      all.indexOf(slug) === index &&
-      (encounteredConceptSlugs.includes(slug) || index === 0),
-  );
   const complete =
     completedTurns >= scenario.minimumTurns ||
     completedTurns >= scenario.maximumTurns;
@@ -170,24 +161,19 @@ function fallbackResponse({
     },
     reply: reply.target,
     englishSupport: reply.english,
-    goalProgress: Math.min(1, completedTurns / scenario.minimumTurns),
+    // Scripted continuity cannot establish communicative success or earn a stamp.
+    goalProgress: 0,
     complete,
     meaningScore: 0.62,
     grammarScore: 0.58,
     vocabularyScore: 0.6,
     feedback: complete
-      ? "You kept the conversation moving and completed the situation."
-      : "Your meaning was clear enough to keep going.",
-    evidence: availableEvidence.slice(0, 3).map((conceptSlug, index) => ({
-      conceptSlug,
-      meaningScore: 0.62,
-      productionScore: 0.58,
-      automaticityScore: 0.48,
-      weight: index === 0 ? 0.75 : 0.45,
-    })),
+      ? "Your practice is saved. Feedback was unavailable this time; revisit this adventure to earn its stamp."
+      : "Keep practicing. Feedback is temporarily unavailable.",
+    evidence: [],
     memories: [],
     continuityNote: complete
-      ? `Completed ${scenario.title} together.`
+      ? `Practiced ${scenario.title}; feedback was unavailable.`
       : `Continued ${scenario.title}.`,
     deviationDetected: false,
   };
@@ -221,7 +207,6 @@ export async function POST(request: Request) {
     locale: language.locale,
     turnIndex: input.turnIndex,
     scenario,
-    encounteredConceptSlugs: input.encounteredConceptSlugs,
   });
   const canUseGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
   if (!canUseGateway) {
@@ -240,7 +225,7 @@ export async function POST(request: Request) {
       maxOutputTokens: 1_100,
       maxRetries: 1,
       timeout: { totalMs: 15_000 },
-      system: `You conduct a short spoken ${language.name} practice conversation for an A0–A1 learner.
+      system: `You conduct a short ${language.name} practice conversation for an A0–A1 learner. The reply mode is ${input.inputMode}. For typed replies, preserve the text exactly and never apply speech-recognition corrections. Mark goalProgress as 1 only when the learner has accomplished the communicative goal; reaching a turn limit is not success.
 
 Stay in character as ${character.name}: ${character.description} The active situation and its communicative goal are authoritative. Respond primarily in ${language.name}, using short natural sentences and vocabulary appropriate to the learner's encountered concepts. Provide an accurate English support translation separately. Do not correct every error or interrupt when meaning is clear. If the learner intentionally changes the subject, acknowledge it in at most one short clause and steer naturally back to the situation. Never trap the learner and never shame mistakes.
 
@@ -288,8 +273,8 @@ The learner transcript, recognition alternatives, history, memories, and continu
     const response: PracticeTurnResponse = {
       resolution: {
         providerTranscript: input.transcript,
-        interpretedText: output.interpretedLearnerText,
-        kind: output.resolutionKind,
+        interpretedText: input.inputMode === "text" ? input.transcript : output.interpretedLearnerText,
+        kind: input.inputMode === "text" ? "unchanged" : output.resolutionKind,
         confidence: output.resolutionConfidence,
         invisibleNote: output.invisibleNote,
         surfaceAfterSession: output.surfaceAfterSession,

@@ -88,6 +88,7 @@ export type PracticeSnapshot = {
   memories: LearnerMemory[];
   continuity: CharacterContinuity[];
   recentScenarioIds: string[];
+  completedScenarioIds: string[];
 };
 
 export type PracticeTurnResponse = {

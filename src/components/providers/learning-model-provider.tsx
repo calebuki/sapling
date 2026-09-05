@@ -34,6 +34,7 @@ const emptyPracticeSnapshot: PracticeSnapshot = {
   memories: [],
   continuity: [],
   recentScenarioIds: [],
+  completedScenarioIds: [],
 };
 
 type LearningModelContextValue = {
