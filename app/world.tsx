@@ -1,12 +1,27 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as T from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { SLOTS } from '@/lib/game';
+import { routeTo, walkable } from '@/lib/navigation';
 export type Decoration = { id: string; kind: string; x: number; z: number };
 type Props = {
-  onInteract: (id: string) => void;
+  onInteract: (id: string) => boolean;
   decorations: Decoration[];
   paused: boolean;
   command?: { id: string; nonce: number };
+  onTravel: (id: string | null) => void;
+  cooldowns: Partial<Record<string, number>>;
+  placement: string | null;
+  onPlace: (slot: number) => void;
+};
+const labels: Record<string, { icon: string; name: string; y: number }> = {
+  wood: { icon: '🪵', name: 'Gather wood', y: 4.8 },
+  apple: { icon: '🍎', name: 'Pick apples', y: 4.8 },
+  stone: { icon: '🪨', name: 'Collect stones', y: 1.9 },
+  flower: { icon: '🌼', name: 'Pick flowers', y: 1.5 },
+  workshop: { icon: '🔨', name: 'Workshop', y: 4.8 },
+  visitor: { icon: '💬', name: 'Say hej!', y: 2.7 },
 };
 const points: Record<string, [number, number]> = {
   wood: [-5, -2],
@@ -21,11 +36,22 @@ export default function World({
   decorations,
   paused,
   command,
+  onTravel,
+  cooldowns,
+  placement,
+  onPlace,
 }: Props) {
+  const pins = useRef<Record<string, HTMLButtonElement | null>>({});
+  const slots = useRef<Record<number, HTMLButtonElement | null>>({});
+  const live = useRef({ onTravel, cooldowns, placement });
+  useEffect(() => {
+    live.current = { onTravel, cooldowns, placement };
+  }, [onTravel, cooldowns, placement]);
   const host = useRef<HTMLDivElement>(null),
     api = useRef<{
       go: (id: string) => void;
       decorate: (d: Decoration[]) => void;
+      zoom: (delta: number) => void;
     } | null>(null),
     interaction = useRef(onInteract),
     pause = useRef(paused);
@@ -34,6 +60,7 @@ export default function World({
     pause.current = paused;
   }, [onInteract, paused]);
   const [error, setError] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     const el = host.current;
     if (!el) return;
@@ -50,15 +77,17 @@ export default function World({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFShadowMap;
-    renderer.setClearColor('#9cdadf');
+    renderer.setClearColor('#86dce2');
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
     el.appendChild(renderer.domElement);
     const scene = new T.Scene();
-    scene.fog = new T.Fog('#9cdadf', 38, 95);
+    scene.fog = new T.Fog('#86dce2', 40, 90);
     const camera = new T.PerspectiveCamera(35, 1, 0.1, 150);
     camera.position.set(19, 22, 26);
     camera.lookAt(0, 0, 0);
-    scene.add(new T.HemisphereLight('#fff7dc', '#5b9f8b', 2.3));
-    const sun = new T.DirectionalLight('#fff0cb', 3);
+    scene.add(new T.HemisphereLight('#e7f6ff', '#5c9f9d', 2.5));
+    const sun = new T.DirectionalLight('#fff1d7', 3.3);
     sun.position.set(-9, 18, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -77,8 +106,8 @@ export default function World({
           c,
           new T.MeshStandardMaterial({
             color: c,
-            roughness: 0.85,
-            flatShading: true,
+            roughness: 0.7,
+            flatShading: false,
           }),
         );
       return mats.get(c)!;
@@ -107,7 +136,15 @@ export default function World({
       y = 0,
       z = 0,
       p: T.Object3D = scene,
-    ) => mesh(new T.BoxGeometry(w, h, d), c, x, y, z, p);
+    ) =>
+      mesh(
+        new RoundedBoxGeometry(w, h, d, 2, Math.min(w, h, d) * 0.15),
+        c,
+        x,
+        y,
+        z,
+        p,
+      );
     const ball = (
       r: number,
       c: string,
@@ -115,7 +152,7 @@ export default function World({
       y: number,
       z: number,
       p: T.Object3D = scene,
-    ) => mesh(new T.IcosahedronGeometry(r, 1), c, x, y, z, p);
+    ) => mesh(new T.SphereGeometry(r, 14, 10), c, x, y, z, p);
     const cyl = (
       a: number,
       b: number,
@@ -126,11 +163,31 @@ export default function World({
       z: number,
       p: T.Object3D = scene,
     ) => mesh(new T.CylinderGeometry(a, b, h, 10), c, x, y, z, p);
-    const water = mesh(new T.PlaneGeometry(250, 250), '#6ccbd3', 0, -0.65, 0);
+    const water = mesh(new T.PlaneGeometry(250, 250), '#40bacb', 0, -0.65, 0);
     water.rotation.x = -Math.PI / 2;
     water.receiveShadow = false;
-    cyl(10.4, 9.5, 1.3, '#e9cf98', 0, -0.25, 0).scale.z = 0.82;
-    cyl(9.9, 10.3, 0.36, '#8cbd68', 0, 0.52, 0).scale.z = 0.82;
+    cyl(10.4, 9.5, 1.3, '#f1d6a0', 0, -0.25, 0).scale.z = 0.82;
+    cyl(9.9, 10.3, 0.36, '#94cf70', 0, 0.52, 0).scale.z = 0.82;
+    const extraMaterials: T.Material[] = [];
+    const shores: T.Mesh[] = [];
+    for (let i = 0; i < 3; i++) {
+      const m = new T.MeshBasicMaterial({
+        color: '#c4f2df',
+        transparent: true,
+        opacity: 0.35 - i * 0.08,
+        depthWrite: false,
+      });
+      extraMaterials.push(m);
+      const shore = new T.Mesh(
+        new T.RingGeometry(10.4 + i * 0.8, 10.65 + i * 0.8, 72),
+        m,
+      );
+      shore.rotation.x = -Math.PI / 2;
+      shore.scale.y = 0.82;
+      shore.position.y = -0.59 + i * 0.01;
+      scene.add(shore);
+      shores.push(shore);
+    }
     box(2.1, 0.045, 9, '#e1c99c', 0, 0.72, 2);
     box(9, 0.045, 1.45, '#e1c99c', -2, 0.72, 0);
     box(6, 0.045, 1.4, '#e1c99c', 3.5, 0.72, 1);
@@ -144,14 +201,14 @@ export default function World({
       g.position.set(x, 0.72, z);
       scene.add(g);
       cyl(0.22, 0.38, 2.25, '#906748', 0, 1, 0, g);
-      ball(1.48, fruit ? '#5b9c59' : '#4e9461', 0, 2.8, 0, g);
-      ball(0.95, '#73ac62', 0.6, 3.35, 0.1, g);
-      ball(0.95, '#70a45b', -0.75, 2.85, 0.3, g);
+      ball(1.48, fruit ? '#65b267' : '#43a985', 0, 2.8, 0, g);
+      ball(0.95, '#a1d175', 0.6, 3.35, 0.1, g);
+      ball(0.95, '#7bc575', -0.75, 2.85, 0.3, g);
       if (fruit)
         for (let i = 0; i < 6; i++)
           ball(
             0.17,
-            '#dc6551',
+            '#ee795c',
             Math.sin(i * 2) * 1.1,
             2.2 + (i % 3) * 0.35,
             Math.cos(i * 2) * 1.1,
@@ -221,6 +278,52 @@ export default function World({
       box(0.15, 0.8, 0.65, '#775d44', x, 1, -1.5, bench);
     box(0.65, 0.12, 0.35, '#eedfb2', -1.9, 1.58, -1.5, bench);
     mark(bench, 'workshop');
+    // Striped workshop awning, flower boxes, path stones, and garden fences.
+    for (let i = 0; i < 7; i++) {
+      const awning = box(
+        0.48,
+        0.12,
+        1.1,
+        i % 2 ? '#fff4dc' : '#edae73',
+        -1.45 + i * 0.48,
+        2.4,
+        1.7,
+        house,
+      );
+      awning.rotation.x = 0.16;
+    }
+    for (const x of [-1.5, 1.5])
+      cyl(0.045, 0.045, 2.35, '#f6e6bd', x, 1.1, 2.1, house);
+    for (const x of [-1, 1]) {
+      box(0.72, 0.23, 0.36, '#916947', x, 0.9, 1.55, house);
+      for (let i = 0; i < 3; i++)
+        ball(
+          0.12,
+          i % 2 ? '#f4bbd6' : '#ffcf73',
+          x - 0.22 + i * 0.22,
+          1.1,
+          1.55,
+          house,
+        );
+    }
+    for (let i = 0; i < 8; i++) {
+      const p = ball(
+        0.32,
+        '#f5dda9',
+        -0.4 + (i % 2) * 0.75,
+        0.77,
+        -0.2 + i * 0.65,
+      );
+      p.scale.set(1, 0.09, 0.7);
+    }
+    for (let i = 0; i < 6; i++) {
+      const x = 2.8 + i * 0.6;
+      box(0.1, 0.65, 0.1, '#fff0ca', x, 1.05, 4.8);
+      if (i < 5) {
+        box(0.6, 0.09, 0.08, '#ead1a3', x + 0.3, 1.22, 4.8);
+        box(0.6, 0.09, 0.08, '#ead1a3', x + 0.3, 0.96, 4.8);
+      }
+    }
     for (let i = 0; i < 11; i++)
       box(2, 0.16, 0.39, i % 2 ? '#b79569' : '#c5a576', 1, 0.55, 6 + i * 0.43);
     for (const z of [6, 8.3, 10.3])
@@ -236,14 +339,24 @@ export default function World({
       cyl(0.2, 0.28, 0.62, color, 0, 0.66, 0, g);
       ball(0.24, '#edc7a3', 0, 1.22, 0, g);
       ball(0.245, '#76503c', 0, 1.34, -0.045, g).scale.y = 0.65;
+      for (const sx of [-0.08, 0.08])
+        ball(0.026, '#343546', sx, 1.25, 0.216, g);
+      ball(0.035, '#e8a38c', 0, 1.17, 0.237, g);
+      const hat = cyl(0.34, 0.34, 0.075, color, 0, 1.47, 0, g);
+      hat.rotation.z = -0.08;
+      cyl(0.23, 0.24, 0.17, color, 0, 1.57, 0, g);
       for (const sx of [-0.14, 0.14]) {
-        box(0.13, 0.36, 0.15, '#425868', sx, 0.23, 0, g);
-        ball(0.08, '#edc7a3', sx * 2, 0.65, 0, g);
+        const leg = box(0.13, 0.36, 0.15, '#425868', sx, 0.23, 0, g);
+        leg.userData.limb = sx < 0 ? -1 : 1;
+        const arm = ball(0.08, '#edc7a3', sx * 2, 0.65, 0, g);
+        arm.userData.arm = sx < 0 ? -1 : 1;
       }
       return g;
     }
-    mark(person(1.3, 4.6, '#e8b653'), 'visitor');
-    const player = person(0, 2, '#5b85b1');
+    const visitor = person(1.3, 4.6, '#f2bb64');
+    mark(visitor, 'visitor');
+    const player = person(0, 2, '#9373d5');
+    box(0.34, 0.39, 0.2, '#d6a771', 0, 0.73, -0.23, player);
     const halo = mesh(new T.RingGeometry(0.32, 0.4, 32), '#fff4c9', 0, 0.75, 2);
     halo.rotation.x = -Math.PI / 2;
     const marker = mesh(
@@ -255,6 +368,76 @@ export default function World({
     );
     marker.rotation.x = -Math.PI / 2;
     marker.visible = false;
+    const hoverRing = mesh(
+      new T.RingGeometry(0.52, 0.61, 36),
+      '#fff5b9',
+      0,
+      0.79,
+      0,
+    );
+    hoverRing.rotation.x = -Math.PI / 2;
+    hoverRing.visible = false;
+    let hovered: string | null = null;
+    const particles = Array.from({ length: 14 }, (_, i) => {
+      const p = ball(0.08, ['#fff1a4', '#f6b9d1', '#b2e5c9'][i % 3], 0, 0, 0);
+      p.visible = false;
+      return { mesh: p, velocity: new T.Vector3(), life: 0 };
+    });
+    const bumps = new Map<T.Object3D, { time: number; base: T.Vector3 }>();
+    function collect(id: string) {
+      if (reduced) return;
+      for (const o of targets.filter((o) => o.userData.id === id))
+        bumps.set(o, { time: 0, base: o.scale.clone() });
+      particles.forEach((p, i) => {
+        p.life = 1;
+        p.mesh.visible = true;
+        p.mesh.position.copy(player.position).add(new T.Vector3(0, 0.7, 0));
+        p.velocity.set(
+          Math.cos(i * 2.4) * 1.6,
+          2 + (i % 3) * 0.5,
+          Math.sin(i * 2.4) * 1.6,
+        );
+      });
+    }
+    const clouds: T.Group[] = [];
+    for (let i = 0; i < 4; i++) {
+      const g = new T.Group();
+      g.position.set(-15 + i * 10, 5 + (i % 2) * 1.5, -14 - (i % 2) * 4);
+      scene.add(g);
+      for (let j = 0; j < 4; j++)
+        ball(
+          0.75 + (j % 2) * 0.3,
+          '#eefcfa',
+          j * 0.75,
+          Math.sin(j) * 0.3,
+          0,
+          g,
+        );
+      clouds.push(g);
+    }
+    const smoke: T.Mesh[] = [];
+    for (let i = 0; i < 4; i++) {
+      const p = ball(0.2, '#f4f5e9', 0.8, 5 + i * 0.45, -4.1);
+      p.castShadow = false;
+      smoke.push(p);
+    }
+    const butterflies: T.Group[] = [];
+    for (let i = 0; i < 3; i++) {
+      const g = new T.Group();
+      scene.add(g);
+      for (const side of [-1, 1]) {
+        const wing = ball(
+          0.1,
+          i % 2 ? '#c49bea' : '#f4c566',
+          side * 0.1,
+          0,
+          0,
+          g,
+        );
+        wing.scale.z = 0.5;
+      }
+      butterflies.push(g);
+    }
     for (let i = 0; i < 65; i++) {
       const a = i * 2.3999,
         r = 3 + Math.sin(i * 8) * 5,
@@ -325,20 +508,47 @@ export default function World({
     }
     let goal: T.Vector3 | null = null,
       pending: string | null = null;
-    function go(id: string) {
+    let waypoints: T.Vector3[] = [];
+    function plan(x: number, z: number) {
+      waypoints = routeTo(player.position, { x, z }).map(
+        (p) => new T.Vector3(p.x, 0.73, p.z),
+      );
+      goal = waypoints.shift() ?? null;
+      return !!goal;
+    }
+    let lastReport: string | null = null;
+    const report = (id: string | null) => {
+      if (lastReport !== id) {
+        lastReport = id;
+        live.current.onTravel(id);
+      }
+    };
+    function go(id: string, object?: T.Object3D) {
       if (pause.current || !points[id]) return;
-      const [x, z] = points[id];
-      goal = new T.Vector3(x, 0.73, z + 0.7);
+      let [x, z] = points[id];
+      if (object && ['apple', 'wood', 'stone'].includes(id)) {
+        const position = object.getWorldPosition(new T.Vector3());
+        x = position.x;
+        z = position.z;
+      }
+      if (!plan(x, z + 0.7) || !goal) return;
       pending = id;
-      marker.position.set(goal.x, 0.77, goal.z);
+      report(id);
+      marker.position.set(x, 0.77, z + 0.7);
       marker.visible = true;
     }
-    api.current = { go, decorate };
+    let zoomLevel = 1;
+    const zoom = (delta: number) => {
+      zoomLevel = T.MathUtils.clamp(zoomLevel + delta, 0.74, 1.25);
+      resize();
+    };
+    api.current = { go, decorate, zoom };
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), -0.73);
     const down = (e: PointerEvent) => {
       if (pause.current) return;
+      if ((e.target as HTMLElement).closest('button')) return;
       el.focus({ preventScroll: true });
       const rect = el.getBoundingClientRect();
       pointer.set(
@@ -351,22 +561,49 @@ export default function World({
         let o: T.Object3D | null = hits[0].object;
         while (o && !o.userData.id) o = o.parent;
         if (o?.userData.id) {
-          go(o.userData.id);
+          go(o.userData.id, o);
           return;
         }
       }
       const p = new T.Vector3();
-      if (
-        ray.ray.intersectPlane(plane, p) &&
-        (p.x / 9.5) ** 2 + (p.z / 7.5) ** 2 < 1
-      ) {
-        goal = p;
+      if (ray.ray.intersectPlane(plane, p) && walkable(p)) {
+        if (!plan(p.x, p.z)) return;
         pending = null;
+        report('walk');
         marker.position.set(p.x, 0.77, p.z);
         marker.visible = true;
       }
     };
+    const move = (e: PointerEvent) => {
+      if (pause.current || e.pointerType === 'touch') {
+        hovered = null;
+        return;
+      }
+      const pin = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        '[data-object]',
+      );
+      if (pin) {
+        hovered = pin.dataset.object ?? null;
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      pointer.set(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        (-(e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      ray.setFromCamera(pointer, camera);
+      const hit = ray.intersectObjects(targets, true)[0];
+      let object: T.Object3D | null = hit?.object ?? null;
+      while (object && !object.userData.id) object = object.parent;
+      hovered = object?.userData.id ?? null;
+      renderer.domElement.style.cursor = hovered ? 'pointer' : 'crosshair';
+    };
+    const leave = () => {
+      hovered = null;
+    };
     el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerleave', leave);
     const keys = new Set<string>();
     const keydown = (e: KeyboardEvent) => {
       if (
@@ -413,7 +650,9 @@ export default function World({
         h = el!.clientHeight;
       renderer.setSize(w, h);
       camera.aspect = w / h;
-      camera.position.set(19, 22, 26).multiplyScalar(w / h < 0.8 ? 1.4 : 1);
+      camera.position
+        .set(17, 23, 26)
+        .multiplyScalar(Math.max(1, 0.94 / (w / h)) * zoomLevel);
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
     }
@@ -429,6 +668,35 @@ export default function World({
       frame = requestAnimationFrame(animate);
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
+      const viewWidth = el!.clientWidth,
+        viewHeight = el!.clientHeight;
+      const projected = new T.Vector3();
+      for (const [id, [x, z]] of Object.entries(points)) {
+        const pin = pins.current[id];
+        if (!pin) continue;
+        projected.set(x, labels[id].y, z).project(camera);
+        pin.style.left = `${(projected.x * 0.5 + 0.5) * viewWidth}px`;
+        pin.style.top = `${(-projected.y * 0.5 + 0.5) * viewHeight}px`;
+        pin.hidden = pause.current;
+        pin.dataset.active = String(hovered === id || pending === id);
+        const remaining = Math.max(
+          0,
+          Math.ceil(((live.current.cooldowns[id] ?? 0) - Date.now()) / 1000),
+        );
+        pin.dataset.ready = String(!remaining);
+        const countdown = pin.querySelector('em');
+        if (countdown) countdown.textContent = remaining ? `${remaining}s` : '';
+      }
+      SLOTS.forEach(([x, z], i) => {
+        const slot = slots.current[i];
+        if (!slot) return;
+        projected.set(x, 1, z).project(camera);
+        slot.style.left = `${(projected.x * 0.5 + 0.5) * viewWidth}px`;
+        slot.style.top = `${(-projected.y * 0.5 + 0.5) * viewHeight}px`;
+      });
+      hoverRing.visible = !!hovered && !pause.current;
+      if (hovered && points[hovered])
+        hoverRing.position.set(points[hovered][0], 0.79, points[hovered][1]);
       let moving = false;
       if (!pause.current) {
         const dx =
@@ -438,12 +706,16 @@ export default function World({
             (keys.has('s') || keys.has('ArrowDown') ? 1 : 0) -
             (keys.has('w') || keys.has('ArrowUp') ? 1 : 0);
         if (dx || dz) {
+          report('walk');
           goal = null;
+          waypoints = [];
           pending = null;
           marker.visible = false;
-          const nx = player.position.x + (dx * 0.8 + dz * 0.6) * dt * 4,
-            nz = player.position.z + (dz * 0.8 - dx * 0.6) * dt * 4;
-          if ((nx / 9.2) ** 2 + (nz / 7.3) ** 2 < 1) {
+          const length = Math.hypot(dx, dz);
+          const nx =
+              player.position.x + ((dx * 0.8 + dz * 0.6) * dt * 4) / length,
+            nz = player.position.z + ((dz * 0.8 - dx * 0.6) * dt * 4) / length;
+          if (walkable({ x: nx, z: nz })) {
             player.rotation.y = Math.atan2(
               dx * 0.8 + dz * 0.6,
               dz * 0.8 - dx * 0.6,
@@ -455,11 +727,14 @@ export default function World({
           const d = goal.clone().sub(player.position);
           d.y = 0;
           if (d.length() < 0.13) {
-            goal = null;
-            marker.visible = false;
-            const id = pending;
-            pending = null;
-            if (id) interaction.current(id);
+            goal = waypoints.shift() ?? null;
+            if (!goal) {
+              marker.visible = false;
+              const id = pending;
+              pending = null;
+              report(null);
+              if (id && interaction.current(id)) collect(id);
+            }
           } else {
             d.normalize();
             player.position.addScaledVector(
@@ -469,13 +744,79 @@ export default function World({
             player.rotation.y = Math.atan2(d.x, d.z);
             moving = true;
           }
-        }
+        } else report(null);
       }
       player.position.y =
         0.73 +
         (moving && !reduced ? Math.abs(Math.sin(now * 0.012)) * 0.07 : 0);
       halo.position.set(player.position.x, 0.76, player.position.z);
       if (!reduced) {
+        const t = now * 0.001;
+        player.children.forEach((limb) => {
+          if (limb.userData.limb)
+            limb.rotation.x = moving
+              ? Math.sin(now * 0.015) * 0.55 * limb.userData.limb
+              : 0;
+          if (limb.userData.arm)
+            limb.position.z = moving
+              ? Math.sin(now * 0.015) * 0.12 * limb.userData.arm
+              : 0;
+        });
+        visitor.rotation.y = Math.sin(t * 0.4) * 0.15;
+        visitor.children.forEach((o) => {
+          if (o.userData.arm === 1) {
+            o.position.y = 0.85 + Math.sin(t * 3) * 0.12;
+            o.position.x = 0.34;
+          }
+        });
+        clouds.forEach((g, i) => {
+          g.position.x = -15 + i * 10 + Math.sin(t * 0.045 + i) * 2;
+        });
+        smoke.forEach((p, i) => {
+          const cycle = (t * 0.4 + i * 0.25) % 1;
+          p.position.set(0.8 + cycle * 0.4, 5 + cycle * 2, -4.1);
+          p.scale.setScalar(0.4 + Math.sin(cycle * Math.PI) * 1.1);
+        });
+        butterflies.forEach((g, i) => {
+          g.position.set(
+            3.9 + Math.sin(t * 0.6 + i * 2),
+            1.8 + Math.sin(t * 1.5 + i) * 0.4,
+            3.5 + Math.cos(t * 0.6 + i * 2) * 0.8,
+          );
+          g.rotation.y = t + i;
+          g.children.forEach(
+            (wing, j) =>
+              (wing.rotation.z = Math.sin(t * 13) * (j ? 1 : -1) * 0.7),
+          );
+        });
+        shores.forEach((shore, i) =>
+          shore.scale.set(
+            1 + Math.sin(t * 0.5 + i) * 0.02,
+            0.82 + Math.sin(t * 0.5 + i) * 0.015,
+            1,
+          ),
+        );
+        bumps.forEach((b, o) => {
+          b.time += dt;
+          const pulse = Math.sin(b.time * 18) * Math.exp(-b.time * 5);
+          o.scale.set(
+            b.base.x * (1 - pulse * 0.07),
+            b.base.y * (1 + pulse * 0.13),
+            b.base.z * (1 - pulse * 0.07),
+          );
+          if (b.time > 1) {
+            o.scale.copy(b.base);
+            bumps.delete(o);
+          }
+        });
+        particles.forEach((p) => {
+          if (p.life <= 0) return;
+          p.life -= dt * 1.1;
+          p.velocity.y -= dt * 5;
+          p.mesh.position.addScaledVector(p.velocity, dt);
+          p.mesh.scale.setScalar(Math.max(0, p.life));
+          p.mesh.visible = p.life > 0;
+        });
         boat.rotation.z = Math.sin(now * 0.001) * 0.045;
         waves.forEach(
           (w, i) => (w.scale.x = 1 + Math.sin(now * 0.0008 + i) * 0.25),
@@ -484,10 +825,13 @@ export default function World({
       renderer.render(scene, camera);
     }
     frame = requestAnimationFrame(animate);
+    queueMicrotask(() => setReady(true));
     return () => {
       cancelAnimationFrame(frame);
       ro.disconnect();
       el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerleave', leave);
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
@@ -495,6 +839,7 @@ export default function World({
         if (o instanceof T.Mesh) o.geometry.dispose();
       });
       mats.forEach((m) => m.dispose());
+      extraMaterials.forEach((m) => m.dispose());
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
@@ -512,6 +857,54 @@ export default function World({
       role="application"
       aria-label="3D island. Click to walk or use WASD. Click trees, rocks, flowers, the workshop, or the visitor to interact."
     >
+      {!ready && !error && (
+        <div className="world-loading">Growing your little island…</div>
+      )}
+      <div className="world-labels">
+        {Object.entries(labels).map(([id, label]) => (
+          <button
+            key={id}
+            ref={(node) => {
+              pins.current[id] = node;
+            }}
+            className="world-pin"
+            data-object={id}
+            hidden={paused || !ready}
+            aria-label={label.name}
+            onClick={() => api.current?.go(id)}
+          >
+            <span aria-hidden="true">{label.icon}</span>
+            {label.name}
+            <em />
+          </button>
+        ))}
+        {SLOTS.map(([x, z], i) => {
+          const occupied = decorations.some((d) => d.x === x && d.z === z);
+          return (
+            <button
+              key={i}
+              ref={(node) => {
+                slots.current[i] = node;
+              }}
+              className="world-slot"
+              hidden={!placement || !ready}
+              disabled={occupied}
+              aria-label={`Place furniture in ${i < 3 ? 'orchard' : i < 6 ? 'workshop' : 'garden'} spot ${i + 1}${occupied ? ', occupied' : ''}`}
+              onClick={() => onPlace(i)}
+            >
+              {occupied ? '✓' : '+'}
+            </button>
+          );
+        })}
+      </div>
+      <div className="view-controls" aria-label="Camera zoom">
+        <button aria-label="Zoom in" onClick={() => api.current?.zoom(-0.1)}>
+          +
+        </button>
+        <button aria-label="Zoom out" onClick={() => api.current?.zoom(0.1)}>
+          −
+        </button>
+      </div>
       {error && (
         <div className="world-error">
           This device couldn’t start the 3D island. Enable hardware acceleration

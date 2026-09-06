@@ -106,3 +106,33 @@ test('invalid save data falls back safely', () => {
   s.bag.apple = -5;
   assert.deepEqual(restore(JSON.stringify(s)), initialState());
 });
+import { routeTo, walkable, clearPath } from '../lib/navigation.ts';
+test('walking routes around the workshop and refuses water or indoor destinations', () => {
+  const start = { x: -4, z: -4 },
+    end = { x: 4, z: -4 };
+  assert.equal(clearPath(start, end), false);
+  const route = routeTo(start, end);
+  assert.ok(route.length >= 3);
+  assert.deepEqual(route.at(-1), end);
+  let previous = start;
+  for (const p of route) {
+    assert.ok(walkable(p));
+    assert.ok(clearPath(previous, p));
+    previous = p;
+  }
+  assert.deepEqual(routeTo({ x: 0, z: 2 }, { x: 0, z: -3.5 }), []);
+  assert.deepEqual(routeTo({ x: 0, z: 2 }, { x: 20, z: 0 }), []);
+});
+test('all canonical gathering and visitor points remain mutually reachable', () => {
+  const spots = [
+    [-5, -1.3],
+    [-6, 3.7],
+    [5, -2.3],
+    [4, 4.7],
+    [0, -1.3],
+    [1.3, 5.3],
+  ];
+  for (const [x, z] of spots)
+    for (const [tx, tz] of spots)
+      assert.ok(routeTo({ x, z }, { x: tx, z: tz }).length);
+});

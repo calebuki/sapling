@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
   Settings2,
@@ -13,6 +13,8 @@ import {
   Check,
   Plus,
   Minus,
+  X,
+  Sparkles,
 } from 'lucide-react';
 import {
   Dialog,
@@ -48,37 +50,77 @@ export default function Home() {
     [command, setCommand] = useState<{ id: string; nonce: number }>(),
     [toast, setToast] = useState(''),
     [feedback, setFeedback] = useState(''),
+    [speaking, setSpeaking] = useState(false),
     [offer, setOffer] = useState<Inventory>(emptyBag),
     [revealed, setRevealed] = useState<string[]>([]),
     [subtitles, setSubtitles] = useState(false),
     [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]),
     [saving, setSaving] = useState(true),
     [place, setPlace] = useState<Item>('chair'),
-    [helpOpen, setHelpOpen] = useState(false);
+    [helpOpen, setHelpOpen] = useState(false),
+    [walking, setWalking] = useState<string | null>(null),
+    [celebration, setCelebration] = useState<{
+      name: string;
+      reward: number;
+    } | null>(null),
+    [placement, setPlacement] = useState<Item | null>(null),
+    [crafted, setCrafted] = useState<Item | null>(null),
+    [pop, setPop] = useState<{ item: Item; id: number } | null>(null);
   const req = makeRequest(state.completed, state.cycle);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voice = voices.find((v) => /^sv([_-]|$)/i.test(v.lang));
+  const travel = useCallback(
+    (id: string) => {
+      setPanel(null);
+      setDialog(false);
+      setPlacement(null);
+      setCommand((previous) => ({ id, nonce: (previous?.nonce ?? 0) + 1 }));
+    },
+    [setPanel, setDialog, setPlacement, setCommand],
+  );
   useEffect(() => {
     const openBag = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && placement) {
+        setPlacement(null);
+        return;
+      }
       if (
         panel ||
         dialog ||
         helpOpen ||
+        celebration ||
+        placement ||
         /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement)?.tagName)
       )
         return;
-      if (/^[1-7]$/.test(event.key) || event.key.toLowerCase() === 'b') {
+      if (/^[1-7]$/.test(event.key)) {
+        event.preventDefault();
+        const item = (Object.keys(ITEMS) as Item[])[Number(event.key) - 1];
+        travel(resources.includes(item) ? item : 'workshop');
+      } else if (event.key.toLowerCase() === 'b') {
         event.preventDefault();
         setPanel('bag');
       }
     };
     window.addEventListener('keydown', openBag);
     return () => window.removeEventListener('keydown', openBag);
-  }, [panel, dialog, helpOpen]);
+  }, [panel, dialog, helpOpen, celebration, placement, travel]);
   function act(action: Action) {
     const result = transition(current.current, action);
     current.current = result.state;
     setState(result.state);
+    if (
+      result.ok &&
+      (action.type === 'gather' ||
+        action.type === 'craft' ||
+        action.type === 'trade')
+    ) {
+      setPop((previous) => ({
+        item: action.item,
+        id: (previous?.id ?? 0) + 1,
+      }));
+      if (action.type === 'craft') setCrafted(action.item);
+    }
     try {
       localStorage.setItem(KEY, JSON.stringify(result.state));
       setSaving(true);
@@ -101,7 +143,6 @@ export default function Home() {
       }
       current.current = s;
       setState(s);
-      setHelpOpen(!s.welcomed);
       setLoaded(true);
     });
     if ('speechSynthesis' in window) {
@@ -143,6 +184,17 @@ export default function Home() {
     u.voice = voice;
     u.lang = 'sv-SE';
     u.rate = slow ? 0.64 : 0.86;
+    u.onstart = () => setSpeaking(true);
+    u.onend = () => setSpeaking(false);
+    u.onerror = (event) => {
+      setSpeaking(false);
+      if (event.error !== 'canceled' && event.error !== 'interrupted') {
+        setSubtitles(true);
+        setToast(
+          'Audio couldn’t play. Try Listen again, or use the subtitles.',
+        );
+      }
+    };
     window.speechSynthesis.speak(u);
   }
   function openVisitor() {
@@ -181,14 +233,10 @@ export default function Home() {
   function interact(id: string) {
     if (resources.includes(id as Item))
       // oxlint-disable-next-line react/react-compiler -- Invoked by the world's input/arrival callback, never during render.
-      act({ type: 'gather', item: id as Item, now: Date.now() });
+      return act({ type: 'gather', item: id as Item, now: Date.now() }).ok;
     else if (id === 'visitor') openVisitor();
     else if (id === 'workshop') setPanel('workshop');
-  }
-  function travel(id: string) {
-    setPanel(null);
-    setDialog(false);
-    setCommand({ id, nonce: Date.now() });
+    return false;
   }
   function hint(key?: string) {
     if (hintTimer.current) clearTimeout(hintTimer.current);
@@ -201,6 +249,8 @@ export default function Home() {
     if (r.ok) {
       setDialog(false);
       setOffer(emptyBag());
+      setToast('');
+      setCelebration({ name: req.visitor, reward: req.reward });
     } else {
       setFeedback(r.message);
       setToast('');
@@ -264,15 +314,34 @@ export default function Home() {
       <World
         onInteract={interact}
         decorations={state.decorations}
-        paused={!loaded || !!panel || dialog || helpOpen}
+        paused={
+          !loaded ||
+          !!panel ||
+          dialog ||
+          helpOpen ||
+          !!celebration ||
+          !!placement
+        }
         command={command}
+        onTravel={setWalking}
+        cooldowns={state.cooldowns}
+        placement={placement}
+        onPlace={(slot) => {
+          if (!placement) return;
+          const r = act({ type: 'place', item: placement, slot });
+          if (r.ok) setPlacement(null);
+        }}
       />
       <header className="topbar">
         <div className="brand">
           lilla<span>ISLAND WORKSHOP</span>
         </div>
         <div className="top-right">
-          <div className="pill language">
+          <button
+            className="pill language"
+            aria-label="Change learning support"
+            onClick={() => setPanel('settings')}
+          >
             <span className="flag">🇸🇪</span> Swedish <span className="dot" />{' '}
             <span className="soft">
               {state.mode === 'guided'
@@ -281,7 +350,7 @@ export default function Home() {
                   ? 'Listening first'
                   : 'Immersive'}
             </span>
-          </div>
+          </button>
           <div className="pill currency">
             <Shell size={18} />
             <b>{state.coins}</b>
@@ -297,17 +366,40 @@ export default function Home() {
       </header>
       <section className="island-title">
         <span className="eyebrow">A LITTLE MORE LIKE HOME</span>
-        <h1>
-          Your island,
-          <br />
-          one word at a time.
-        </h1>
+        <h1>A little island. All yours.</h1>
         <div className="island-progress">
           <Sprout size={16} />
           <span>{state.completed} neighbors helped</span>
           <i /> <span>{learned} familiar words</span>
         </div>
       </section>
+      {loaded &&
+        state.completed === 0 &&
+        !dialog &&
+        !panel &&
+        !helpOpen &&
+        !placement && (
+          <section className="coach">
+            <strong>
+              {state.heard
+                ? 'A little gathering adventure'
+                : 'Your first island friend'}
+            </strong>
+            <p>
+              {state.heard
+                ? 'Tap a resource marker to gather. Come back when you have something to give.'
+                : `${req.visitor} has a small request. Head to the dock and listen.`}
+            </p>
+            <button
+              onClick={() =>
+                state.heard ? setPanel('bag') : travel('visitor')
+              }
+            >
+              {state.heard ? 'Explore your bag' : 'Meet ' + req.visitor}
+              <ArrowRight size={15} />
+            </button>
+          </section>
+        )}
       <aside className="request-card">
         <div className="request-top">
           <span className="eyebrow">AT THE DOCK</span>
@@ -320,24 +412,38 @@ export default function Home() {
             <span>{req.role}</span>
           </div>
         </div>
-        <p>A little help goes a long way.</p>
+        <p
+          className={
+            state.heard && state.mode === 'guided' ? 'request-memory' : ''
+          }
+        >
+          {state.heard && state.mode === 'guided'
+            ? req.tokens.map((w) => w.sv).join(' ')
+            : state.heard
+              ? 'Ready when you are.'
+              : 'Someone could use a hand.'}
+        </p>
         <button className="primary" onClick={() => travel('visitor')}>
-          Go say hello <ArrowRight size={17} />
+          {state.heard ? 'Back to ' + req.visitor : 'Say hej!'}{' '}
+          <ArrowRight size={17} />
         </button>
         <div className="reward">
           <Shell size={14} /> {req.reward} shells for helping
         </div>
       </aside>
       <nav className="side-tools" aria-label="Island tools">
-        <button onClick={() => travel('workshop')}>
+        <button aria-label="Workshop" onClick={() => travel('workshop')}>
           <Hammer size={20} />
           <span>Workshop</span>
         </button>
-        <button onClick={() => setPanel('decorate')}>
+        <button
+          aria-label="Decorate island"
+          onClick={() => setPanel('decorate')}
+        >
           <Sprout size={20} />
           <span>Decorate</span>
         </button>
-        <button onClick={() => setPanel('journal')}>
+        <button aria-label="Word journal" onClick={() => setPanel('journal')}>
           <BookOpen size={20} />
           <span>Words</span>
         </button>
@@ -351,17 +457,23 @@ export default function Home() {
           </button>
         </div>
         <div className="inventory-bar">
-          <div className="bag-label">
+          <button
+            className="bag-label"
+            aria-label="Open your bag"
+            onClick={() => setPanel('bag')}
+          >
             <Backpack size={22} />
             <span>YOUR BAG</span>
-          </div>
+          </button>
           {(Object.keys(ITEMS) as Item[]).map((id, i) => (
             <button
-              key={id}
+              key={`${id}-${pop?.item === id ? pop.id : 0}`}
               className="bag-slot"
-              title={`${ITEMS[id].name}: ${state.bag[id]}`}
+              data-pop={pop?.item === id}
+              aria-label={`${resources.includes(id) ? 'Gather ' + ITEMS[id].name : 'Visit workshop for ' + ITEMS[id].name}. ${state.bag[id]} in bag`}
+              title={`${resources.includes(id) ? 'Gather ' + ITEMS[id].name : 'Craft ' + ITEMS[id].name} · ${state.bag[id]} in bag`}
               onClick={() => {
-                setPanel('bag');
+                travel(resources.includes(id) ? id : 'workshop');
               }}
             >
               <span className="slot-key">{i + 1}</span>
@@ -376,11 +488,82 @@ export default function Home() {
             : 'Storage unavailable — progress will be lost when you leave'}
         </div>
       </div>
+      {walking && !dialog && !panel && !placement && (
+        <output className="travel-pill">
+          <i />{' '}
+          {walking === 'visitor'
+            ? `Off to see ${req.visitor}…`
+            : walking === 'workshop'
+              ? 'Off to the workshop…'
+              : walking === 'walk'
+                ? 'A little stroll…'
+                : `Finding ${ITEMS[walking as Item]?.name.toLowerCase() ?? 'a spot'}…`}
+        </output>
+      )}
+      {placement && (
+        <div className="placement-toolbar">
+          <span>{ITEMS[placement].icon}</span>
+          <div>
+            <b>Find a home for your {ITEMS[placement].name.toLowerCase()}</b>
+            <small>Tap a + spot on the island</small>
+          </div>
+          <button
+            aria-label="Cancel furniture placement"
+            onClick={() => setPlacement(null)}
+          >
+            <X size={19} />
+          </button>
+        </div>
+      )}
       {toast && (
         <output className="toast" aria-live="polite">
           {toast}
         </output>
       )}
+      <Dialog
+        open={!!celebration}
+        onOpenChange={(v) => {
+          if (!v) setCelebration(null);
+        }}
+      >
+        <DialogContent className="game-modal success-card">
+          <div className="confetti" aria-hidden="true">
+            {Array.from({ length: 18 }, (_, i) => (
+              <i
+                key={i}
+                style={
+                  {
+                    '--x': `${(i * 37) % 100}%`,
+                    '--c': ['#f7cd61', '#9bd9b4', '#a98ae1', '#f3a09b'][i % 4],
+                    '--delay': `${(i % 6) * 0.08}s`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+          <div className="success-stamp">
+            <Check size={48} strokeWidth={3} />
+          </div>
+          <DialogTitle className="modal-title">
+            You made someone’s day.
+          </DialogTitle>
+          <DialogDescription>
+            {celebration?.name} says “Tack så mycket!”
+          </DialogDescription>
+          <div className="success-reward">
+            <Shell size={24} /> +{celebration?.reward} shells
+          </div>
+          {[2, 4].includes(state.completed) && (
+            <p className="unlock-note">
+              <Sparkles size={17} /> New recipe:{' '}
+              {state.completed === 2 ? 'flowerpot' : 'table'}!
+            </p>
+          )}
+          <button className="primary" onClick={() => setCelebration(null)}>
+            Keep exploring <ArrowRight size={17} />
+          </button>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={helpOpen}
         onOpenChange={(v) => {
@@ -446,7 +629,7 @@ export default function Home() {
             </div>
             <span className="speech-language">SVENSKA</span>
           </div>
-          <div className="sentence-area">
+          <div className={`sentence-area ${speaking ? 'is-speaking' : ''}`}>
             {subtitles ? (
               <div className="sentence" lang="sv">
                 {req.tokens.map((w, i) => (
@@ -487,6 +670,7 @@ export default function Home() {
               Slower
             </button>
             <button
+              aria-pressed={subtitles}
               onClick={() => {
                 setSubtitles(!subtitles);
               }}
@@ -536,9 +720,34 @@ export default function Home() {
               ))}
           </div>
           {Object.values(state.bag).every((n) => n === 0) && (
-            <p className="empty-note">
-              Your bag is empty. Gather a few things around the island first.
-            </p>
+            <>
+              <p className="empty-note">
+                Your bag is empty. Pick a spot to explore.
+              </p>
+              <div className="quick-gather">
+                {resources.map((id) => (
+                  <button
+                    key={id}
+                    aria-label={`Gather ${ITEMS[id].name}`}
+                    onClick={() => travel(id)}
+                  >
+                    {ITEMS[id].icon}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {Object.values(offer).some((n) => n > 0) && (
+            <div className="selection-summary">
+              You’re giving
+              {(Object.keys(ITEMS) as Item[])
+                .filter((id) => offer[id] > 0)
+                .map((id) => (
+                  <span key={id}>
+                    {ITEMS[id].icon} × {offer[id]}
+                  </span>
+                ))}
+            </div>
           )}
           {feedback && <output className="feedback">{feedback}</output>}
           <div className="dialog-footer">
@@ -678,15 +887,17 @@ export default function Home() {
                           </h3>
                           <div className="costs">
                             {Object.entries(r.cost).map(([k, n]) => (
-                              <span
+                              <button
                                 className={
                                   state.bag[k as Item] < n! ? 'missing' : ''
                                 }
                                 key={k}
+                                aria-label={`Gather ${ITEMS[k as Item].name}; ${state.bag[k as Item]} of ${n} available`}
+                                onClick={() => travel(k)}
                               >
                                 {ITEMS[k as Item].icon} {state.bag[k as Item]}/
                                 {n}
-                              </span>
+                              </button>
                             ))}
                           </div>
                           {locked && (
@@ -704,6 +915,18 @@ export default function Home() {
                     );
                   })}
                 </div>
+                {crafted && state.bag[crafted] > 0 && (
+                  <button
+                    className="primary place-crafted"
+                    onClick={() => {
+                      setPlacement(crafted);
+                      setPanel(null);
+                    }}
+                  >
+                    Place your {ITEMS[crafted].name.toLowerCase()} on the island{' '}
+                    <Sprout size={18} />
+                  </button>
+                )}
               </TabsContent>
               <TabsContent value="supplies">
                 <p className="fine">
@@ -800,6 +1023,21 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              <button
+                className="primary"
+                disabled={
+                  !state.bag[place] || state.decorations.length >= SLOTS.length
+                }
+                onClick={() => {
+                  setPlacement(place);
+                  setPanel(null);
+                }}
+              >
+                {state.decorations.length >= SLOTS.length
+                  ? 'All spots are filled'
+                  : 'Choose a spot on the island'}
+                <ArrowRight size={17} />
+              </button>
               <div className="placement-grid">
                 {SLOTS.map(([x, z], i) => {
                   const d = state.decorations.find(

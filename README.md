@@ -10,7 +10,7 @@ A standalone 3D browser game for learning Swedish through a repeatable gathering
 - Craft chairs, flowerpots, and tables. Recipes unlock after 0, 2, and 4 deliveries.
 - Place furniture in eight island spots and return it to your bag at any time.
 - Earn shells through deliveries and exchange them for optional supply bundles.
-- Press B or 1–7 to inspect your bag.
+- Press B to inspect your bag; 1–7 are gathering/workshop shortcuts.
 
 ## Learning and storage
 
@@ -33,8 +33,12 @@ The original scaffold's `npm run lint` includes unrelated preinstalled UI compon
 
 ## Validation and limits
 
-Seven engine tests cover wrong-delivery safety, resource cooldowns and crafting costs, per-word help credit, repeated exposure protection, decoration inventory, corrupt saves, and 100 consecutive fulfillable requests with save/restore checks. TypeScript and the production build are also checked.
+Nine focused tests cover walking routes around the workshop, reachable interaction spots, wrong-delivery safety, resource cooldowns and crafting costs, per-word help credit, repeated exposure protection, decoration inventory, corrupt saves, and 100 consecutive fulfillable requests with save/restore checks. TypeScript and the production build are also checked.
 
 Browser interaction and visual QA were not performed in this implementation pass. The optional, feature-detected read-only WebMCP progress tool has not been verified in a supporting browser context.
 
 This is a playable foundation with four resource types, three recipes, and composable Swedish request patterns. It is not an extensive curriculum or a full sandbox survival game.
+
+## Playful UI refresh
+
+Inspired by the tangible 3D interaction and rounded graphic treatments on https://recent.design/. The interface uses raised buttons, larger touch targets, visible world markers and resource cooldowns, movement feedback, inventory arrival animations, and delivery celebrations. Initial guidance is an unobtrusive in-world card. Missing crafting ingredients lead directly to gathering; furniture can be placed using actual world-space spots. A responsive camera and zoom controls support smaller screens. Ambient animation and collection particles respect reduced-motion preferences. Existing saves and learning evidence are preserved.

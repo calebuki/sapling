@@ -13,7 +13,7 @@
     "format": "oxfmt",
     "test": "node --test tests/game.test.mjs",
     "typecheck": "tsc --noEmit",
-    "lint:game": "oxlint app lib/game.ts"
+    "lint:game": "oxlint app lib/game.ts lib/navigation.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
