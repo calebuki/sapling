@@ -1367,3 +1367,63 @@ body {
 .inventory-bar .bag-slot {
   flex-shrink: 0;
 }
+.home-customize {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.home-customize label,
+.coordinate-placement label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.home-customize input,
+.coordinate-placement input,
+.coordinate-placement select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e3deee;
+  border-radius: 12px;
+  background: #fff;
+}
+.paint-palette {
+  display: flex;
+  gap: 12px;
+}
+.paint-palette button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 0 #0002;
+}
+.paint-palette button[aria-pressed='true'] {
+  outline: 3px solid #675487;
+  outline-offset: 2px;
+}
+.expansion-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: #ecf2e4;
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.coordinate-placement {
+  margin-top: 16px;
+}
+.coordinate-placement summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.coordinate-placement form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 12px;
+}
+.placement-toolbar {
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+}

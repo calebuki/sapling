@@ -1,8 +1,9 @@
 export type Point = { x: number; z: number };
-export function walkable(p: Point) {
+export function walkable(p: Point, expansion = 0) {
   return (
-    (p.x / 9.2) ** 2 + (p.z / 7.3) ** 2 < 1 &&
-    !(p.x > -1.7 && p.x < 1.7 && p.z > -5.25 && p.z < -2.2)
+    (p.x / (9.2 + expansion * 1.8)) ** 2 +
+      (p.z / (7.3 + expansion * 1.45)) ** 2 <
+      1 && !(p.x > -1.7 && p.x < 1.7 && p.z > -5.25 && p.z < -2.2)
   );
 }
 const corners: Point[] = [
@@ -11,19 +12,24 @@ const corners: Point[] = [
   { x: -1.9, z: -2 },
   { x: 1.9, z: -2 },
 ];
-export function clearPath(a: Point, b: Point) {
+export function clearPath(a: Point, b: Point, expansion = 0) {
   const steps = Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.1);
   for (let i = 0; i <= steps; i++) {
     const t = steps ? i / steps : 0;
-    if (!walkable({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t }))
+    if (
+      !walkable(
+        { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t },
+        expansion,
+      )
+    )
       return false;
   }
   return true;
 }
 // A tiny visibility graph routes around the cabin without a per-frame pathfinder.
-export function routeTo(start: Point, end: Point): Point[] {
-  if (!walkable(start) || !walkable(end)) return [];
-  if (clearPath(start, end)) return [end];
+export function routeTo(start: Point, end: Point, expansion = 0): Point[] {
+  if (!walkable(start, expansion) || !walkable(end, expansion)) return [];
+  if (clearPath(start, end, expansion)) return [end];
   const nodes = [start, ...corners, end],
     distance = nodes.map(() => Infinity),
     previous = nodes.map(() => -1),
@@ -44,7 +50,8 @@ export function routeTo(start: Point, end: Point): Point[] {
     }
     visited.add(at);
     for (let next = 0; next < nodes.length; next++) {
-      if (visited.has(next) || !clearPath(nodes[at], nodes[next])) continue;
+      if (visited.has(next) || !clearPath(nodes[at], nodes[next], expansion))
+        continue;
       const cost =
         distance[at] +
         Math.hypot(nodes[at].x - nodes[next].x, nodes[at].z - nodes[next].z);

@@ -2,10 +2,17 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { SLOTS } from '@/lib/game';
+import { canPlace } from '@/lib/game';
 import { routeTo, walkable } from '@/lib/navigation';
 import Vocab from './vocab';
-export type Decoration = { id: string; kind: string; x: number; z: number };
+export type Decoration = {
+  id: string;
+  kind: string;
+  x: number;
+  z: number;
+  rotation?: number;
+  color?: string;
+};
 type Props = {
   onInteract: (id: string) => boolean;
   decorations: Decoration[];
@@ -14,7 +21,10 @@ type Props = {
   onTravel: (id: string | null) => void;
   cooldowns: Partial<Record<string, number>>;
   placement: string | null;
-  onPlace: (slot: number) => void;
+  onPlace: (x: number, z: number) => void;
+  expansion: number;
+  visitorAvailable: boolean;
+  roofColor: string;
   onWordHelp: (key: string) => void;
 };
 const labels: Record<
@@ -46,13 +56,42 @@ export default function World({
   placement,
   onPlace,
   onWordHelp,
+  expansion,
+  visitorAvailable,
+  roofColor,
 }: Props) {
   const pins = useRef<Record<string, HTMLButtonElement | null>>({});
-  const slots = useRef<Record<number, HTMLButtonElement | null>>({});
-  const live = useRef({ onTravel, cooldowns, placement });
+  const live = useRef({
+    onTravel,
+    cooldowns,
+    placement,
+    onPlace,
+    expansion,
+    visitorAvailable,
+    roofColor,
+    decorations,
+  });
   useEffect(() => {
-    live.current = { onTravel, cooldowns, placement };
-  }, [onTravel, cooldowns, placement]);
+    live.current = {
+      onTravel,
+      cooldowns,
+      placement,
+      onPlace,
+      expansion,
+      visitorAvailable,
+      roofColor,
+      decorations,
+    };
+  }, [
+    onTravel,
+    cooldowns,
+    placement,
+    onPlace,
+    expansion,
+    visitorAvailable,
+    roofColor,
+    decorations,
+  ]);
   const host = useRef<HTMLDivElement>(null),
     api = useRef<{
       go: (id: string) => void;
@@ -172,8 +211,10 @@ export default function World({
     const water = mesh(new T.PlaneGeometry(250, 250), '#40bacb', 0, -0.65, 0);
     water.rotation.x = -Math.PI / 2;
     water.receiveShadow = false;
-    cyl(10.4, 9.5, 1.3, '#f1d6a0', 0, -0.25, 0).scale.z = 0.82;
-    cyl(9.9, 10.3, 0.36, '#94cf70', 0, 0.52, 0).scale.z = 0.82;
+    const landBase = cyl(10.4, 9.5, 1.3, '#f1d6a0', 0, -0.25, 0);
+    landBase.scale.z = 0.82;
+    const landTop = cyl(9.9, 10.3, 0.36, '#94cf70', 0, 0.52, 0);
+    landTop.scale.z = 0.82;
     const extraMaterials: T.Material[] = [];
     const shores: T.Mesh[] = [];
     for (let i = 0; i < 3; i++) {
@@ -483,19 +524,20 @@ export default function World({
         const g = new T.Group();
         g.position.set(d.x, 0.75, d.z);
         deco.add(g);
+        g.rotation.y = ((d.rotation ?? 0) * Math.PI) / 180;
         if (d.kind === 'chair') {
-          box(0.7, 0.12, 0.65, '#dfb475', 0, 0.6, 0, g);
-          box(0.7, 0.7, 0.1, '#dfb475', 0, 1, -0.28, g);
+          box(0.7, 0.12, 0.65, d.color ?? '#dfb475', 0, 0.6, 0, g);
+          box(0.7, 0.7, 0.1, d.color ?? '#dfb475', 0, 1, -0.28, g);
           for (const x of [-0.25, 0.25])
             for (const z of [-0.24, 0.24])
               box(0.09, 0.6, 0.09, '#946d43', x, 0.3, z, g);
         } else if (d.kind === 'table') {
-          box(1.2, 0.13, 0.85, '#d7ae72', 0, 0.85, 0, g);
+          box(1.2, 0.13, 0.85, d.color ?? '#d7ae72', 0, 0.85, 0, g);
           for (const x of [-0.45, 0.45])
             for (const z of [-0.3, 0.3])
               box(0.1, 0.85, 0.1, '#926e48', x, 0.43, z, g);
         } else {
-          cyl(0.3, 0.21, 0.45, '#c47b54', 0, 0.23, 0, g);
+          cyl(0.3, 0.21, 0.45, d.color ?? '#c47b54', 0, 0.23, 0, g);
           for (let i = 0; i < 5; i++) {
             cyl(
               0.025,
@@ -516,9 +558,11 @@ export default function World({
       pending: string | null = null;
     let waypoints: T.Vector3[] = [];
     function plan(x: number, z: number) {
-      waypoints = routeTo(player.position, { x, z }).map(
-        (p) => new T.Vector3(p.x, 0.73, p.z),
-      );
+      waypoints = routeTo(
+        player.position,
+        { x, z },
+        live.current.expansion,
+      ).map((p) => new T.Vector3(p.x, 0.73, p.z));
       goal = waypoints.shift() ?? null;
       return !!goal;
     }
@@ -530,7 +574,12 @@ export default function World({
       }
     };
     function go(id: string, object?: T.Object3D) {
-      if (pause.current || !points[id]) return;
+      if (
+        pause.current ||
+        !points[id] ||
+        (id === 'visitor' && !live.current.visitorAvailable)
+      )
+        return;
       let [x, z] = points[id];
       if (object && ['apple', 'wood', 'stone'].includes(id)) {
         const position = object.getWorldPosition(new T.Vector3());
@@ -553,7 +602,7 @@ export default function World({
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), -0.73);
     const down = (e: PointerEvent) => {
-      if (pause.current) return;
+      if (pause.current && !live.current.placement) return;
       if ((e.target as HTMLElement).closest('button')) return;
       el.focus({ preventScroll: true });
       const rect = el.getBoundingClientRect();
@@ -562,6 +611,15 @@ export default function World({
         (-(e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       ray.setFromCamera(pointer, camera);
+      if (live.current.placement) {
+        const p = new T.Vector3();
+        if (ray.ray.intersectPlane(plane, p))
+          live.current.onPlace(
+            Math.round(p.x * 4) / 4,
+            Math.round(p.z * 4) / 4,
+          );
+        return;
+      }
       const hits = ray.intersectObjects(targets, true);
       if (hits.length) {
         let o: T.Object3D | null = hits[0].object;
@@ -572,7 +630,10 @@ export default function World({
         }
       }
       const p = new T.Vector3();
-      if (ray.ray.intersectPlane(plane, p) && walkable(p)) {
+      if (
+        ray.ray.intersectPlane(plane, p) &&
+        walkable(p, live.current.expansion)
+      ) {
         if (!plan(p.x, p.z)) return;
         pending = null;
         report('walk');
@@ -580,7 +641,46 @@ export default function World({
         marker.visible = true;
       }
     };
+    const placementRing = mesh(
+      new T.RingGeometry(0.65, 0.73, 32),
+      '#a8c58a',
+      0,
+      0.78,
+      0,
+    );
+    placementRing.rotation.x = -Math.PI / 2;
+    placementRing.visible = false;
     const move = (e: PointerEvent) => {
+      if (live.current.placement) {
+        const rect = el.getBoundingClientRect();
+        pointer.set(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          (-(e.clientY - rect.top) / rect.height) * 2 + 1,
+        );
+        ray.setFromCamera(pointer, camera);
+        const p = new T.Vector3();
+        if (ray.ray.intersectPlane(plane, p)) {
+          p.x = Math.round(p.x * 4) / 4;
+          p.z = Math.round(p.z * 4) / 4;
+          placementRing.position.set(p.x, 0.78, p.z);
+          placementRing.visible = true;
+          placementRing.material = mat(
+            canPlace(
+              {
+                expansion: live.current.expansion,
+                decorations: live.current.decorations as Parameters<
+                  typeof canPlace
+                >[0]['decorations'],
+              },
+              p.x,
+              p.z,
+            )
+              ? '#a8c58a'
+              : '#eaa6a0',
+          );
+        }
+        return;
+      }
       if (pause.current || e.pointerType === 'touch') {
         hovered = null;
         return;
@@ -658,7 +758,11 @@ export default function World({
       camera.aspect = w / h;
       camera.position
         .set(17, 23, 26)
-        .multiplyScalar(Math.max(1, 0.94 / (w / h)) * zoomLevel);
+        .multiplyScalar(
+          Math.max(1, 0.94 / (w / h)) *
+            zoomLevel *
+            (1 + live.current.expansion * 0.15),
+        );
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
     }
@@ -672,6 +776,16 @@ export default function World({
     ).matches;
     function animate(now: number) {
       frame = requestAnimationFrame(animate);
+      visitor.visible = live.current.visitorAvailable;
+      placementRing.visible = !!live.current.placement && placementRing.visible;
+      const scale = 1 + live.current.expansion * 0.19;
+      if (landTop.scale.x !== scale) {
+        landTop.scale.set(scale, 1, scale * 0.82);
+        landBase.scale.set(scale, 1, scale * 0.82);
+        shores.forEach((o) => o.scale.set(scale, scale * 0.82, 1));
+        resize();
+      }
+      roof.material = mat(live.current.roofColor);
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       const viewWidth = el!.clientWidth,
@@ -683,7 +797,8 @@ export default function World({
         projected.set(x, labels[id].y, z).project(camera);
         pin.style.left = `${(projected.x * 0.5 + 0.5) * viewWidth}px`;
         pin.style.top = `${(-projected.y * 0.5 + 0.5) * viewHeight}px`;
-        pin.hidden = pause.current;
+        pin.hidden =
+          pause.current || (id === 'visitor' && !live.current.visitorAvailable);
         pin.dataset.active = String(hovered === id || pending === id);
         const remaining = Math.max(
           0,
@@ -693,13 +808,6 @@ export default function World({
         const countdown = pin.querySelector('em');
         if (countdown) countdown.textContent = remaining ? `${remaining}s` : '';
       }
-      SLOTS.forEach(([x, z], i) => {
-        const slot = slots.current[i];
-        if (!slot) return;
-        projected.set(x, 1, z).project(camera);
-        slot.style.left = `${(projected.x * 0.5 + 0.5) * viewWidth}px`;
-        slot.style.top = `${(-projected.y * 0.5 + 0.5) * viewHeight}px`;
-      });
       hoverRing.visible = !!hovered && !pause.current;
       if (hovered && points[hovered])
         hoverRing.position.set(points[hovered][0], 0.79, points[hovered][1]);
@@ -721,7 +829,7 @@ export default function World({
           const nx =
               player.position.x + ((dx * 0.8 + dz * 0.6) * dt * 4) / length,
             nz = player.position.z + ((dz * 0.8 - dx * 0.6) * dt * 4) / length;
-          if (walkable({ x: nx, z: nz })) {
+          if (walkable({ x: nx, z: nz }, live.current.expansion)) {
             player.rotation.y = Math.atan2(
               dx * 0.8 + dz * 0.6,
               dz * 0.8 - dx * 0.6,
@@ -887,24 +995,6 @@ export default function World({
             <em />
           </Vocab>
         ))}
-        {SLOTS.map(([x, z], i) => {
-          const occupied = decorations.some((d) => d.x === x && d.z === z);
-          return (
-            <button
-              key={i}
-              ref={(node) => {
-                slots.current[i] = node;
-              }}
-              className="world-slot"
-              hidden={!placement || !ready}
-              disabled={occupied}
-              aria-label={`Place furniture in ${i < 3 ? 'orchard' : i < 6 ? 'workshop' : 'garden'} spot ${i + 1}${occupied ? ', occupied' : ''}`}
-              onClick={() => onPlace(i)}
-            >
-              {occupied ? '✓' : '+'}
-            </button>
-          );
-        })}
       </div>
       <div className="view-controls" aria-label="Camera zoom">
         <button aria-label="Zoom in" onClick={() => api.current?.zoom(-0.1)}>

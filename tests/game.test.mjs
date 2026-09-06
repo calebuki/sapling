@@ -8,6 +8,9 @@ import {
   ITEMS,
   RECIPES,
   restore,
+  visitorDelay,
+  COLORS,
+  EXPANSION_COSTS,
 } from '../lib/game.ts';
 const run = (s, a) => transition(s, a).state;
 test('wrong delivery does not consume resources or grant rewards', () => {
@@ -74,7 +77,7 @@ test('100 consecutive requests are fulfillable with unlocked recipes and preserv
   }
   for (let i = 0; i < 100; i++) {
     const req = makeRequest(s.completed, s.cycle);
-    s = run(s, { type: 'hear' });
+    s = run(s, { type: 'hear', now: s.nextVisitorAt });
     for (const [id, n] of Object.entries(req.needs)) {
       kinds.add(id);
       if (RECIPES[id]) {
@@ -90,6 +93,8 @@ test('100 consecutive requests are fulfillable with unlocked recipes and preserv
     }
     const r = transition(s, {
       type: 'offer',
+      now: s.nextVisitorAt,
+      random: 0.5,
       bag: { ...emptyBag(), ...req.needs },
     });
     assert.ok(r.ok);
@@ -135,4 +140,93 @@ test('all canonical gathering and visitor points remain mutually reachable', () 
   for (const [x, z] of spots)
     for (const [tx, tz] of spots)
       assert.ok(routeTo({ x, z }, { x: tx, z: tz }).length);
+});
+
+test('visits vary, survive reload, and cannot be opened or skipped early', () => {
+  assert.equal(visitorDelay(0), 25000);
+  assert.equal(visitorDelay(1), 90000);
+  let s = initialState();
+  s.bag.apple = 1;
+  s = run(s, {
+    type: 'offer',
+    bag: { ...emptyBag(), apple: 1 },
+    now: 1000,
+    random: 0.5,
+  });
+  assert.equal(s.nextVisitorAt, 58500);
+  s = restore(JSON.stringify(s));
+  for (const type of ['hear', 'skip'])
+    assert.equal(transition(s, { type, now: 58499 }).ok, false);
+  assert.equal(
+    transition(s, { type: 'offer', bag: emptyBag(), now: 58499 }).ok,
+    false,
+  );
+  assert.equal(transition(s, { type: 'hear', now: 58500 }).ok, true);
+  s = run(s, { type: 'skip', now: 58500, random: 1 });
+  assert.equal(s.nextVisitorAt, 148500);
+});
+test('free placement preserves color and rotation, rejects obstacles, and refunds inventory', () => {
+  let s = initialState();
+  s.bag.chair = 3;
+  for (const [x, z] of [
+    [0, -3],
+    [-5, -2],
+    [40, 40],
+    [NaN, 2],
+  ])
+    assert.equal(
+      transition(s, { type: 'place', item: 'chair', x, z }).ok,
+      false,
+    );
+  s = run(s, {
+    type: 'place',
+    item: 'chair',
+    x: -3.25,
+    z: 1.75,
+    rotation: 90,
+    color: COLORS[2],
+  });
+  assert.equal(s.decorations[0].rotation, 90);
+  assert.equal(s.decorations[0].color, COLORS[2]);
+  assert.deepEqual(restore(JSON.stringify(s)), s);
+  assert.equal(
+    transition(s, { type: 'place', item: 'chair', x: -3, z: 2 }).ok,
+    false,
+  );
+  s = run(s, { type: 'remove', id: s.decorations[0].id });
+  assert.equal(s.bag.chair, 3);
+});
+test('expansion costs shells, unlocks actual walkable land, and is bounded', () => {
+  let s = initialState();
+  s.bag.chair = 1;
+  assert.equal(transition(s, { type: 'expand' }).ok, false);
+  assert.equal(
+    transition(s, { type: 'place', item: 'chair', x: 10, z: 0 }).ok,
+    false,
+  );
+  s.coins = 300;
+  for (let i = 0; i < 3; i++) {
+    const before = s.coins;
+    s = run(s, { type: 'expand' });
+    assert.equal(s.coins, before - EXPANSION_COSTS[i]);
+  }
+  assert.equal(transition(s, { type: 'expand' }).ok, false);
+  assert.equal(walkable({ x: 12, z: 0 }, s.expansion), true);
+  assert.ok(routeTo({ x: 0, z: 2 }, { x: 12, z: 0 }, s.expansion).length);
+  s = run(s, { type: 'place', item: 'chair', x: 10, z: 0 });
+  assert.equal(s.decorations.length, 1);
+  assert.deepEqual(restore(JSON.stringify(s)), s);
+});
+test('old saves retain their inventory and furniture; customization persists', () => {
+  let s = initialState();
+  s.bag.table = 2;
+  s.decorations = [{ id: 'chair-0', kind: 'chair', x: -3, z: 2 }];
+  for (const key of ['expansion', 'nextVisitorAt', 'islandName', 'roofColor'])
+    delete s[key];
+  s = restore(JSON.stringify(s));
+  assert.equal(s.bag.table, 2);
+  assert.equal(s.decorations.length, 1);
+  assert.equal(s.expansion, 0);
+  s = run(s, { type: 'personalize', name: 'My little home', color: COLORS[3] });
+  assert.equal(restore(JSON.stringify(s)).islandName, 'My little home');
 });

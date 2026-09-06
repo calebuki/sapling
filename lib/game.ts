@@ -196,9 +196,60 @@ export type Word = {
   successes: number;
   help: number;
 };
-export type Decoration = { id: string; kind: Item; x: number; z: number };
+export const COLORS = [
+  '#dfb475',
+  '#a8c58a',
+  '#eaa6a0',
+  '#9bbde0',
+  '#b9a0d9',
+] as const;
+export const EXPANSION_COSTS = [35, 65, 100];
+export type Decoration = {
+  id: string;
+  kind: Item;
+  x: number;
+  z: number;
+  rotation?: number;
+  color?: string;
+};
+export function canPlace(
+  s: Pick<State, 'expansion' | 'decorations'>,
+  x: number,
+  z: number,
+) {
+  return (
+    Number.isFinite(x) &&
+    Number.isFinite(z) &&
+    (x / (8.8 + s.expansion * 1.8)) ** 2 +
+      (z / (6.9 + s.expansion * 1.45)) ** 2 <
+      1 &&
+    !(x > -2.5 && x < 2.5 && z > -6 && z < -1.4) &&
+    !(x > -0.8 && x < 2.8 && z > 5.4) &&
+    !(x > 2.2 && x < 6.5 && z > 4.2 && z < 5.4) &&
+    ![
+      [-7.2, 1.3],
+      [-6.6, -3.5],
+      [-3.4, -5],
+      [3.4, -5.5],
+      [7, 0],
+      [6, 2],
+      [-5, -2],
+      [-6, 3],
+      [5, -3],
+      [4, 4],
+      [1.3, 4.6],
+    ].some(([a, b]) => Math.hypot(x - a, z - b) < 1.5) &&
+    !s.decorations.some((d) => Math.hypot(d.x - x, d.z - z) < 1.3)
+  );
+}
+export const visitorDelay = (random = Math.random()) =>
+  25000 + Math.floor(Math.max(0, Math.min(1, random)) * 65000);
 export type State = {
   version: 1;
+  nextVisitorAt: number;
+  expansion: number;
+  islandName: string;
+  roofColor: string;
   bag: Inventory;
   coins: number;
   completed: number;
@@ -215,6 +266,10 @@ export type State = {
 };
 export const initialState = (): State => ({
   version: 1,
+  nextVisitorAt: 0,
+  expansion: 0,
+  islandName: 'Lilla',
+  roofColor: COLORS[0],
   bag: emptyBag(),
   coins: 0,
   completed: 0,
@@ -233,11 +288,21 @@ export type Action =
   | { type: 'trade'; item: Item }
   | { type: 'gather'; item: Item; now: number }
   | { type: 'craft'; item: Item }
-  | { type: 'offer'; bag: Inventory }
-  | { type: 'hear' }
+  | { type: 'offer'; bag: Inventory; now?: number; random?: number }
+  | { type: 'hear'; now?: number }
   | { type: 'help'; key?: string }
-  | { type: 'skip' }
-  | { type: 'place'; item: Item; slot: number }
+  | { type: 'skip'; now?: number; random?: number }
+  | {
+      type: 'place';
+      item: Item;
+      slot?: number;
+      x?: number;
+      z?: number;
+      rotation?: number;
+      color?: string;
+    }
+  | { type: 'expand' }
+  | { type: 'personalize'; name: string; color: string }
   | { type: 'remove'; id: string }
   | { type: 'mode'; mode: State['mode'] }
   | { type: 'sound'; sound: boolean }
@@ -262,6 +327,11 @@ export function transition(s: State, a: Action): Result {
     cooldowns: { ...s.cooldowns },
   };
   let message = '';
+  if (
+    (a.type === 'offer' || a.type === 'hear' || a.type === 'skip') &&
+    (a.now ?? Date.now()) < s.nextVisitorAt
+  )
+    return fail('Your next neighbor is still on the way.');
   if (a.type === 'gather') {
     if (!['wood', 'stone', 'apple', 'flower'].includes(a.item))
       return fail('That cannot be gathered.');
@@ -361,6 +431,7 @@ export function transition(s: State, a: Action): Result {
       };
     }
     next.completed++;
+    next.nextVisitorAt = (a.now ?? Date.now()) + visitorDelay(a.random);
     next.coins += req.reward;
     next.heard = false;
     next.requestHelp = false;
@@ -368,28 +439,56 @@ export function transition(s: State, a: Action): Result {
     message = `Tack så mycket! +${req.reward} shells`;
   } else if (a.type === 'skip') {
     next.cycle++;
+    next.nextVisitorAt = (a.now ?? Date.now()) + visitorDelay(a.random);
     next.requestHelp = false;
     next.helpedKeys = [];
     next.heard = false;
-    message = 'A new visitor is ready at the dock.';
+    message = 'Your neighbor has headed home. Someone else will stop by later.';
   } else if (a.type === 'place') {
     if (!RECIPES[a.item] || s.bag[a.item] < 1)
       return fail('Craft that item first.');
-    if (
-      !Number.isInteger(a.slot) ||
-      !SLOTS[a.slot] ||
-      s.decorations.some(
-        (d) => d.x === SLOTS[a.slot][0] && d.z === SLOTS[a.slot][1],
-      )
-    )
-      return fail('That spot is already occupied.');
-    const [x, z] = SLOTS[a.slot];
+    const point = a.slot !== undefined ? SLOTS[a.slot] : [a.x, a.z];
+    if (!point || typeof point[0] !== 'number' || typeof point[1] !== 'number')
+      return fail('Choose a spot on land.');
+    const [x, z] = point as [number, number];
+    if (s.decorations.length >= 60 || !canPlace(s, x, z))
+      return fail(
+        'Choose clear land away from buildings, gathering spots, and furniture.',
+      );
+    if (a.color && !COLORS.includes(a.color as (typeof COLORS)[number]))
+      return fail('Choose a color from the palette.');
+    if (a.rotation !== undefined && ![0, 90, 180, 270].includes(a.rotation))
+      return fail('Choose a quarter turn.');
     next.bag[a.item]--;
     next.decorations = [
       ...s.decorations,
-      { id: `${a.item}-${a.slot}`, kind: a.item, x, z },
+      {
+        id: a.item + '-' + x + '-' + z,
+        kind: a.item,
+        x,
+        z,
+        rotation: a.rotation ?? 0,
+        color: a.color ?? COLORS[0],
+      },
     ];
     message = 'A little more like home.';
+  } else if (a.type === 'expand') {
+    const cost = EXPANSION_COSTS[s.expansion];
+    if (cost === undefined) return fail('Your island is fully expanded.');
+    if (s.coins < cost) return fail('Collect more shells to expand.');
+    next.coins -= cost;
+    next.expansion++;
+    message = 'More room to make yourself at home!';
+  } else if (a.type === 'personalize') {
+    if (
+      !a.name.trim() ||
+      a.name.trim().length > 24 ||
+      !COLORS.includes(a.color as (typeof COLORS)[number])
+    )
+      return fail('Choose a name up to 24 characters and a palette color.');
+    next.islandName = a.name.trim();
+    next.roofColor = a.color;
+    message = 'Welcome home.';
   } else if (a.type === 'remove') {
     const d = s.decorations.find((v) => v.id === a.id);
     if (!d) return fail('That decoration is no longer here.');
@@ -422,10 +521,18 @@ export function restore(raw: string | null): State {
       if (!Number.isInteger(s.bag[id]) || s.bag[id] < 0 || s.bag[id] > 1000)
         return initialState();
     if (
-      s.decorations.length > 8 ||
+      s.decorations.length > 60 ||
       s.decorations.some(
         (d: Decoration) =>
-          !RECIPES[d.kind] || !SLOTS.some(([x, z]) => d.x === x && d.z === z),
+          !RECIPES[d.kind] ||
+          !Number.isFinite(d.x) ||
+          !Number.isFinite(d.z) ||
+          Math.abs(d.x) > 15 ||
+          Math.abs(d.z) > 12 ||
+          typeof d.id !== 'string' ||
+          (d.color !== undefined &&
+            !COLORS.includes(d.color as (typeof COLORS)[number])) ||
+          (d.rotation !== undefined && ![0, 90, 180, 270].includes(d.rotation)),
       )
     )
       return initialState();
@@ -441,6 +548,19 @@ export function restore(raw: string | null): State {
     return {
       ...initialState(),
       ...s,
+      expansion:
+        Number.isInteger(s.expansion) && s.expansion >= 0 && s.expansion <= 3
+          ? s.expansion
+          : 0,
+      nextVisitorAt:
+        Number.isFinite(s.nextVisitorAt) && s.nextVisitorAt >= 0
+          ? s.nextVisitorAt
+          : 0,
+      islandName:
+        typeof s.islandName === 'string' && s.islandName.trim()
+          ? s.islandName.slice(0, 24)
+          : 'Lilla',
+      roofColor: COLORS.includes(s.roofColor) ? s.roofColor : COLORS[0],
       mode: ['guided', 'listening', 'immersive'].includes(s.mode)
         ? s.mode
         : 'guided',

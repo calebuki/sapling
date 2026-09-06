@@ -36,7 +36,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   ITEMS,
   RECIPES,
-  SLOTS,
+  COLORS,
+  EXPANSION_COSTS,
   emptyBag,
   initialState,
   makeRequest,
@@ -74,6 +75,18 @@ export default function Home() {
     [placement, setPlacement] = useState<Item | null>(null),
     [crafted, setCrafted] = useState<Item | null>(null),
     [pop, setPop] = useState<{ item: Item; id: number } | null>(null);
+  const [clock, setClock] = useState(0);
+  const [rotation, setRotation] = useState(0),
+    [color, setColor] = useState<string>(COLORS[0]);
+  useEffect(() => {
+    const firstTick = setTimeout(() => setClock(Date.now()), 0);
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(firstTick);
+    };
+  }, []);
+  const visitorAvailable = clock >= state.nextVisitorAt;
   const req = makeRequest(state.completed, state.cycle);
   const voice = voices.find((v) => /^sv([_-]|$)/i.test(v.lang));
   const travel = useCallback(
@@ -228,6 +241,10 @@ export default function Home() {
     window.speechSynthesis.speak(u);
   }
   function openVisitor() {
+    if (clock < current.current.nextVisitorAt) {
+      setToast('Your next neighbor is still on the way.');
+      return;
+    }
     setPanel(null);
     setDialog(true);
     setFeedback('');
@@ -333,6 +350,9 @@ export default function Home() {
     <TooltipProvider delay={120}>
       <main className="game">
         <World
+          expansion={state.expansion}
+          visitorAvailable={visitorAvailable}
+          roofColor={state.roofColor}
           onWordHelp={wordHelp}
           onInteract={interact}
           decorations={state.decorations}
@@ -348,15 +368,23 @@ export default function Home() {
           onTravel={setWalking}
           cooldowns={state.cooldowns}
           placement={placement}
-          onPlace={(slot) => {
+          onPlace={(x, z) => {
             if (!placement) return;
-            const r = act({ type: 'place', item: placement, slot });
+            const r = act({
+              type: 'place',
+              item: placement,
+              x,
+              z,
+              rotation,
+              color,
+            });
             if (r.ok) setPlacement(null);
           }}
         />
         <header className="topbar">
           <div className="brand">
-            lilla<span>ISLAND WORKSHOP</span>
+            {state.islandName}
+            <span>ISLAND WORKSHOP</span>
           </div>
           <div className="top-right">
             <button
@@ -397,6 +425,7 @@ export default function Home() {
         </section>
         {loaded &&
           state.completed === 0 &&
+          visitorAvailable &&
           !dialog &&
           !panel &&
           !helpOpen &&
@@ -423,35 +452,52 @@ export default function Home() {
             </section>
           )}
         <aside className="request-card">
-          <div className="request-top">
-            <span className="eyebrow">AT THE DOCK</span>
-            <span className="available-dot">Visitor</span>
-          </div>
-          <div className="visitor-intro">
-            <div className="avatar">{req.visitor.slice(0, 1)}</div>
-            <div>
-              <h2>{req.visitor} is here</h2>
-              <span>{req.role}</span>
-            </div>
-          </div>
-          <p
-            className={
-              state.heard && state.mode === 'guided' ? 'request-memory' : ''
-            }
-          >
-            {state.heard && state.mode === 'guided'
-              ? req.tokens.map((w) => w.sv).join(' ')
-              : state.heard
-                ? 'Ready when you are.'
-                : 'Someone could use a hand.'}
-          </p>
-          <button className="primary" onClick={() => travel('visitor')}>
-            {state.heard ? 'Back to ' + req.visitor : 'Say hej!'}{' '}
-            <ArrowRight size={17} />
-          </button>
-          <div className="reward">
-            <Shell size={14} /> {req.reward} shells for helping
-          </div>
+          {visitorAvailable ? (
+            <>
+              <div className="request-top">
+                <span className="eyebrow">AT THE DOCK</span>
+                <span className="available-dot">Visitor</span>
+              </div>
+              <div className="visitor-intro">
+                <div className="avatar">{req.visitor.slice(0, 1)}</div>
+                <div>
+                  <h2>{req.visitor} is here</h2>
+                  <span>{req.role}</span>
+                </div>
+              </div>
+              <p
+                className={
+                  state.heard && state.mode === 'guided' ? 'request-memory' : ''
+                }
+              >
+                {state.heard && state.mode === 'guided'
+                  ? req.tokens.map((w) => w.sv).join(' ')
+                  : state.heard
+                    ? 'Ready when you are.'
+                    : 'Someone could use a hand.'}
+              </p>
+              <button className="primary" onClick={() => travel('visitor')}>
+                {state.heard ? 'Back to ' + req.visitor : 'Say hej!'}{' '}
+                <ArrowRight size={17} />
+              </button>
+              <div className="reward">
+                <Shell size={14} /> {req.reward} shells for helping
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="eyebrow">AT THE DOCK</span>
+              <h2>A little island time</h2>
+              <p>
+                Your next neighbor arrives in about{' '}
+                {Math.max(1, Math.ceil((state.nextVisitorAt - clock) / 1000))}s.
+              </p>
+              <button className="primary" onClick={() => setPanel('decorate')}>
+                Make yourself at home
+              </button>
+              <p>Gather, craft, or decorate while you wait.</p>
+            </>
+          )}
         </aside>
         <nav className="side-tools" aria-label="Island tools">
           <Vocab sv="Verkstad" en="Workshop" action={() => travel('workshop')}>
@@ -535,8 +581,16 @@ export default function Home() {
                 Find a home for your{' '}
                 <Vocab sv={ITEMS[placement].sv} en={ITEMS[placement].name} />
               </b>
-              <small>Tap a + spot on the island</small>
+              <small>
+                Click or tap clear land · green fits, pink is blocked
+              </small>
             </div>
+            <button
+              onClick={() => setRotation((v) => (v + 90) % 360)}
+              aria-label="Rotate furniture"
+            >
+              ↻ {rotation}°
+            </button>
             <button
               aria-label="Cancel furniture placement"
               onClick={() => setPlacement(null)}
@@ -1071,6 +1125,75 @@ export default function Home() {
             )}
             {panel === 'decorate' && (
               <>
+                <form
+                  className="home-customize"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const data = new FormData(event.currentTarget);
+                    act({
+                      type: 'personalize',
+                      name: data.get('islandName') as string,
+                      color,
+                    });
+                  }}
+                >
+                  <label>
+                    Island name
+                    <input
+                      name="islandName"
+                      defaultValue={state.islandName}
+                      maxLength={24}
+                      required
+                    />
+                  </label>
+                  <div
+                    className="paint-palette"
+                    aria-label="Furniture and roof color"
+                  >
+                    {COLORS.map((c, i) => (
+                      <button
+                        type="button"
+                        key={c}
+                        aria-label={
+                          ['Honey', 'Sage', 'Rose', 'Sky', 'Lilac'][i]
+                        }
+                        aria-pressed={color === c}
+                        style={{ background: c }}
+                        onClick={() => setColor(c)}
+                      >
+                        {color === c ? '✓' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="text-button" type="submit">
+                    Save name & roof color
+                  </button>
+                </form>
+                <div className="expansion-card">
+                  <div>
+                    <b>More island, more possibilities</b>
+                    <p>
+                      Expansion {state.expansion} / 3 ·{' '}
+                      {state.decorations.length} / 60 decorations
+                    </p>
+                  </div>
+                  <button
+                    className="primary"
+                    disabled={
+                      state.expansion >= 3 ||
+                      state.coins < EXPANSION_COSTS[state.expansion]
+                    }
+                    onClick={() => act({ type: 'expand' })}
+                  >
+                    {state.expansion >= 3
+                      ? 'Fully expanded'
+                      : 'Expand · 🐚 ' + EXPANSION_COSTS[state.expansion]}
+                  </button>
+                </div>
+                <p className="fine">
+                  Choose a color, then furniture. Rotate it while placing.
+                  Return any piece to your bag to move or recolor it.
+                </p>
                 <div className="decoration-choices">
                   {(Object.keys(RECIPES) as Item[]).map((id) => (
                     <Vocab
@@ -1089,47 +1212,88 @@ export default function Home() {
                 </div>
                 <button
                   className="primary"
-                  disabled={
-                    !state.bag[place] ||
-                    state.decorations.length >= SLOTS.length
-                  }
+                  disabled={!state.bag[place] || state.decorations.length >= 60}
                   onClick={() => {
                     setPlacement(place);
                     setPanel(null);
                   }}
                 >
-                  {state.decorations.length >= SLOTS.length
-                    ? 'All spots are filled'
+                  {state.decorations.length >= 60
+                    ? 'Decoration limit reached'
                     : 'Choose a spot on the island'}
                   <ArrowRight size={17} />
                 </button>
-                <div className="placement-grid">
-                  {SLOTS.map(([x, z], i) => {
-                    const d = state.decorations.find(
-                      (d) => d.x === x && d.z === z,
-                    );
-                    return (
-                      <button
-                        key={i}
-                        className={d ? 'occupied' : ''}
-                        disabled={!d && !state.bag[place]}
-                        onClick={() =>
-                          d
-                            ? act({ type: 'remove', id: d.id })
-                            : act({ type: 'place', item: place, slot: i })
-                        }
+                <details className="coordinate-placement">
+                  <summary>Place with coordinates</summary>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const d = new FormData(e.currentTarget);
+                      act({
+                        type: 'place',
+                        item: place,
+                        x: Number(d.get('x')),
+                        z: Number(d.get('z')),
+                        rotation,
+                        color,
+                      });
+                    }}
+                  >
+                    <label>
+                      East / west
+                      <input
+                        name="x"
+                        type="number"
+                        step="0.25"
+                        defaultValue="-3"
+                        required
+                      />
+                    </label>
+                    <label>
+                      North / south
+                      <input
+                        name="z"
+                        type="number"
+                        step="0.25"
+                        defaultValue="2"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Rotation
+                      <select
+                        value={rotation}
+                        onChange={(e) => setRotation(Number(e.target.value))}
                       >
-                        <span>
-                          {d ? ITEMS[d.kind].icon : <Plus size={21} />}
-                        </span>
-                        <b>
-                          {i < 3 ? 'Orchard' : i < 6 ? 'Workshop' : 'Garden'}{' '}
-                          {i < 3 ? i + 1 : i < 6 ? i - 2 : i - 5}
-                        </b>
-                        <small>{d ? 'Return to bag' : 'Place here'}</small>
-                      </button>
-                    );
-                  })}
+                        {[0, 90, 180, 270].map((n) => (
+                          <option key={n} value={n}>
+                            {n}°
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="primary"
+                      disabled={!state.bag[place]}
+                      type="submit"
+                    >
+                      Place {ITEMS[place].sv}
+                    </button>
+                  </form>
+                </details>
+                <div className="placement-grid">
+                  {state.decorations.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => act({ type: 'remove', id: d.id })}
+                    >
+                      <span>{ITEMS[d.kind].icon}</span>
+                      <b>{ITEMS[d.kind].sv}</b>
+                      <small>
+                        Return to bag · {d.x}, {d.z}
+                      </small>
+                    </button>
+                  ))}
                 </div>
                 <button
                   className="text-button"
