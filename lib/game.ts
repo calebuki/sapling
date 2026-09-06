@@ -213,7 +213,7 @@ export type Decoration = {
   color?: string;
 };
 export function canPlace(
-  s: Pick<State, 'expansion' | 'decorations'>,
+  s: Pick<State, 'expansion' | 'decorations'> & { buildings?: BuildPiece[] },
   x: number,
   z: number,
 ) {
@@ -239,13 +239,135 @@ export function canPlace(
       [4, 4],
       [1.3, 4.6],
     ].some(([a, b]) => Math.hypot(x - a, z - b) < 1.5) &&
-    !s.decorations.some((d) => Math.hypot(d.x - x, d.z - z) < 1.3)
+    !s.decorations.some((d) => Math.hypot(d.x - x, d.z - z) < 1.3) &&
+    !(s.buildings ?? []).some(
+      (b) =>
+        b.area === 'island' &&
+        b.level === 0 &&
+        !['floor', 'roof', 'doorway'].includes(b.kind) &&
+        Math.hypot(b.x * 1.5 - x, b.z * 1.5 - z) < 1.2,
+    )
   );
 }
 export const visitorDelay = (random = Math.random()) =>
   25000 + Math.floor(Math.max(0, Math.min(1, random)) * 65000);
+export const BUILD_PARTS = {
+  floor: { sv: 'golv', en: 'floor', wood: 2, stone: 0 },
+  wall: { sv: 'vägg', en: 'wall', wood: 3, stone: 0 },
+  doorway: { sv: 'dörröppning', en: 'doorway', wood: 3, stone: 0 },
+  window: { sv: 'fönster', en: 'window', wood: 2, stone: 1 },
+  roof: { sv: 'tak', en: 'roof', wood: 3, stone: 1 },
+  stairs: { sv: 'trappa', en: 'stairs', wood: 4, stone: 0 },
+  shelf: { sv: 'hylla', en: 'shelf', wood: 3, stone: 0 },
+  bench: { sv: 'arbetsbänk', en: 'workbench', wood: 4, stone: 2 },
+  chair: { sv: 'stol', en: 'chair', wood: 0, stone: 0 },
+  table: { sv: 'bord', en: 'table', wood: 0, stone: 0 },
+  planter: { sv: 'blomkruka', en: 'flowerpot', wood: 0, stone: 0 },
+} as const;
+export type BuildKind = keyof typeof BUILD_PARTS;
+export type BuildPiece = {
+  id: string;
+  kind: BuildKind;
+  x: number;
+  z: number;
+  level: number;
+  rotation: number;
+  color: string;
+  material: 'wood' | 'stone';
+  area: 'workshop' | 'island';
+};
+export const WORKSHOP_COSTS = [
+  { wood: 10, stone: 6 },
+  { wood: 18, stone: 12 },
+];
+export function buildCost(kind: BuildKind, material: 'wood' | 'stone') {
+  const p = BUILD_PARTS[kind];
+  return material === 'stone' &&
+    ['floor', 'wall', 'doorway', 'window'].includes(kind)
+    ? { wood: 0, stone: p.wood + p.stone }
+    : { wood: p.wood, stone: p.stone };
+}
+export function validBuild(
+  s: State,
+  p: Omit<BuildPiece, 'id'>,
+  ignore?: string,
+) {
+  if (
+    !BUILD_PARTS[p.kind] ||
+    ![0, 1].includes(p.level) ||
+    !Number.isInteger(p.x) ||
+    !Number.isInteger(p.z) ||
+    ![0, 90, 180, 270].includes(p.rotation) ||
+    !COLORS.includes(p.color as (typeof COLORS)[number]) ||
+    !['wood', 'stone'].includes(p.material) ||
+    !['workshop', 'island'].includes(p.area)
+  )
+    return false;
+  const room = 3 + s.workshopLevel;
+  if (
+    p.area === 'workshop'
+      ? Math.abs(p.x) > room ||
+        Math.abs(p.z) > room ||
+        (p.z === room && p.x === 0)
+      : !canPlace({ ...s, buildings: [] }, p.x * 1.5, p.z * 1.5)
+  )
+    return false;
+  const pieces = s.buildings.filter(
+    (b) => b.id !== ignore && b.area === p.area,
+  );
+  const same = pieces.filter((b) => b.x === p.x && b.z === p.z);
+  const category = (k: BuildKind) =>
+    k === 'floor'
+      ? 'floor'
+      : k === 'roof'
+        ? 'roof'
+        : ['wall', 'window', 'doorway'].includes(k)
+          ? 'edge'
+          : 'object';
+  const edge = (b: Omit<BuildPiece, 'id'>) => [
+    b.x * 2 - Math.round(Math.sin((b.rotation * Math.PI) / 180)),
+    b.z * 2 - Math.round(Math.cos((b.rotation * Math.PI) / 180)),
+  ];
+  if (
+    category(p.kind) === 'edge' &&
+    pieces.some(
+      (b) =>
+        category(b.kind) === 'edge' &&
+        b.level === p.level &&
+        edge(b)[0] === edge(p)[0] &&
+        edge(b)[1] === edge(p)[1],
+    )
+  )
+    return false;
+  if (
+    same.some(
+      (b) =>
+        b.level === p.level &&
+        category(b.kind) === category(p.kind) &&
+        (category(p.kind) !== 'edge' || b.rotation === p.rotation),
+    )
+  )
+    return false;
+  if (
+    p.level === 1 &&
+    p.kind !== 'floor' &&
+    !same.some((b) => b.level === 1 && b.kind === 'floor')
+  )
+    return false;
+  if (p.level === 1 && !same.some((b) => b.level === 0 && b.kind === 'floor'))
+    return false;
+  if (
+    p.area === 'island' &&
+    p.kind !== 'floor' &&
+    !same.some((b) => b.kind === 'floor' && b.level === p.level)
+  )
+    return false;
+  return true;
+}
 export type State = {
   version: 1;
+  workshopLevel: number;
+  buildings: BuildPiece[];
   nextVisitorAt: number;
   expansion: number;
   islandName: string;
@@ -266,6 +388,8 @@ export type State = {
 };
 export const initialState = (): State => ({
   version: 1,
+  workshopLevel: 0,
+  buildings: [],
   nextVisitorAt: 0,
   expansion: 0,
   islandName: 'Lilla',
@@ -302,6 +426,18 @@ export type Action =
       color?: string;
     }
   | { type: 'expand' }
+  | { type: 'workshop-expand' }
+  | { type: 'build'; piece: Omit<BuildPiece, 'id'> }
+  | { type: 'build-edit'; id: string; piece: Omit<BuildPiece, 'id'> }
+  | { type: 'build-remove'; id: string }
+  | {
+      type: 'edit';
+      id: string;
+      x: number;
+      z: number;
+      rotation: number;
+      color: string;
+    }
   | { type: 'personalize'; name: string; color: string }
   | { type: 'remove'; id: string }
   | { type: 'mode'; mode: State['mode'] }
@@ -472,6 +608,119 @@ export function transition(s: State, a: Action): Result {
       },
     ];
     message = 'A little more like home.';
+  } else if (a.type === 'edit') {
+    const d = s.decorations.find((d) => d.id === a.id);
+    if (
+      !d ||
+      !canPlace(
+        { ...s, decorations: s.decorations.filter((v) => v.id !== a.id) },
+        a.x,
+        a.z,
+      ) ||
+      ![0, 90, 180, 270].includes(a.rotation) ||
+      !COLORS.includes(a.color as (typeof COLORS)[number])
+    )
+      return fail('Choose a clear spot and a palette color.');
+    next.decorations = s.decorations.map((v) =>
+      v.id === a.id
+        ? { ...v, x: a.x, z: a.z, rotation: a.rotation, color: a.color }
+        : v,
+    );
+    message = 'Updated.';
+  } else if (a.type === 'workshop-expand') {
+    const cost = WORKSHOP_COSTS[s.workshopLevel];
+    if (!cost) return fail('Your workshop is fully expanded.');
+    if (s.bag.wood < cost.wood || s.bag.stone < cost.stone)
+      return fail('Gather more wood and stone first.');
+    next.bag.wood -= cost.wood;
+    next.bag.stone -= cost.stone;
+    next.workshopLevel++;
+    message = 'Your workshop has more room!';
+  } else if (a.type === 'build' || a.type === 'build-edit') {
+    const old =
+      a.type === 'build-edit'
+        ? s.buildings.find((b) => b.id === a.id)
+        : undefined;
+    if (
+      a.type === 'build-edit' &&
+      (!old ||
+        old.kind !== a.piece.kind ||
+        old.material !== a.piece.material ||
+        old.area !== a.piece.area)
+    )
+      return fail('That piece cannot be changed into another item.');
+    if (
+      old?.kind === 'floor' &&
+      (old.x !== a.piece.x ||
+        old.z !== a.piece.z ||
+        old.level !== a.piece.level) &&
+      s.buildings.some(
+        (b) =>
+          b.id !== old.id &&
+          b.area === old.area &&
+          b.x === old.x &&
+          b.z === old.z &&
+          b.level >= old.level,
+      )
+    )
+      return fail('Move the pieces supported by this floor first.');
+    if (!validBuild(s, a.piece, old?.id) || (!old && s.buildings.length >= 150))
+      return fail(
+        'Choose a clear grid square. Upstairs needs a floor below; outdoor pieces need a floor beneath them.',
+      );
+    const cost = buildCost(a.piece.kind, a.piece.material);
+    if (!old) {
+      if (RECIPES[a.piece.kind]) {
+        if (s.bag[a.piece.kind as Item] < 1)
+          return fail('Craft that furniture in the workshop first.');
+        next.bag[a.piece.kind as Item]--;
+      } else {
+        if (s.bag.wood < cost.wood || s.bag.stone < cost.stone)
+          return fail('Gather the missing wood or stone.');
+        next.bag.wood -= cost.wood;
+        next.bag.stone -= cost.stone;
+      }
+    }
+    const piece = {
+      ...a.piece,
+      id:
+        old?.id ??
+        'build-' +
+          s.completed +
+          '-' +
+          s.cycle +
+          '-' +
+          Date.now() +
+          '-' +
+          s.buildings.length,
+    };
+    next.buildings = old
+      ? s.buildings.map((b) => (b.id === old.id ? piece : b))
+      : [...s.buildings, piece];
+    message = old ? 'Updated.' : 'Built!';
+  } else if (a.type === 'build-remove') {
+    const b = s.buildings.find((b) => b.id === a.id);
+    if (!b) return fail('That piece is no longer here.');
+    if (
+      b.kind === 'floor' &&
+      s.buildings.some(
+        (v) =>
+          v.id !== b.id &&
+          v.area === b.area &&
+          v.x === b.x &&
+          v.z === b.z &&
+          v.level >= b.level,
+      )
+    )
+      return fail('Remove the pieces supported by this floor first.');
+    next.buildings = s.buildings.filter((v) => v.id !== b.id);
+    const cost = buildCost(b.kind, b.material);
+    if (RECIPES[b.kind]) next.bag[b.kind as Item]++;
+    else {
+      next.bag.wood += cost.wood;
+      next.bag.stone += cost.stone;
+    }
+    message = 'Materials returned to your bag.';
   } else if (a.type === 'expand') {
     const cost = EXPANSION_COSTS[s.expansion];
     if (cost === undefined) return fail('Your island is fully expanded.');

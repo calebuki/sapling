@@ -1427,3 +1427,208 @@ body {
   max-width: calc(100vw - 24px);
   flex-wrap: wrap;
 }
+.dictionary-search {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  margin: 16px 0;
+}
+.dictionary-search input {
+  border: 2px solid #ddd5ed;
+  padding: 13px 16px;
+  border-radius: 14px;
+  background: white;
+}
+.dictionary-entry small {
+  display: block;
+  font-size: 12px;
+  color: #737083;
+  margin-top: 7px;
+}
+.dictionary-entry p {
+  font-size: 14px;
+  margin-top: 8px;
+}
+.practice-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.practice-actions button {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ece7f5;
+}
+.voice-practice {
+  padding: 16px;
+  margin: 14px 0;
+  border: 2px solid #e2dbef;
+  border-radius: 16px;
+  background: #f9f6fc;
+}
+.voice-practice h3 {
+  margin: 12px 0;
+  font-size: 20px;
+}
+.voice-practice output {
+  display: block;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.voice-practice audio {
+  width: 100%;
+  margin-top: 12px;
+}
+.studio-modal {
+  width: calc(100vw - 24px) !important;
+  max-width: 1500px !important;
+  height: calc(100dvh - 24px);
+  padding: 0 !important;
+  overflow: hidden;
+  background: #f9f6ed;
+  border-radius: 22px !important;
+}
+.studio-modal > button {
+  display: none;
+}
+.build-studio {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: #49435b;
+}
+.build-studio > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e4dfd5;
+  flex-wrap: wrap;
+}
+.build-studio header h2 {
+  font-size: 21px;
+  margin: 3px 0;
+}
+.build-studio header > div {
+  margin-right: auto;
+}
+.studio-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  min-height: 0;
+}
+.studio-viewport {
+  position: relative;
+  min-height: 200px;
+  overflow: hidden;
+  outline-offset: -4px;
+}
+.studio-viewport canvas {
+  display: block;
+}
+.studio-viewport > p {
+  position: absolute;
+  padding: 30px;
+}
+.studio-tools {
+  padding: 18px;
+  overflow-y: auto;
+  background: #fffdf7;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.studio-tools > label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.studio-tools select,
+.coordinate-form input {
+  border: 1px solid #d9d1e7;
+  border-radius: 10px;
+  background: white;
+  padding: 9px;
+  width: 100%;
+}
+.build-palette {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.build-palette button {
+  padding: 12px 8px;
+  border: 2px solid #e6dfef;
+  border-radius: 12px;
+  background: #f8f4fc;
+}
+.build-palette .selected {
+  border-color: #8b73bb;
+  background: #e5dbf6;
+}
+.studio-tools .paint-palette {
+  gap: 9px;
+}
+.studio-tools .paint-palette button {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+.coordinate-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.piece-edit {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f1eadc;
+}
+.studio-tools output {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 12px;
+  background: #ecf0e3;
+}
+@media (max-width: 760px) {
+  .studio-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 1fr) 280px;
+  }
+  .build-studio > header {
+    padding: 10px;
+    gap: 6px;
+  }
+  .build-studio header h2 {
+    font-size: 16px;
+  }
+  .build-studio header button {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .studio-tools {
+    padding: 12px;
+  }
+  .studio-tools .build-palette {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.placed-piece-list {
+  display: grid;
+  gap: 6px;
+  max-height: 200px;
+  overflow: auto;
+}
+.studio-tools label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.studio-tools input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+}

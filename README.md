@@ -16,7 +16,7 @@ A standalone 3D browser game for learning Swedish through a repeatable gathering
 
 Guided, listening-first, and immersive settings share the same Swedish content. Gameplay vocabulary uses dotted underlines: hover, keyboard-focus, or tap to reveal English. On touch screens, tap an action once for its translation and again to act. English is no longer shown automatically. Revealing a word in the active request counts as help; hint-assisted deliveries do not increase that word's familiarity. This is a gameplay proxy for familiarity, not a validated proficiency assessment.
 
-Swedish speech uses a Swedish voice exposed by browser speech synthesis. Without a Swedish voice, the game shows subtitles and an explicit audio availability message. Microphone input is not implemented. All progress is versioned in localStorage on the current browser and origin; there is no account sync. Preview and production therefore have separate saves.
+Swedish speech uses a Swedish voice exposed by browser speech synthesis. Without a Swedish voice, the game shows subtitles and an explicit audio availability message. Optional crafting speech lets the player record up to 60 seconds and play it back locally. Recordings are discarded on closing the practice and never uploaded or counted as pronunciation evidence. All progress is versioned in localStorage on the current browser and origin; there is no account sync. Preview and production therefore have separate saves.
 
 ## Development
 
@@ -46,3 +46,11 @@ Inspired by the tangible 3D interaction and rounded graphic treatments on https:
 ## Island life
 
 Neighbors arrive 25–90 seconds after a delivery or departure. The saved arrival timestamp survives refreshes and time away; waiting does not consume active play time. The first visitor is immediately available. Expand the island three times for 35, 65, and 100 shells. Each expansion grows both visible terrain and walkable/buildable land. Furniture snaps to a quarter-unit grid, with collision checks around buildings, gathering locations, and existing furniture. A 60-piece limit keeps the browser scene bounded. Existing saves migrate automatically.
+
+## Workshop and building
+
+Click the workshop to enter its 3D interior; use Craft furniture to open recipes. Enlarge the room twice using 10 wood + 6 stone, then 18 wood + 12 stone. The build palette offers 11 modular pieces and furniture types, wood/stone materials, colors, quarter-turn rotation, and two construction levels. Outdoors, put a floor down before other pieces; upper floors need supporting floors below. Inspect placed pieces to move/recolor/rotate them or refund their original materials. Supported floors cannot be removed or moved until their contents are cleared. A 150-piece limit bounds the saved structures.
+
+Decorate → Build a house opens the island construction view. Structures appear on the main island. Walk inside switches the interior/construction scene to a ground-level first-person camera (W/S forward/back, A/D turn, with on-screen alternatives); Build view returns to the overhead editor. Upper floors can be built and viewed from above; stair climbing and a full first-person island camera are not yet included. Roofs are hidden in the overhead editor so interiors remain selectable.
+
+Click outdoor furniture to edit it directly. Moving preserves the original item until a valid new spot is confirmed. Ord now searches an offline Swedish/English island dictionary, including inflected forms, examples, audio, and encountered/discover distinctions. Searching does not grant learning credit.

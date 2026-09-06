@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { canPlace } from '@/lib/game';
+import { canPlace, type BuildPiece } from '@/lib/game';
 import { routeTo, walkable } from '@/lib/navigation';
 import Vocab from './vocab';
+import { pieceMesh, disposeGroup } from './build-mesh';
 export type Decoration = {
   id: string;
   kind: string;
@@ -15,6 +16,10 @@ export type Decoration = {
 };
 type Props = {
   onInteract: (id: string) => boolean;
+  buildings: BuildPiece[];
+  onEdit: (id: string) => void;
+  onBuildEdit: (id: string) => void;
+  movingId?: string | null;
   decorations: Decoration[];
   paused: boolean;
   command?: { id: string; nonce: number };
@@ -48,6 +53,10 @@ const points: Record<string, [number, number]> = {
 };
 export default function World({
   onInteract,
+  buildings,
+  onEdit,
+  onBuildEdit,
+  movingId,
   decorations,
   paused,
   command,
@@ -63,26 +72,37 @@ export default function World({
   const pins = useRef<Record<string, HTMLButtonElement | null>>({});
   const live = useRef({
     onTravel,
+    onEdit,
+    onBuildEdit,
+    movingId,
     cooldowns,
     placement,
     onPlace,
     expansion,
     visitorAvailable,
     roofColor,
+    buildings,
     decorations,
   });
   useEffect(() => {
     live.current = {
       onTravel,
+      onEdit,
+      onBuildEdit,
+      movingId,
       cooldowns,
       placement,
       onPlace,
       expansion,
       visitorAvailable,
       roofColor,
+      buildings,
       decorations,
     };
   }, [
+    movingId,
+    onEdit,
+    onBuildEdit,
     onTravel,
     cooldowns,
     placement,
@@ -90,6 +110,7 @@ export default function World({
     expansion,
     visitorAvailable,
     roofColor,
+    buildings,
     decorations,
   ]);
   const host = useRef<HTMLDivElement>(null),
@@ -97,6 +118,7 @@ export default function World({
       go: (id: string) => void;
       decorate: (d: Decoration[]) => void;
       zoom: (delta: number) => void;
+      structures: (pieces: BuildPiece[]) => void;
     } | null>(null),
     interaction = useRef(onInteract),
     pause = useRef(paused);
@@ -524,6 +546,7 @@ export default function World({
         const g = new T.Group();
         g.position.set(d.x, 0.75, d.z);
         deco.add(g);
+        g.userData.decorationId = d.id;
         g.rotation.y = ((d.rotation ?? 0) * Math.PI) / 180;
         if (d.kind === 'chair') {
           box(0.7, 0.12, 0.65, d.color ?? '#dfb475', 0, 0.6, 0, g);
@@ -597,7 +620,16 @@ export default function World({
       zoomLevel = T.MathUtils.clamp(zoomLevel + delta, 0.74, 1.25);
       resize();
     };
-    api.current = { go, decorate, zoom };
+    const buildingGroup = new T.Group();
+    buildingGroup.position.y = 0.73;
+    scene.add(buildingGroup);
+    function structures(pieces: BuildPiece[]) {
+      disposeGroup(buildingGroup);
+      buildingGroup.clear();
+      for (const p of pieces.filter((p) => p.area === 'island'))
+        buildingGroup.add(pieceMesh(p));
+    }
+    api.current = { go, decorate, zoom, structures };
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), -0.73);
@@ -619,6 +651,23 @@ export default function World({
             Math.round(p.z * 4) / 4,
           );
         return;
+      }
+      const placedHit = ray.intersectObjects(
+        [...deco.children, ...buildingGroup.children],
+        true,
+      )[0];
+      if (placedHit) {
+        let o: T.Object3D | null = placedHit.object;
+        while (o && !o.userData.decorationId && !o.userData.pieceId)
+          o = o.parent;
+        if (o?.userData.decorationId) {
+          live.current.onEdit(o.userData.decorationId);
+          return;
+        }
+        if (o?.userData.pieceId) {
+          live.current.onBuildEdit(o.userData.pieceId);
+          return;
+        }
       }
       const hits = ray.intersectObjects(targets, true);
       if (hits.length) {
@@ -668,9 +717,10 @@ export default function World({
             canPlace(
               {
                 expansion: live.current.expansion,
-                decorations: live.current.decorations as Parameters<
-                  typeof canPlace
-                >[0]['decorations'],
+                buildings: live.current.buildings,
+                decorations: live.current.decorations.filter(
+                  (d) => d.id !== live.current.movingId,
+                ) as Parameters<typeof canPlace>[0]['decorations'],
               },
               p.x,
               p.z,
@@ -952,6 +1002,7 @@ export default function World({
       scene.traverse((o) => {
         if (o instanceof T.Mesh) o.geometry.dispose();
       });
+      disposeGroup(buildingGroup);
       mats.forEach((m) => m.dispose());
       extraMaterials.forEach((m) => m.dispose());
       renderer.dispose();
@@ -960,6 +1011,7 @@ export default function World({
     };
   }, []);
   useEffect(() => api.current?.decorate(decorations), [decorations]);
+  useEffect(() => api.current?.structures(buildings), [buildings]);
   useEffect(() => {
     if (command) api.current?.go(command.id);
   }, [command]);

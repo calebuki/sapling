@@ -31,6 +31,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import World from './world';
+import BuildStudio from './build-studio';
+import { WordBook, VoicePractice } from './learning';
 import Vocab from './vocab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -75,6 +77,11 @@ export default function Home() {
     [placement, setPlacement] = useState<Item | null>(null),
     [crafted, setCrafted] = useState<Item | null>(null),
     [pop, setPop] = useState<{ item: Item; id: number } | null>(null);
+  const [studio, setStudio] = useState<'workshop' | 'island' | null>(null);
+  const [studioSelection, setStudioSelection] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null),
+    [movingId, setMovingId] = useState<string | null>(null),
+    [practiceItem, setPracticeItem] = useState<Item | null>(null);
   const [clock, setClock] = useState(0);
   const [rotation, setRotation] = useState(0),
     [color, setColor] = useState<string>(COLORS[0]);
@@ -105,6 +112,8 @@ export default function Home() {
         return;
       }
       if (
+        studio ||
+        editing ||
         panel ||
         dialog ||
         helpOpen ||
@@ -124,7 +133,16 @@ export default function Home() {
     };
     window.addEventListener('keydown', openBag);
     return () => window.removeEventListener('keydown', openBag);
-  }, [panel, dialog, helpOpen, celebration, placement, travel]);
+  }, [
+    panel,
+    dialog,
+    helpOpen,
+    celebration,
+    placement,
+    travel,
+    studio,
+    editing,
+  ]);
   function act(action: Action) {
     const result = transition(current.current, action);
     current.current = result.state;
@@ -139,7 +157,10 @@ export default function Home() {
         item: action.item,
         id: (previous?.id ?? 0) + 1,
       }));
-      if (action.type === 'craft') setCrafted(action.item);
+      if (action.type === 'craft') {
+        setCrafted(action.item);
+        setPracticeItem(action.item);
+      }
     }
     try {
       localStorage.setItem(KEY, JSON.stringify(result.state));
@@ -262,7 +283,7 @@ export default function Home() {
       // oxlint-disable-next-line react/react-compiler -- Invoked by the world's input/arrival callback, never during render.
       return act({ type: 'gather', item: id as Item, now: Date.now() }).ok;
     else if (id === 'visitor') openVisitor();
-    else if (id === 'workshop') setPanel('workshop');
+    else if (id === 'workshop') setStudio('workshop');
     return false;
   }
   function hint(key?: string) {
@@ -350,6 +371,20 @@ export default function Home() {
     <TooltipProvider delay={120}>
       <main className="game">
         <World
+          buildings={state.buildings}
+          onEdit={(id) => {
+            setEditing(id);
+            const d = current.current.decorations.find((v) => v.id === id);
+            if (d) {
+              setColor(d.color ?? COLORS[0]);
+              setRotation(d.rotation ?? 0);
+            }
+          }}
+          onBuildEdit={(id) => {
+            setStudioSelection(id);
+            setStudio('island');
+          }}
+          movingId={movingId}
           expansion={state.expansion}
           visitorAvailable={visitorAvailable}
           roofColor={state.roofColor}
@@ -357,6 +392,8 @@ export default function Home() {
           onInteract={interact}
           decorations={state.decorations}
           paused={
+            !!studio ||
+            !!editing ||
             !loaded ||
             !!panel ||
             dialog ||
@@ -370,15 +407,22 @@ export default function Home() {
           placement={placement}
           onPlace={(x, z) => {
             if (!placement) return;
-            const r = act({
-              type: 'place',
-              item: placement,
-              x,
-              z,
-              rotation,
-              color,
-            });
-            if (r.ok) setPlacement(null);
+            const r = act(
+              movingId
+                ? { type: 'edit', id: movingId, x, z, rotation, color }
+                : {
+                    type: 'place',
+                    item: placement,
+                    x,
+                    z,
+                    rotation,
+                    color,
+                  },
+            );
+            if (r.ok) {
+              setPlacement(null);
+              setMovingId(null);
+            }
           }}
         />
         <header className="topbar">
@@ -961,6 +1005,29 @@ export default function Home() {
               </>
             )}
             {panel === 'workshop' && (
+              <>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setPanel(null);
+                    setStudio('workshop');
+                  }}
+                >
+                  Enter & customize workshop
+                </button>
+                {practiceItem && (
+                  <details open>
+                    <summary>Say what you made · optional</summary>
+                    <VoicePractice
+                      key={practiceItem + String(pop?.id)}
+                      line={`Jag byggde ${ITEMS[practiceItem].unit} ${ITEMS[practiceItem].sv}.`}
+                      translation={`I built a ${ITEMS[practiceItem].name.toLowerCase()}.`}
+                    />
+                  </details>
+                )}
+              </>
+            )}
+            {panel === 'workshop' && (
               <Tabs defaultValue="craft">
                 <TabsList className="game-tabs">
                   <TabsTrigger value="craft">Craft</TabsTrigger>
@@ -1019,6 +1086,7 @@ export default function Home() {
                     <button
                       className="primary place-crafted"
                       onClick={() => {
+                        setMovingId(null);
                         setPlacement(crafted);
                         setPanel(null);
                       }}
@@ -1082,49 +1150,30 @@ export default function Home() {
               </>
             )}
             {panel === 'journal' && (
-              <>
-                {Object.keys(state.words).length === 0 ? (
-                  <div className="empty-note">
-                    Meet your first visitor to start your word collection.
-                  </div>
-                ) : (
-                  <div className="word-list">
-                    {Object.entries(state.words).map(([key, w]) => (
-                      <div className="journal-word" key={key}>
-                        <div>
-                          <b>
-                            <Vocab
-                              sv={w.sv}
-                              en={w.en}
-                              onReveal={() => wordHelp(key)}
-                            />
-                          </b>
-                        </div>
-                        <div className="word-evidence">
-                          <span>
-                            {w.successes >= 3
-                              ? 'Familiar'
-                              : w.successes > 0
-                                ? 'Taking root'
-                                : 'Just met'}
-                          </span>
-                          <div className="word-dots">
-                            {[1, 2, 3].map((n) => (
-                              <i
-                                key={n}
-                                className={w.successes >= n ? 'filled' : ''}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
+              <WordBook state={state} onHelp={wordHelp} />
             )}
             {panel === 'decorate' && (
               <>
+                <div className="practice-actions">
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPanel(null);
+                      setStudio('workshop');
+                    }}
+                  >
+                    Inside my workshop
+                  </button>
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPanel(null);
+                      setStudio('island');
+                    }}
+                  >
+                    Build a house
+                  </button>
+                </div>
                 <form
                   className="home-customize"
                   onSubmit={(event) => {
@@ -1214,6 +1263,7 @@ export default function Home() {
                   className="primary"
                   disabled={!state.bag[place] || state.decorations.length >= 60}
                   onClick={() => {
+                    setMovingId(null);
                     setPlacement(place);
                     setPanel(null);
                   }}
@@ -1303,6 +1353,129 @@ export default function Home() {
                 </button>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={!!studio}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStudio(null);
+              setStudioSelection(null);
+            }
+          }}
+        >
+          <DialogContent className="studio-modal">
+            <DialogTitle className="sr-only">Build and explore</DialogTitle>
+            <DialogDescription className="sr-only">
+              Customize your workshop or build a home on your island.
+            </DialogDescription>
+            {studio && (
+              <BuildStudio
+                initialSelected={studioSelection}
+                area={studio}
+                state={state}
+                act={act}
+                onExit={() => {
+                  setStudio(null);
+                  setStudioSelection(null);
+                }}
+                onCraft={() => {
+                  setStudio(null);
+                  setPanel('workshop');
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={!!editing}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+        >
+          <DialogContent className="game-modal">
+            <DialogTitle>Edit placed furniture</DialogTitle>
+            <DialogDescription>
+              Move it, rotate it, or give it a new color.
+            </DialogDescription>
+            {(() => {
+              const d = state.decorations.find((v) => v.id === editing);
+              return d ? (
+                <>
+                  <h3>
+                    <Vocab sv={ITEMS[d.kind].sv} en={ITEMS[d.kind].name} />
+                  </h3>
+                  <div className="paint-palette">
+                    {COLORS.map((c, i) => (
+                      <button
+                        key={c}
+                        aria-label={
+                          ['Honey', 'Sage', 'Rose', 'Sky', 'Lilac'][i]
+                        }
+                        style={{ background: c }}
+                        aria-pressed={color === c}
+                        onClick={() => setColor(c)}
+                      >
+                        {c === color ? '✓' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="practice-actions">
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        setMovingId(d.id);
+                        setPlacement(d.kind);
+                        setEditing(null);
+                      }}
+                    >
+                      Move on island
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        const n = (rotation + 90) % 360;
+                        setRotation(n);
+                        act({
+                          type: 'edit',
+                          id: d.id,
+                          x: d.x,
+                          z: d.z,
+                          rotation: n,
+                          color,
+                        });
+                      }}
+                    >
+                      Rotate ↻
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        act({
+                          type: 'edit',
+                          id: d.id,
+                          x: d.x,
+                          z: d.z,
+                          rotation,
+                          color,
+                        })
+                      }
+                    >
+                      Apply color
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        act({ type: 'remove', id: d.id });
+                        setEditing(null);
+                      }}
+                    >
+                      Return to bag
+                    </button>
+                  </div>
+                </>
+              ) : null;
+            })()}
           </DialogContent>
         </Dialog>
       </main>

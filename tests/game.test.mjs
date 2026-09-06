@@ -230,3 +230,159 @@ test('old saves retain their inventory and furniture; customization persists', (
   s = run(s, { type: 'personalize', name: 'My little home', color: COLORS[3] });
   assert.equal(restore(JSON.stringify(s)).islandName, 'My little home');
 });
+
+const piece = (kind = 'floor', extras = {}) => ({
+  kind,
+  x: -2,
+  z: 0,
+  level: 0,
+  rotation: 0,
+  color: COLORS[0],
+  material: 'wood',
+  area: 'workshop',
+  ...extras,
+});
+test('workshop expansion charges once, unlocks space, and survives restore', () => {
+  let s = initialState();
+  assert.equal(transition(s, { type: 'workshop-expand' }).ok, false);
+  s.bag.wood = 50;
+  s.bag.stone = 30;
+  assert.equal(
+    transition(s, { type: 'build', piece: piece('floor', { x: 4 }) }).ok,
+    false,
+  );
+  s = run(s, { type: 'workshop-expand' });
+  assert.equal(s.bag.wood, 40);
+  assert.equal(s.bag.stone, 24);
+  s = run(s, { type: 'build', piece: piece('floor', { x: 4 }) });
+  assert.equal(s.buildings.length, 1);
+  s = run(s, { type: 'workshop-expand' });
+  assert.equal(transition(s, { type: 'workshop-expand' }).ok, false);
+  assert.deepEqual(restore(JSON.stringify(s)), s);
+});
+test('building costs, duplicate rejection and refunds preserve materials', () => {
+  let s = initialState();
+  s.bag.wood = 20;
+  s.bag.stone = 20;
+  s = run(s, { type: 'build', piece: piece('wall', { material: 'stone' }) });
+  assert.equal(s.bag.stone, 17);
+  assert.equal(
+    transition(s, { type: 'build', piece: piece('window') }).ok,
+    false,
+  );
+  const before = structuredClone(s.bag);
+  s = run(s, {
+    type: 'build-edit',
+    id: s.buildings[0].id,
+    piece: piece('wall', {
+      material: 'stone',
+      rotation: 90,
+      color: COLORS[3],
+      x: -1,
+    }),
+  });
+  assert.deepEqual(s.bag, before);
+  assert.equal(
+    transition(s, {
+      type: 'build-edit',
+      id: s.buildings[0].id,
+      piece: piece('wall'),
+    }).ok,
+    false,
+  );
+  s = run(s, { type: 'build-remove', id: s.buildings[0].id });
+  assert.equal(s.bag.stone, 20);
+  assert.equal(s.bag.wood, 20);
+});
+test('furniture inside uses inventory, can be edited, and is refundable', () => {
+  let s = initialState();
+  assert.equal(
+    transition(s, { type: 'build', piece: piece('chair') }).ok,
+    false,
+  );
+  s.bag.chair = 1;
+  s = run(s, { type: 'build', piece: piece('chair') });
+  assert.equal(s.bag.chair, 0);
+  const id = s.buildings[0].id;
+  s = run(s, {
+    type: 'build-edit',
+    id,
+    piece: piece('chair', { x: 1, rotation: 180, color: COLORS[2] }),
+  });
+  assert.equal(s.buildings[0].x, 1);
+  assert.equal(s.bag.chair, 0);
+  s = run(s, { type: 'build-remove', id });
+  assert.equal(s.bag.chair, 1);
+});
+test('outdoor and upstairs structures require floors and protect their supports', () => {
+  let s = initialState();
+  s.bag.wood = 99;
+  s.bag.stone = 99;
+  assert.equal(
+    transition(s, { type: 'build', piece: piece('wall', { area: 'island' }) })
+      .ok,
+    false,
+  );
+  assert.equal(
+    transition(s, { type: 'build', piece: piece('table', { level: 1 }) }).ok,
+    false,
+  );
+  s = run(s, { type: 'build', piece: piece('floor', { area: 'island' }) });
+  const floor = s.buildings[0];
+  s = run(s, { type: 'build', piece: piece('wall', { area: 'island' }) });
+  assert.equal(s.buildings.length, 2);
+  assert.equal(transition(s, { type: 'build-remove', id: floor.id }).ok, false);
+  assert.equal(
+    transition(s, {
+      type: 'build-edit',
+      id: floor.id,
+      piece: { ...floor, x: -3 },
+    }).ok,
+    false,
+  );
+  s = run(s, {
+    type: 'build',
+    piece: piece('floor', { area: 'island', level: 1 }),
+  });
+  assert.equal(s.buildings.length, 3);
+  assert.deepEqual(restore(JSON.stringify(s)), s);
+});
+test('outdoor furniture moves atomically and rejects overlaps without consuming items', () => {
+  let s = initialState();
+  s.bag.chair = 1;
+  s = run(s, { type: 'place', item: 'chair', x: -3, z: 2 });
+  const d = s.decorations[0];
+  const failed = transition(s, {
+    type: 'edit',
+    id: d.id,
+    x: 0,
+    z: -3,
+    rotation: 90,
+    color: COLORS[1],
+  });
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.state, s);
+  s = run(s, {
+    type: 'edit',
+    id: d.id,
+    x: -3,
+    z: 0,
+    rotation: 90,
+    color: COLORS[1],
+  });
+  assert.equal(s.decorations[0].id, d.id);
+  assert.equal(s.bag.chair, 0);
+  assert.equal(s.decorations[0].z, 0);
+});
+test('legacy saves gain an empty workshop without losing progress', () => {
+  const s = initialState();
+  s.completed = 8;
+  s.bag.wood = 12;
+  delete s.buildings;
+  delete s.workshopLevel;
+  const restored = restore(JSON.stringify(s));
+  assert.equal(restored.completed, 8);
+  assert.equal(restored.bag.wood, 12);
+  assert.deepEqual(restored.buildings, []);
+  assert.equal(restored.workshopLevel, 0);
+});
