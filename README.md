@@ -1,92 +1,44 @@
-# Sapling
+# Lilla — Island Workshop
 
-Sapling is a personal, retrieval-first language learning application with
-separate Danish and Swedish learning tracks. Its core
-product is an evolving model of what a learner can recognize, retrieve,
-produce, pronounce, and understand across contexts and speakers.
+A standalone 3D browser game for learning Swedish through a repeatable gathering, crafting, delivery, and decorating loop. Built separately from Sapling.
 
-The first slice includes:
+## Play
 
-- a small adaptive Learn loop built around attempt, reveal, compare, and repair
-- an adaptive Read & Write loop with five comprehension checks and five typed
-  responses per session
-- a language-specific progress view that keeps learning dimensions separate
-- a Supabase schema for concepts, learner state, and append-only evidence
-- focused placeholders for the future Ear and World systems
-- local demo persistence when Sapling's Supabase project is not configured
+- Click the island to walk, or use WASD / arrow keys. E interacts with nearby objects.
+- Click trees, rocks, flowers, the workshop, or the visitor. The bag also offers accessible Gather buttons.
+- Visitors speak Swedish requests. Select quantities from your bag and deliver them; wrong deliveries retain your items.
+- Craft chairs, flowerpots, and tables. Recipes unlock after 0, 2, and 4 deliveries.
+- Place furniture in eight island spots and return it to your bag at any time.
+- Earn shells through deliveries and exchange them for optional supply bundles.
+- Press B to inspect your bag; 1–7 are gathering/workshop shortcuts.
 
-## Stack
+## Learning and storage
 
-- Next.js App Router and React
-- strict TypeScript
-- Tailwind CSS v4
-- Supabase Auth and Postgres with row-level security
-- Vercel-ready application structure
+Guided, listening-first, and immersive settings share the same Swedish content. Gameplay vocabulary uses dotted underlines: hover, keyboard-focus, or tap to reveal English. On touch screens, tap an action once for its translation and again to act. English is no longer shown automatically. Revealing a word in the active request counts as help; hint-assisted deliveries do not increase that word's familiarity. This is a gameplay proxy for familiarity, not a validated proficiency assessment.
 
-This follows the useful infrastructure conventions from Crumbs while keeping
-Sapling's code, data model, credentials, Supabase project, and Vercel project
-entirely independent.
+Swedish speech uses a Swedish voice exposed by browser speech synthesis. Without a Swedish voice, the game shows subtitles and an explicit audio availability message. Microphone input is not implemented. All progress is versioned in localStorage on the current browser and origin; there is no account sync. Preview and production therefore have separate saves.
 
-## Production
+## Development
 
-Sapling is deployed at [https://mysapl.ing](https://mysapl.ing). Vercel serves
-the apex domain, and `www.mysapl.ing` permanently redirects to it.
+Node 24 recommended (tests use native TypeScript stripping).
 
-Production deployments follow the `main` branch. Supabase applies checked-in
-database migrations from that branch, and Supabase Auth uses the custom domain
-as its Site URL. Localhost and scoped Vercel preview URLs remain on the Auth
-redirect allow list for development and review.
+- `npm install`
+- `npm run dev`
+- `npm run typecheck`
+- `npm run lint:game`
+- `npm test`
+- `npm run build`
 
-## Local development
+The original scaffold's `npm run lint` includes unrelated preinstalled UI components with existing lint violations. The focused game check covers authored game files without changing those vendored components.
 
-```bash
-npm install
-npm run dev
-```
+## Validation and limits
 
-Open [http://localhost:3000](http://localhost:3000). With no Supabase variables,
-Sapling uses a local demo repository in the browser so the Learn and progress
-flows can be exercised immediately.
+Nine focused tests cover walking routes around the workshop, reachable interaction spots, wrong-delivery safety, resource cooldowns and crafting costs, per-word help credit, repeated exposure protection, decoration inventory, corrupt saves, and 100 consecutive fulfillable requests with save/restore checks. TypeScript and the production build are also checked.
 
-To connect a new Sapling Supabase project, create `.env.local` from the variable
-names in `.env.example` and use values from **Sapling's own project**:
+Browser interaction and visual QA were not performed in this implementation pass. The optional, feature-detected read-only WebMCP progress tool has not been verified in a supporting browser context.
 
-```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-NEXT_PUBLIC_SAPLING_SITE_URL
-```
+This is a playable foundation with four resource types, three recipes, and composable Swedish request patterns. It is not an extensive curriculum or a full sandbox survival game.
 
-Only the publishable key belongs in browser-accessible configuration. Do not add
-a Supabase secret or service-role key to the frontend.
+## Playful UI refresh
 
-## Database
-
-The initial migration is in `supabase/migrations`. It creates the core concept,
-learner-state, session, and evidence model; enables RLS on every public table;
-and installs authenticated database commands for atomic retrieval and repair
-logging.
-
-After creating and linking Sapling's own Supabase project:
-
-```bash
-npx supabase link
-npx supabase db push
-```
-
-Create the first private account in Supabase Auth, and keep new-user sign-ups
-disabled in the production Auth settings. Sapling intentionally ships with
-sign-in but no public sign-up flow.
-
-## Quality checks
-
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
-
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Staged implementation plan](docs/implementation-plan.md)
+Inspired by the tangible 3D interaction and rounded graphic treatments on https://recent.design/. The interface uses raised buttons, larger touch targets, visible world markers and resource cooldowns, movement feedback, inventory arrival animations, and delivery celebrations. Initial guidance is an unobtrusive in-world card. Missing crafting ingredients lead directly to gathering; furniture can be placed using actual world-space spots. A responsive camera and zoom controls support smaller screens. Ambient animation and collection particles respect reduced-motion preferences. Existing saves and learning evidence are preserved.
