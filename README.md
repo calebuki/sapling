@@ -14,7 +14,7 @@ A standalone 3D browser game for learning Swedish through a repeatable gathering
 
 ## Learning and storage
 
-Guided, listening-first, and immersive settings share the same content. New words show readable English glosses for 4.5 seconds. Hints recur less often as encounters increase, with automatic hints removed after three independently successful deliveries for a word. Hint-assisted deliveries do not increase that word's familiarity. Incorrect deliveries bring support back. This is a gameplay proxy for familiarity, not a validated proficiency assessment.
+Guided, listening-first, and immersive settings share the same Swedish content. Gameplay vocabulary uses dotted underlines: hover, keyboard-focus, or tap to reveal English. On touch screens, tap an action once for its translation and again to act. English is no longer shown automatically. Revealing a word in the active request counts as help; hint-assisted deliveries do not increase that word's familiarity. This is a gameplay proxy for familiarity, not a validated proficiency assessment.
 
 Swedish speech uses a Swedish voice exposed by browser speech synthesis. Without a Swedish voice, the game shows subtitles and an explicit audio availability message. Microphone input is not implemented. All progress is versioned in localStorage on the current browser and origin; there is no account sync. Preview and production therefore have separate saves.
 

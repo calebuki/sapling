@@ -4,6 +4,7 @@ import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { SLOTS } from '@/lib/game';
 import { routeTo, walkable } from '@/lib/navigation';
+import Vocab from './vocab';
 export type Decoration = { id: string; kind: string; x: number; z: number };
 type Props = {
   onInteract: (id: string) => boolean;
@@ -14,14 +15,18 @@ type Props = {
   cooldowns: Partial<Record<string, number>>;
   placement: string | null;
   onPlace: (slot: number) => void;
+  onWordHelp: (key: string) => void;
 };
-const labels: Record<string, { icon: string; name: string; y: number }> = {
-  wood: { icon: '🪵', name: 'Gather wood', y: 4.8 },
-  apple: { icon: '🍎', name: 'Pick apples', y: 4.8 },
-  stone: { icon: '🪨', name: 'Collect stones', y: 1.9 },
-  flower: { icon: '🌼', name: 'Pick flowers', y: 1.5 },
-  workshop: { icon: '🔨', name: 'Workshop', y: 4.8 },
-  visitor: { icon: '💬', name: 'Say hej!', y: 2.7 },
+const labels: Record<
+  string,
+  { icon: string; name: string; sv: string; y: number }
+> = {
+  wood: { icon: '🪵', name: 'Gather wood', sv: 'Samla trä', y: 4.8 },
+  apple: { icon: '🍎', name: 'Pick apples', sv: 'Plocka äpplen', y: 4.8 },
+  stone: { icon: '🪨', name: 'Collect stones', sv: 'Samla stenar', y: 1.9 },
+  flower: { icon: '🌼', name: 'Pick flowers', sv: 'Plocka blommor', y: 1.5 },
+  workshop: { icon: '🔨', name: 'Workshop', sv: 'Verkstad', y: 4.8 },
+  visitor: { icon: '💬', name: 'Say hej!', sv: 'Säg hej!', y: 2.7 },
 };
 const points: Record<string, [number, number]> = {
   wood: [-5, -2],
@@ -40,6 +45,7 @@ export default function World({
   cooldowns,
   placement,
   onPlace,
+  onWordHelp,
 }: Props) {
   const pins = useRef<Record<string, HTMLButtonElement | null>>({});
   const slots = useRef<Record<number, HTMLButtonElement | null>>({});
@@ -862,21 +868,24 @@ export default function World({
       )}
       <div className="world-labels">
         {Object.entries(labels).map(([id, label]) => (
-          <button
+          <Vocab
+            sv={label.sv}
+            en={label.name}
+            onReveal={() => onWordHelp(id)}
             key={id}
-            ref={(node) => {
-              pins.current[id] = node;
+            buttonRef={(node) => {
+              pins.current[id] = node as HTMLButtonElement | null;
             }}
             className="world-pin"
             data-object={id}
             hidden={paused || !ready}
-            aria-label={label.name}
-            onClick={() => api.current?.go(id)}
+            aria-label={label.sv}
+            action={() => api.current?.go(id)}
           >
             <span aria-hidden="true">{label.icon}</span>
-            {label.name}
+            <span className="vocab-text world-word">{label.sv}</span>
             <em />
-          </button>
+          </Vocab>
         ))}
         {SLOTS.map(([x, z], i) => {
           const occupied = decorations.some((d) => d.x === x && d.z === z);
