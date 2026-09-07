@@ -384,6 +384,9 @@ export default function Home() {
             setStudioSelection(id);
             setStudio('island');
           }}
+          editingId={editing}
+          placementRotation={rotation}
+          placementColor={color}
           movingId={movingId}
           expansion={state.expansion}
           visitorAvailable={visitorAvailable}
@@ -393,7 +396,6 @@ export default function Home() {
           decorations={state.decorations}
           paused={
             !!studio ||
-            !!editing ||
             !loaded ||
             !!panel ||
             dialog ||
@@ -1387,17 +1389,18 @@ export default function Home() {
             )}
           </DialogContent>
         </Dialog>
-        <Dialog
-          open={!!editing}
-          onOpenChange={(open) => {
-            if (!open) setEditing(null);
-          }}
-        >
-          <DialogContent className="game-modal">
-            <DialogTitle>Edit placed furniture</DialogTitle>
-            <DialogDescription>
-              Move it, rotate it, or give it a new color.
-            </DialogDescription>
+        {editing && (
+          <section
+            className="furniture-hud"
+            aria-label="Edit selected furniture"
+          >
+            <button
+              className="furniture-close"
+              aria-label="Finish editing"
+              onClick={() => setEditing(null)}
+            >
+              Done
+            </button>
             {(() => {
               const d = state.decorations.find((v) => v.id === editing);
               return d ? (
@@ -1476,8 +1479,8 @@ export default function Home() {
                 </>
               ) : null;
             })()}
-          </DialogContent>
-        </Dialog>
+          </section>
+        )}
       </main>
     </TooltipProvider>
   );

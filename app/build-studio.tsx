@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as T from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   BUILD_PARTS,
   COLORS,
@@ -14,8 +15,9 @@ import {
   type BuildPiece,
 } from '@/lib/game';
 import { pieceMesh, disposeGroup } from './build-mesh';
-import Vocab from './vocab';
+
 import { VoicePractice } from './learning';
+import Vocab from './vocab';
 
 type Props = {
   state: State;
@@ -35,6 +37,7 @@ export default function BuildStudio({
 }: Props) {
   const host = useRef<HTMLDivElement>(null),
     [kind, setKind] = useState<BuildKind | null>(null),
+    [moving, setMoving] = useState(false),
     [selected, setSelected] = useState<string | null>(initialSelected ?? null),
     [rotation, setRotation] = useState(0),
     [color, setColor] = useState<string>(COLORS[0]),
@@ -56,13 +59,31 @@ export default function BuildStudio({
     level,
     walk,
     showRoofs,
+    selected,
+    moving,
     area,
     onClick: (_x: number, _z: number, _id?: string) => {},
   });
   const selectedPiece = state.buildings.find((p) => p.id === selected);
   function placeAt(x: number, z: number, id?: string) {
+    if (moving && selectedPiece) {
+      const r = act({
+        type: 'build-edit',
+        id: selectedPiece.id,
+        piece: { ...selectedPiece, x, z, rotation, color },
+      });
+      setNotice(r.message);
+      if (r.ok) setMoving(false);
+      return;
+    }
     if (!kind) {
       setSelected(id ?? null);
+      const picked = state.buildings.find((p) => p.id === id);
+      if (picked) {
+        setRotation(picked.rotation);
+        setColor(picked.color);
+        setLevel(picked.level);
+      }
       return;
     }
     const piece = { kind, x, z, level, rotation, color, material, area };
@@ -83,6 +104,8 @@ export default function BuildStudio({
       level,
       walk,
       showRoofs,
+      selected,
+      moving,
       area,
       onClick: placeAt,
     };
@@ -91,6 +114,7 @@ export default function BuildStudio({
     refresh: () => void;
     turn: (n: number) => void;
     step: (n: number) => void;
+    focus: () => void;
   } | null>(null);
   useEffect(() => {
     const el = host.current;
@@ -110,11 +134,31 @@ export default function BuildStudio({
     scene.add(new T.HemisphereLight('#fff6df', '#8b9679', 2.4));
     const sun = new T.DirectionalLight('#fff1dc', 3);
     sun.position.set(8, 14, 7);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, {
+      left: -20,
+      right: 20,
+      top: 20,
+      bottom: -20,
+    });
+    sun.shadow.bias = -0.0005;
     scene.add(sun);
+    renderer.toneMapping = T.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     const camera = new T.PerspectiveCamera(48, 1, 0.1, 150),
       root = new T.Group();
     scene.add(root);
     const position = new T.Vector3(0, 1.65, 3);
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enableDamping = true;
+    orbit.minDistance = 3;
+    orbit.maxDistance = 48;
+    orbit.maxPolarAngle = Math.PI / 2.05;
+    orbit.target.set(0, 0.8, 0);
+    camera.position.set(11, 13, 15);
+    orbit.update();
+    let pitch = 0;
     let yaw = 0,
       frame = 0,
       last = performance.now();
@@ -137,6 +181,7 @@ export default function BuildStudio({
           color: area === 'workshop' ? '#dfd1ae' : '#94cf70',
         }),
       );
+      floor.receiveShadow = true;
       floor.position.y = -0.1;
       if (area === 'island') floor.scale.z = 0.82;
       root.add(floor);
@@ -163,10 +208,11 @@ export default function BuildStudio({
         ];
         for (const [x, z] of obstacles) {
           const m = new T.Mesh(
-            new T.CylinderGeometry(0.8, 0.8, 0.3, 16),
+            new T.ConeGeometry(1, 2.8, 7),
             new T.MeshStandardMaterial({ color: '#668e6b' }),
           );
-          m.position.set(x, 0.15, z);
+          m.position.set(x, 1.4, z);
+          m.castShadow = true;
           root.add(m);
         }
         const cabin = new T.Mesh(
@@ -199,6 +245,7 @@ export default function BuildStudio({
             new T.MeshStandardMaterial({ color: '#d9c9b5' }),
           );
           wall.position.set((x * size) / 2, 1.3, 0);
+          wall.userData.shell = true;
           root.add(wall);
         }
         const back = new T.Mesh(
@@ -206,6 +253,7 @@ export default function BuildStudio({
           new T.MeshStandardMaterial({ color: '#d9c9b5' }),
         );
         back.position.set(0, 1.3, -size / 2);
+        back.userData.shell = true;
         root.add(back);
       }
       for (const p of s.buildings.filter((p) => p.area === area)) {
@@ -216,9 +264,25 @@ export default function BuildStudio({
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
+    let press = { x: 0, y: 0 };
+    const pressed = (e: PointerEvent) => {
+      press = { x: e.clientX, y: e.clientY };
+    };
     function click(e: PointerEvent) {
+      if (
+        e.button !== 0 ||
+        Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5
+      )
+        return;
       el!.focus({ preventScroll: true });
-      if (live.current.walk) return;
+      if (live.current.walk) {
+        renderer.domElement
+          .requestPointerLock?.()
+          ?.catch(() =>
+            setNotice('Mouse capture unavailable. Hold and drag to look.'),
+          );
+        return;
+      }
       const rect = el!.getBoundingClientRect();
       pointer.set(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -229,7 +293,7 @@ export default function BuildStudio({
       plane.constant = -live.current.level * 2.4;
       if (!ray.ray.intersectPlane(plane, p)) return;
       let id: string | undefined;
-      if (!live.current.kind) {
+      if (!live.current.kind && !live.current.moving) {
         let o: T.Object3D | null =
           ray.intersectObjects(
             root.children.filter((o) => o.visible),
@@ -250,9 +314,25 @@ export default function BuildStudio({
     );
     scene.add(ghost);
     ghost.visible = false;
+    let preview: T.Group | null = null,
+      previewKey = '';
+    const selection = new T.Box3Helper(new T.Box3(), new T.Color('#ffcf70'));
+    (selection.material as T.Material).depthTest = false;
+    selection.renderOrder = 100;
+    scene.add(selection);
     function hover(e: PointerEvent) {
+      if (live.current.walk) {
+        if (
+          document.pointerLockElement === renderer.domElement ||
+          e.buttons === 1
+        ) {
+          yaw -= e.movementX * 0.0025;
+          pitch = T.MathUtils.clamp(pitch - e.movementY * 0.0025, -1.3, 1.3);
+        }
+        return;
+      }
       const l = live.current;
-      if (!l.kind || l.walk) {
+      if ((!l.kind && !l.moving) || l.walk) {
         ghost.visible = false;
         return;
       }
@@ -269,23 +349,67 @@ export default function BuildStudio({
           z = Math.round(p.z / 1.5);
         ghost.position.set(x * 1.5, l.level * 2.4 + 0.16, z * 1.5);
         ghost.visible = true;
+        const picked = l.state.buildings.find((p) => p.id === l.selected);
+        const candidate = {
+          kind: l.kind ?? picked!.kind,
+          x,
+          z,
+          level: l.level,
+          rotation: l.rotation,
+          color: l.color,
+          material: l.moving ? picked!.material : l.material,
+          area: l.area,
+        };
+        const key = JSON.stringify(candidate);
+        if (key !== previewKey) {
+          if (preview) {
+            scene.remove(preview);
+            disposeGroup(preview);
+          }
+          preview = pieceMesh({ ...candidate, id: 'preview' });
+          preview.traverse((o) => {
+            if (o instanceof T.Mesh) {
+              o.material.transparent = true;
+              o.material.opacity = 0.6;
+              o.material.depthWrite = false;
+            }
+          });
+          scene.add(preview);
+          previewKey = key;
+        }
         ghost.material.color.set(
-          validBuild(l.state, {
-            kind: l.kind,
-            x,
-            z,
-            level: l.level,
-            rotation: l.rotation,
-            color: l.color,
-            material: l.material,
-            area: l.area,
-          })
+          validBuild(
+            l.state,
+            {
+              kind: l.kind ?? picked!.kind,
+              x,
+              z,
+              level: l.level,
+              rotation: l.rotation,
+              color: l.color,
+              material: l.material,
+              area: l.area,
+            },
+            l.moving ? (l.selected ?? undefined) : undefined,
+          )
             ? '#8fc884'
             : '#e89191',
         );
       }
     }
     function keydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (document.pointerLockElement) document.exitPointerLock();
+        keys.clear();
+      }
+      if (
+        e.key === 'r' &&
+        !live.current.walk &&
+        !(e.target as HTMLElement).closest('input,select')
+      ) {
+        setRotation((v) => (v + 90) % 360);
+        e.preventDefault();
+      }
       if ((e.target as HTMLElement).closest('input,select,textarea,button'))
         return;
       if (
@@ -298,6 +422,7 @@ export default function BuildStudio({
           'ArrowDown',
           'ArrowLeft',
           'ArrowRight',
+          'Shift',
         ].includes(e.key)
       ) {
         e.preventDefault();
@@ -306,10 +431,12 @@ export default function BuildStudio({
     }
     const keyup = (e: KeyboardEvent) => keys.delete(e.key),
       blur = () => keys.clear();
-    function step(amount: number) {
+    function step(amount: number, strafe = 0) {
       const n = position.clone();
       n.x -= Math.sin(yaw) * amount;
+      n.x += Math.cos(yaw) * strafe;
       n.z -= Math.cos(yaw) * amount;
+      n.z -= Math.sin(yaw) * strafe;
       const s = live.current.state,
         bound = (3 + s.workshopLevel) * 1.5;
       const terrain =
@@ -348,6 +475,16 @@ export default function BuildStudio({
     }
     api.current = {
       refresh,
+      focus: () => {
+        const p = live.current.state.buildings.find(
+          (p) => p.id === live.current.selected,
+        );
+        if (p) {
+          orbit.target.set(p.x * 1.5, p.level * 2.4 + 0.6, p.z * 1.5);
+          camera.position.copy(orbit.target).add(new T.Vector3(4, 4, 5));
+          orbit.update();
+        }
+      },
       turn: (n) => {
         yaw += n;
       },
@@ -362,40 +499,72 @@ export default function BuildStudio({
     const observer = new ResizeObserver(resize);
     observer.observe(el);
     resize();
+    let previousWalk = false;
+    const buildCamera = camera.position.clone(),
+      buildTarget = orbit.target.clone();
     function animate(now: number) {
       frame = requestAnimationFrame(animate);
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
+      if (live.current.walk !== previousWalk) {
+        if (live.current.walk) {
+          buildCamera.copy(camera.position);
+          buildTarget.copy(orbit.target);
+        } else {
+          camera.position.copy(buildCamera);
+          orbit.target.copy(buildTarget);
+        }
+        keys.clear();
+        previousWalk = live.current.walk;
+      }
       if (live.current.walk) {
-        if (keys.has('a') || keys.has('ArrowLeft')) yaw += dt * 1.5;
-        if (keys.has('d') || keys.has('ArrowRight')) yaw -= dt * 1.5;
-        if (keys.has('w') || keys.has('ArrowUp')) step(dt * 3);
+        if (keys.has('a') || keys.has('ArrowLeft')) step(0, -dt * 3);
+        if (keys.has('d') || keys.has('ArrowRight')) step(0, dt * 3);
+        if (keys.has('w') || keys.has('ArrowUp'))
+          step(dt * (keys.has('Shift') ? 5 : 3));
         if (keys.has('s') || keys.has('ArrowDown')) step(-dt * 3);
         camera.position.copy(position);
         camera.lookAt(
           position.x - Math.sin(yaw),
-          position.y,
+          position.y + Math.tan(pitch),
           position.z - Math.cos(yaw),
         );
       } else {
-        camera.position
-          .set(13, 17, 19)
-          .multiplyScalar(
-            area === 'island'
-              ? 1.2
-              : 0.8 + live.current.state.workshopLevel * 0.1,
-          );
-        camera.lookAt(0, 0, 0);
+        orbit.update();
       }
+      orbit.enabled = !live.current.walk;
+      camera.fov = live.current.walk ? 75 : 48;
+      camera.updateProjectionMatrix();
+      if (
+        !live.current.walk &&
+        document.pointerLockElement === renderer.domElement
+      )
+        document.exitPointerLock();
+      const chosen = root.children.find(
+        (o) => o.userData.pieceId === live.current.selected,
+      );
+      selection.visible = !!chosen && !live.current.walk;
+      if (chosen) selection.box.setFromObject(chosen);
+      if (preview) preview.rotation.y = (live.current.rotation * Math.PI) / 180;
+      if (preview)
+        preview.visible =
+          (!!live.current.kind || live.current.moving) && !live.current.walk;
       ghost.visible =
-        ghost.visible && !!live.current.kind && !live.current.walk;
+        ghost.visible &&
+        (!!live.current.kind || live.current.moving) &&
+        !live.current.walk;
       root.children.forEach((o) => {
+        if (o.userData.shell)
+          o.visible =
+            live.current.walk || (o.position.z < 0 && camera.position.z > 0);
+        if (o instanceof T.GridHelper) o.visible = !live.current.walk;
         if (o.userData.kind === 'roof')
           o.visible = live.current.walk || live.current.showRoofs;
       });
       renderer.render(scene, camera);
     }
-    el.addEventListener('pointerdown', click);
+    el.addEventListener('pointerdown', pressed);
+    el.addEventListener('pointerup', click);
     el.addEventListener('pointermove', hover);
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
@@ -405,7 +574,14 @@ export default function BuildStudio({
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      el.removeEventListener('pointerdown', click);
+      el.removeEventListener('pointerdown', pressed);
+      el.removeEventListener('pointerup', click);
+      orbit.dispose();
+      if (document.pointerLockElement === renderer.domElement)
+        document.exitPointerLock();
+      if (preview) disposeGroup(preview);
+      selection.geometry.dispose();
+      (selection.material as T.Material).dispose();
       el.removeEventListener('pointermove', hover);
       ghost.geometry.dispose();
       ghost.material.dispose();
@@ -440,270 +616,223 @@ export default function BuildStudio({
     setNotice(r.message);
   }
   return (
-    <section className="build-studio">
-      <header>
+    <section className={`build-studio game-editor ${walk ? 'is-walking' : ''}`}>
+      <div
+        className="studio-viewport"
+        ref={host}
+        role="application"
+        tabIndex={-1}
+        aria-label="Build scene. Drag to orbit, scroll to zoom, click to select or place."
+      />
+      <header className="editor-top">
         <div>
           <span className="eyebrow">{state.islandName}</span>
-          <h2>{area === 'workshop' ? 'Min verkstad' : 'Bygg ett hem'}</h2>
+          <h2>{area === 'workshop' ? 'Workshop' : 'Island construction'}</h2>
         </div>
         <button
-          className="text-button"
           onClick={() => {
             setWalk(!walk);
-            host.current?.focus({ preventScroll: true });
             setKind(null);
+            setMoving(false);
+            host.current?.focus();
           }}
         >
-          {walk ? '⌂ Build view' : '◉ Walk inside'}
+          {walk ? 'Build mode' : 'Explore'}
         </button>
-        <button className="text-button" onClick={onCraft}>
-          Craft furniture
-        </button>
-        <button className="primary" onClick={onExit}>
-          Back to island
-        </button>
+        <button onClick={onCraft}>Craft</button>
+        <button onClick={onExit}>Done</button>
       </header>
-      <div className="studio-layout">
-        <div
-          className="studio-viewport"
-          ref={host}
-          role="application"
-          tabIndex={-1}
-          aria-label="3D building area. Click a grid square to build, or choose Inspect to edit a piece."
-        >
-          {!ready && (
-            <p>
-              {failure
-                ? '3D is unavailable. Coordinate building remains available.'
-                : 'Opening your workshop…'}
-            </p>
-          )}
+      {!ready && (
+        <div className="editor-message">
+          {failure
+            ? 'This device could not start 3D.'
+            : 'Opening the workshop…'}
         </div>
-        <aside className="studio-tools">
-          {area === 'workshop' && (
+      )}
+      {walk ? (
+        <>
+          <div className="crosshair" aria-hidden="true">
+            +
+          </div>
+          <div className="editor-help">
+            Click scene to capture mouse · WASD move · Shift sprint · Esc
+            release mouse
+          </div>
+          <div className="walk-touch">
+            <button onClick={() => api.current?.turn(0.2)}>↶</button>
+            <button onClick={() => api.current?.step(0.5)}>↑</button>
+            <button onClick={() => api.current?.turn(-0.2)}>↷</button>
+            <button onClick={() => api.current?.step(-0.5)}>↓</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="editor-help">
+            Drag to orbit · Right-drag to pan · Scroll to zoom · R rotate
+          </div>
+          <div className="editor-options">
             <button
-              className="primary"
-              disabled={state.workshopLevel >= 2}
-              onClick={() => {
-                const r = act({ type: 'workshop-expand' });
-                setNotice(r.message);
-              }}
+              aria-pressed={showRoofs}
+              onClick={() => setShowRoofs(!showRoofs)}
             >
-              {state.workshopLevel >= 2
-                ? 'Workshop fully expanded'
-                : `Expand room · 🪵 ${WORKSHOP_COSTS[state.workshopLevel].wood} 🪨 ${WORKSHOP_COSTS[state.workshopLevel].stone}`}
+              {showRoofs ? 'Hide roofs' : 'Show roofs'}
             </button>
-          )}
-          <p className="fine">
-            🪵 {state.bag.wood} · 🪨 {state.bag.stone} ·{' '}
-            {state.buildings.length}/150 pieces
-          </p>
-          <label>
-            <input
-              type="checkbox"
-              checked={showRoofs}
-              onChange={(e) => setShowRoofs(e.target.checked)}
-            />{' '}
-            Show roofs in build view
-          </label>
-          <details>
-            <summary>
-              Placed pieces ·{' '}
-              {state.buildings.filter((p) => p.area === area).length}
-            </summary>
-            <div className="placed-piece-list">
-              {state.buildings
-                .filter((p) => p.area === area)
-                .map((p) => (
+            <button onClick={() => setLevel(level ? 0 : 1)}>
+              Floor {level + 1}
+            </button>
+            <button
+              onClick={() =>
+                setMaterial(material === 'wood' ? 'stone' : 'wood')
+              }
+            >
+              {material === 'wood' ? 'Wood' : 'Stone'}
+            </button>
+            {area === 'workshop' && (
+              <button
+                disabled={state.workshopLevel >= 2}
+                onClick={() =>
+                  setNotice(act({ type: 'workshop-expand' }).message)
+                }
+              >
+                {state.workshopLevel >= 2
+                  ? 'Room expanded'
+                  : `Expand · 🪵${WORKSHOP_COSTS[state.workshopLevel].wood} 🪨${WORKSHOP_COSTS[state.workshopLevel].stone}`}
+              </button>
+            )}
+          </div>
+          {(selectedPiece || kind) && (
+            <div className="editor-selection">
+              <b>{BUILD_PARTS[kind ?? selectedPiece!.kind].sv}</b>
+              <span>
+                {kind
+                  ? `🪵 ${cost?.wood} · 🪨 ${cost?.stone}`
+                  : moving
+                    ? 'Click a new location'
+                    : 'Selected'}
+              </span>
+              {selectedPiece && !kind && (
+                <>
                   <button
-                    className="text-button"
-                    key={p.id}
                     onClick={() => {
-                      setKind(null);
-                      setSelected(p.id);
-                      setWalk(false);
+                      setMoving(!moving);
+                      setRotation(selectedPiece.rotation);
+                      setColor(selectedPiece.color);
+                      setLevel(selectedPiece.level);
                     }}
                   >
-                    {BUILD_PARTS[p.kind].sv} · {p.x}, {p.z} · level {p.level}
+                    {moving ? 'Cancel move' : 'Move'}
                   </button>
-                ))}
-            </div>
-          </details>
-          {walk ? (
-            <>
-              <p>W / S to walk · A / D to turn. Explore at ground level.</p>
-              <div className="practice-actions">
-                <button onClick={() => api.current?.turn(0.25)}>↶ Left</button>
-                <button onClick={() => api.current?.step(0.5)}>
-                  ↑ Forward
-                </button>
-                <button onClick={() => api.current?.turn(-0.25)}>
-                  Right ↷
-                </button>
-                <button onClick={() => api.current?.step(-0.5)}>↓ Back</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <button className="text-button" onClick={() => setKind(null)}>
-                Inspect / edit placed pieces
+                  <button onClick={() => api.current?.focus()}>Focus</button>
+                </>
+              )}
+              <button
+                onClick={() => {
+                  setRotation((rotation + 90) % 360);
+                  if (selectedPiece && !kind && !moving)
+                    edit({ rotation: (selectedPiece.rotation + 90) % 360 });
+                }}
+              >
+                Rotate ↻
               </button>
-              <div className="build-palette">
-                {(Object.keys(BUILD_PARTS) as BuildKind[]).map((k) => (
-                  <Vocab
-                    key={k}
-                    className={kind === k ? 'selected' : ''}
-                    sv={BUILD_PARTS[k].sv}
-                    en={BUILD_PARTS[k].en}
-                    action={() => {
-                      setKind(k);
-                      setSelected(null);
-                    }}
-                  />
-                ))}
-              </div>
               <div className="paint-palette">
                 {COLORS.map((c, i) => (
                   <button
                     key={c}
                     aria-label={['Honey', 'Sage', 'Rose', 'Sky', 'Lilac'][i]}
-                    aria-pressed={color === c}
                     style={{ background: c }}
-                    onClick={() => setColor(c)}
-                  >
-                    {color === c ? '✓' : ''}
-                  </button>
+                    aria-pressed={color === c}
+                    onClick={() => {
+                      setColor(c);
+                      if (selectedPiece && !kind && !moving) edit({ color: c });
+                    }}
+                  />
                 ))}
               </div>
-              <label>
-                Material
-                <select
-                  value={material}
-                  onChange={(e) =>
-                    setMaterial(e.target.value as 'wood' | 'stone')
-                  }
+              {selectedPiece && !kind && (
+                <button
+                  onClick={() => {
+                    const r = act({
+                      type: 'build-remove',
+                      id: selectedPiece.id,
+                    });
+                    setNotice(r.message);
+                    if (r.ok) {
+                      setSelected(null);
+                      setMoving(false);
+                    }
+                  }}
                 >
-                  <option value="wood">trä · wood</option>
-                  <option value="stone">sten · stone</option>
-                </select>
-              </label>
-              <label>
-                Floor level
-                <select
-                  value={level}
-                  onChange={(e) => setLevel(Number(e.target.value))}
-                >
-                  <option value={0}>Ground floor</option>
-                  <option value={1}>Upper floor</option>
-                </select>
-              </label>
+                  Return materials
+                </button>
+              )}
               <button
-                className="text-button"
-                onClick={() => setRotation((rotation + 90) % 360)}
+                onClick={() => {
+                  setSelected(null);
+                  setKind(null);
+                  setMoving(false);
+                }}
+                aria-label="Deselect"
               >
-                Rotate · {rotation}°
+                ×
               </button>
-              {kind && (
-                <>
-                  <p>
-                    {['chair', 'table', 'planter'].includes(kind)
-                      ? 'Uses one crafted item from your bag.'
-                      : `Cost: 🪵 ${cost?.wood} · 🪨 ${cost?.stone}`}
-                  </p>
-                  <p className="fine">
-                    Click a grid square. Outdoor pieces need a floor first.
-                    Upper floors need a floor below.
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const d = new FormData(e.currentTarget);
-                      placeAt(Number(d.get('x')), Number(d.get('z')));
-                    }}
-                    className="coordinate-form"
-                  >
-                    <label>
-                      X
-                      <input
-                        name="x"
-                        type="number"
-                        defaultValue={-2}
-                        required
-                        step={1}
-                      />
-                    </label>
-                    <label>
-                      Z
-                      <input
-                        name="z"
-                        type="number"
-                        defaultValue={0}
-                        required
-                        step={1}
-                      />
-                    </label>
-                    <button className="primary">Place</button>
-                  </form>
-                </>
-              )}
-              {selectedPiece && (
-                <div className="piece-edit">
-                  <b>{BUILD_PARTS[selectedPiece.kind].sv}</b>
-                  <p>
-                    {selectedPiece.x}, {selectedPiece.z} · level{' '}
-                    {selectedPiece.level}
-                  </p>
-                  <div className="practice-actions">
-                    <button
-                      onClick={() =>
-                        edit({ rotation: (selectedPiece.rotation + 90) % 360 })
-                      }
-                    >
-                      Rotate
-                    </button>
-                    <button onClick={() => edit({ color })}>Apply color</button>
-                    <button onClick={() => edit({ x: selectedPiece.x - 1 })}>
-                      ← Move
-                    </button>
-                    <button onClick={() => edit({ x: selectedPiece.x + 1 })}>
-                      Move →
-                    </button>
-                    <button onClick={() => edit({ z: selectedPiece.z - 1 })}>
-                      ↑ Move
-                    </button>
-                    <button onClick={() => edit({ z: selectedPiece.z + 1 })}>
-                      ↓ Move
-                    </button>
-                    <button
-                      onClick={() => {
-                        const r = act({
-                          type: 'build-remove',
-                          id: selectedPiece.id,
-                        });
-                        setNotice(r.message);
-                        if (r.ok) setSelected(null);
-                      }}
-                    >
-                      Return materials
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
-          {notice && <output aria-live="polite">{notice}</output>}
-          {practice && (
-            <details>
-              <summary>Say what you built</summary>
-              <VoicePractice
-                key={practice + practiceEpoch}
-                line={`Jag byggde ${['golv', 'fönster', 'tak', 'bord'].includes(BUILD_PARTS[practice].sv) ? 'ett' : 'en'} ${BUILD_PARTS[practice].sv}.`}
-                translation={`I built a ${BUILD_PARTS[practice].en}.`}
-              />
-            </details>
-          )}
-        </aside>
-      </div>
+          <nav className="editor-hotbar" aria-label="Building pieces">
+            <button
+              onClick={() => {
+                setKind(null);
+                setMoving(false);
+              }}
+              className={!kind ? 'selected' : ''}
+            >
+              ↖<small>Select</small>
+            </button>
+            {(Object.keys(BUILD_PARTS) as BuildKind[]).map((k, i) => (
+              <Vocab
+                sv={BUILD_PARTS[k].sv}
+                en={BUILD_PARTS[k].en}
+                key={k}
+                className={kind === k ? 'selected' : ''}
+                action={() => {
+                  setKind(k);
+                  setSelected(null);
+                  setMoving(false);
+                }}
+              >
+                <span>
+                  {['▱', '▥', 'Π', '⊞', '⌂', '▟', '▤', '⚒', '♧', '▰', '❀'][i]}
+                </span>
+                <VocabLabel text={BUILD_PARTS[k].sv} />
+              </Vocab>
+            ))}
+          </nav>
+        </>
+      )}
+      {notice && (
+        <output className="editor-notice" aria-live="polite">
+          {notice}{' '}
+          <button aria-label="Dismiss message" onClick={() => setNotice('')}>
+            ×
+          </button>
+        </output>
+      )}
+      {practice && !walk && (
+        <details className="editor-speaking">
+          <summary>Say what you built</summary>
+          <VoicePractice
+            key={practice + practiceEpoch}
+            line={`Jag byggde ${['golv', 'fönster', 'tak', 'bord'].includes(BUILD_PARTS[practice].sv) ? 'ett' : 'en'} ${BUILD_PARTS[practice].sv}.`}
+            translation={`I built a ${BUILD_PARTS[practice].en}.`}
+          />
+        </details>
+      )}
     </section>
+  );
+}
+function VocabLabel({ text }: { text: string }) {
+  return (
+    <small lang="sv" className="vocab-text">
+      {text}
+    </small>
   );
 }

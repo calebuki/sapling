@@ -54,3 +54,9 @@ Click the workshop to enter its 3D interior; use Craft furniture to open recipes
 Decorate → Build a house opens the island construction view. Structures appear on the main island. Walk inside switches the interior/construction scene to a ground-level first-person camera (W/S forward/back, A/D turn, with on-screen alternatives); Build view returns to the overhead editor. Upper floors can be built and viewed from above; stair climbing and a full first-person island camera are not yet included. Roofs are hidden in the overhead editor so interiors remain selectable.
 
 Click outdoor furniture to edit it directly. Moving preserves the original item until a valid new spot is confirmed. Ord now searches an offline Swedish/English island dictionary, including inflected forms, examples, audio, and encountered/discover distinctions. Searching does not grant learning credit.
+
+## Scene-first editor revamp
+
+Building now uses a fullscreen scene with a bottom hotbar, contextual selection tools, an actual translucent piece preview, and an orbit/pan/zoom camera. Drag the scene to orbit; right-drag to pan; scroll to zoom. Click a piece to select it, use Move and click a valid destination, or use Focus to inspect it closely. Island furniture editing stays in a compact scene overlay and automatically frames the selected piece.
+
+Explore uses a 75-degree first-person view, mouse capture on clicking the scene, WASD forward/strafe movement, Shift sprint, and mouse pitch/yaw. Escape releases the mouse. Drag-to-look and on-screen walking controls remain available when mouse capture is unavailable. Returning to build mode restores the previous camera.

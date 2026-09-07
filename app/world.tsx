@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as T from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { canPlace, type BuildPiece } from '@/lib/game';
 import { routeTo, walkable } from '@/lib/navigation';
@@ -20,6 +21,9 @@ type Props = {
   onEdit: (id: string) => void;
   onBuildEdit: (id: string) => void;
   movingId?: string | null;
+  editingId?: string | null;
+  placementRotation: number;
+  placementColor: string;
   decorations: Decoration[];
   paused: boolean;
   command?: { id: string; nonce: number };
@@ -57,6 +61,9 @@ export default function World({
   onEdit,
   onBuildEdit,
   movingId,
+  editingId,
+  placementRotation,
+  placementColor,
   decorations,
   paused,
   command,
@@ -75,6 +82,9 @@ export default function World({
     onEdit,
     onBuildEdit,
     movingId,
+    editingId,
+    placementRotation,
+    placementColor,
     cooldowns,
     placement,
     onPlace,
@@ -90,6 +100,9 @@ export default function World({
       onEdit,
       onBuildEdit,
       movingId,
+      editingId,
+      placementRotation,
+      placementColor,
       cooldowns,
       placement,
       onPlace,
@@ -100,6 +113,9 @@ export default function World({
       decorations,
     };
   }, [
+    editingId,
+    placementColor,
+    placementRotation,
     movingId,
     onEdit,
     onBuildEdit,
@@ -633,7 +649,23 @@ export default function World({
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), -0.73);
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enabled = false;
+    orbit.enableDamping = true;
+    orbit.target.set(0, 0, 0);
+    orbit.minDistance = 4;
+    orbit.maxDistance = 55;
+    orbit.maxPolarAngle = Math.PI / 2.1;
+    let press = { x: 0, y: 0 };
+    const pressed = (e: PointerEvent) => {
+      press = { x: e.clientX, y: e.clientY };
+    };
     const down = (e: PointerEvent) => {
+      if (
+        e.button !== 0 ||
+        Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5
+      )
+        return;
       if (pause.current && !live.current.placement) return;
       if ((e.target as HTMLElement).closest('button')) return;
       el.focus({ preventScroll: true });
@@ -669,6 +701,7 @@ export default function World({
           return;
         }
       }
+      if (live.current.editingId) return;
       const hits = ray.intersectObjects(targets, true);
       if (hits.length) {
         let o: T.Object3D | null = hits[0].object;
@@ -699,6 +732,14 @@ export default function World({
     );
     placementRing.rotation.x = -Math.PI / 2;
     placementRing.visible = false;
+    let preview: T.Group | null = null,
+      previewKey = '';
+    let lastEdit: string | null = null,
+      lastEditMode = false;
+    const selection = new T.Box3Helper(new T.Box3(), new T.Color('#ffcf70'));
+    (selection.material as T.Material).depthTest = false;
+    selection.renderOrder = 100;
+    scene.add(selection);
     const move = (e: PointerEvent) => {
       if (live.current.placement) {
         const rect = el.getBoundingClientRect();
@@ -757,7 +798,8 @@ export default function World({
     const leave = () => {
       hovered = null;
     };
-    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerdown', pressed);
+    el.addEventListener('pointerup', down);
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerleave', leave);
     const keys = new Set<string>();
@@ -986,6 +1028,70 @@ export default function World({
           (w, i) => (w.scale.x = 1 + Math.sin(now * 0.0008 + i) * 0.25),
         );
       }
+      const editMode = !!live.current.editingId || !!live.current.placement;
+      if (!editMode && lastEditMode) {
+        orbit.target.set(0, 0, 0);
+        resize();
+      }
+      lastEditMode = editMode;
+      orbit.enabled = !!live.current.editingId || !!live.current.placement;
+      if (orbit.enabled) orbit.update();
+      const selected = deco.children.find(
+        (o) =>
+          o.userData.decorationId ===
+          (live.current.editingId ?? live.current.movingId),
+      );
+      if (
+        selected &&
+        live.current.editingId &&
+        lastEdit !== live.current.editingId
+      ) {
+        const center = new T.Box3()
+          .setFromObject(selected)
+          .getCenter(new T.Vector3());
+        orbit.target.copy(center);
+        camera.position.copy(center).add(new T.Vector3(5, 6, 7));
+      }
+      lastEdit = live.current.editingId ?? null;
+      selection.visible = !!selected;
+      if (selected) selection.box.setFromObject(selected);
+      const key = [
+        live.current.placement,
+        live.current.placementRotation,
+        live.current.placementColor,
+      ].join();
+      if (key !== previewKey) {
+        if (preview) {
+          scene.remove(preview);
+          disposeGroup(preview);
+          preview = null;
+        }
+        previewKey = key;
+        if (live.current.placement) {
+          preview = pieceMesh({
+            id: 'preview',
+            kind: live.current.placement as BuildPiece['kind'],
+            x: 0,
+            z: 0,
+            level: 0,
+            rotation: live.current.placementRotation,
+            color: live.current.placementColor,
+            material: 'wood',
+            area: 'island',
+          });
+          preview.traverse((o) => {
+            if (o instanceof T.Mesh) {
+              o.material.transparent = true;
+              o.material.opacity = 0.6;
+            }
+          });
+          scene.add(preview);
+        }
+      }
+      if (preview) {
+        preview.position.copy(placementRing.position);
+        preview.visible = placementRing.visible && !!live.current.placement;
+      }
       renderer.render(scene, camera);
     }
     frame = requestAnimationFrame(animate);
@@ -993,7 +1099,12 @@ export default function World({
     return () => {
       cancelAnimationFrame(frame);
       ro.disconnect();
-      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointerdown', pressed);
+      el.removeEventListener('pointerup', down);
+      orbit.dispose();
+      if (preview) disposeGroup(preview);
+      selection.geometry.dispose();
+      (selection.material as T.Material).dispose();
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerleave', leave);
       window.removeEventListener('keydown', keydown);
