@@ -952,6 +952,10 @@ export default function Home() {
             </DialogDescription>
             {panel === 'settings' && (
               <>
+                <div className="mode-option"><b>Bring your island to Sapling</b><p>Download your island, then import it from island settings at mysapl.ing.</p><button className="primary" onClick={()=>{
+                  const url=URL.createObjectURL(new Blob([JSON.stringify(current.current)],{type:'application/json'}));
+                  const link=document.createElement('a');link.href=url;link.download='lilla-island.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+                }}>Download island save</button></div>
                 <div className="mode-options">
                   {(
                     [
