@@ -4,7 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { TownHome } from "@/components/town-home";
+import dynamic from "next/dynamic";
+const IslandHome = dynamic(() => import("@/components/island/island-home"), {
+  ssr: false,
+  loading: () => (
+    <div className="island-loading" role="status">
+      Sailing home…
+    </div>
+  ),
+});
 
 export function HomeLanding() {
   const router = useRouter();
@@ -20,5 +28,5 @@ export function HomeLanding() {
     return <div className="min-h-dvh animate-pulse bg-[#d6e4df]" />;
   }
 
-  return <TownHome />;
+  return <IslandHome />;
 }

@@ -8,17 +8,19 @@ import { createClient } from "@/lib/supabase/server";
 export default async function ProductLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  let learnerId = "demo";
   if (hasSupabase) {
     const supabase = await createClient();
     const { data } = await supabase.auth.getClaims();
 
+    learnerId = data?.claims?.sub ?? "demo";
     if (!data?.claims) {
       redirect("/login");
     }
   }
 
   return (
-    <LearningModelProvider>
+    <LearningModelProvider learnerId={learnerId}>
       <AppShell>{children}</AppShell>
     </LearningModelProvider>
   );

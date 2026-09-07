@@ -1,7 +1,20 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "../components/island/island.css";
+@import "../components/island/sapling-island.css";
 @import "./sapling-life.css";
 
 @theme inline {
+  --color-background: var(--background, #fdfcf8);
+  --color-popover: var(--popover, #fffdf2);
+  --color-popover-foreground: #253e36;
+  --color-foreground: #253e36;
+  --color-primary: #345b43;
+  --color-primary-foreground: #fff;
+  --color-muted: #ecefe5;
+  --color-muted-foreground: #617363;
+  --color-border: #d9dfd1;
+  --color-ring: #517658;
   --font-sans: var(--font-manrope);
   --font-display: var(--font-manrope);
 

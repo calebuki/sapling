@@ -34,9 +34,19 @@ export function AppShell({
   const { isSwitchingLanguage, selectTargetLanguage, targetLanguage, error } =
     useLearningModel();
   const [accountError, setAccountError] = useState<string | null>(null);
+  const island = targetLanguage.code === "sv";
   const destinations = [
-    { href: "/learn", label: "Learn", icon: Sprout },
-    { href: "/practice", label: "Practice", icon: MessageCircle },
+    ...(island ? [{ href: "/", label: "Island", icon: Leaf }] : []),
+    {
+      href: island ? "/?activity=learn" : "/learn",
+      label: "Learn",
+      icon: Sprout,
+    },
+    {
+      href: island ? "/?activity=invitations" : "/practice",
+      label: "Practice",
+      icon: MessageCircle,
+    },
   ];
   async function signOut() {
     const { error } = await createClient().auth.signOut();
@@ -48,7 +58,9 @@ export function AppShell({
     router.refresh();
   }
   return (
-    <div className="life-app">
+    <div
+      className={`life-app ${island ? "island-app" : ""} ${island && pathname === "/" ? "at-island" : ""}`}
+    >
       <a className="life-skip" href="#main-content">
         Skip to content
       </a>
@@ -64,7 +76,7 @@ export function AppShell({
             <Link
               key={href}
               href={href}
-              aria-current={pathname.startsWith(href) ? "page" : undefined}
+              aria-current={pathname === href ? "page" : undefined}
             >
               <Icon size={18} />
               {label}

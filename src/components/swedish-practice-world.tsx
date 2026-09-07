@@ -1,26 +1,22 @@
 "use client";
-
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { PracticeSession } from "@/components/practice-session";
-import { TownHome } from "@/components/town-home";
-import { getTownQuest } from "@/lib/worlds/quests";
-
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { parseIslandActivity } from "@/lib/island/progression";
 export function SwedishPracticeWorld({
   initialScenarioId,
 }: {
   embedded?: boolean;
   initialScenarioId?: string;
 }) {
-  const quest = initialScenarioId ? getTownQuest(initialScenarioId) : undefined;
-  if (!quest) return <TownHome />;
+  const router = useRouter();
+  const activity =
+    parseIslandActivity(initialScenarioId ?? null) ?? "invitations";
+  useEffect(() => {
+    router.replace("/?activity=" + activity);
+  }, [router, activity]);
   return (
-    <div className="life-page life-scene-page">
-      <Link className="life-text-link life-back-link" href="/practice">
-        <ArrowLeft size={16} />
-        Back to Lindbacken
-      </Link>
-      <PracticeSession key={quest.id} scenarioIds={[quest.id]} />
+    <div className="island-loading" role="status">
+      Sailing to your next adventure…
     </div>
   );
 }

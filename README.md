@@ -90,3 +90,13 @@ npm run build
 
 - [Architecture](docs/architecture.md)
 - [Staged implementation plan](docs/implementation-plan.md)
+
+## Sapling Island
+
+The Swedish home is now Lilla's live Three.js island. The existing Sapling lessons, adaptive practice planner, Elin conversations, speech evaluation, authenticated repository, and journal remain the learning source of truth. Learn and Practice open over the island; legacy Swedish Learn/Practice links lead into the same flow. Danish keeps its course and separate records.
+
+Island invitations connect to the four existing Sapling scenarios. Completed conversations and each five saved successful retrievals earn one claimable cosmetic supply delivery. Passive exposure, word lookups, construction, and unfinished conversations do not create mastery evidence. Claims persist with the island, and a sapling grows with completed journal adventures. Ord combines the island dictionary with the current Swedish course concepts.
+
+Construction and furniture retain the Lilla editor, first-person exploration, resource loop, varied visitors, and expandable island. Island state is browser-local and scoped to the signed-in account; it is not cloud-synced. Settings can export/import an island JSON file across domains. Imports preserve current reward claims and save the previous island under the same storage key with a .before-import suffix. Sapling learning records stay in their existing repository.
+
+Development starts from the working production branch codex/learn-practice-overhaul (e3392ee), with Lilla code imported from 78d8655. The combined product is maintained on codex/sapling-island-integration; the standalone island branch and Sapling main remain independently recoverable.

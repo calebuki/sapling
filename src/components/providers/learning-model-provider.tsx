@@ -38,6 +38,7 @@ const emptyPracticeSnapshot: PracticeSnapshot = {
 };
 
 type LearningModelContextValue = {
+  learnerId: string;
   concepts: Concept[];
   states: LearnerConceptState[];
   practiceSnapshot: PracticeSnapshot;
@@ -71,7 +72,8 @@ const LearningModelContext = createContext<LearningModelContextValue | null>(
 
 export function LearningModelProvider({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+  learnerId = "demo",
+}: Readonly<{ children: React.ReactNode; learnerId?: string }>) {
   const repository = useMemo(() => createLearningRepository(), []);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [states, setStates] = useState<LearnerConceptState[]>([]);
@@ -318,6 +320,7 @@ export function LearningModelProvider({
   return (
     <LearningModelContext.Provider
       value={{
+        learnerId,
         concepts,
         states,
         practiceSnapshot,
@@ -345,7 +348,9 @@ export function LearningModelProvider({
 export function useLearningModel() {
   const value = useContext(LearningModelContext);
   if (!value) {
-    throw new Error("useLearningModel must be used inside LearningModelProvider.");
+    throw new Error(
+      "useLearningModel must be used inside LearningModelProvider.",
+    );
   }
   return value;
 }
