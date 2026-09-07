@@ -22,6 +22,32 @@ export function pieceMesh(p: BuildPiece) {
     return m;
   };
   switch (p.kind) {
+    case 'door': {
+      const leaf = box(0.9, 1.95, 0.12, -0.48, 1.08, -0.23);
+      leaf.rotation.y = Math.PI / 2;
+      box(0.12, 0.12, 0.12, -0.4, 1, -0.1);
+      break;
+    }
+    case 'chimney':
+      box(0.45, 1.2, 0.5, 0, 3);
+      box(0.6, 0.18, 0.65, 0, 3.6);
+      break;
+    case 'awning': {
+      const m = box(1.5, 0.12, 1.5, 0, 2.25);
+      m.rotation.x = 0.12;
+      break;
+    }
+    case 'post':
+      box(0.14, 2.2, 0.14, 0, 1.1, 0.5);
+      break;
+    case 'railing':
+      box(1.5, 0.12, 0.12, 0, 1, -0.65);
+      for (const x of [-0.65, 0, 0.65]) box(0.1, 1, 0.1, x, 0.5, -0.65);
+      break;
+    case 'windowbox':
+      box(0.9, 0.3, 0.38, 0, 1, -0.83);
+      for (const x of [-0.3, 0, 0.3]) box(0.15, 0.3, 0.15, x, 1.28, -0.83);
+      break;
     case 'floor':
       box(1.48, 0.14, 1.48, 0, 0.07);
       break;

@@ -47,16 +47,11 @@ Inspired by the tangible 3D interaction and rounded graphic treatments on https:
 
 Neighbors arrive 25–90 seconds after a delivery or departure. The saved arrival timestamp survives refreshes and time away; waiting does not consume active play time. The first visitor is immediately available. Expand the island three times for 35, 65, and 100 shells. Each expansion grows both visible terrain and walkable/buildable land. Furniture snaps to a quarter-unit grid, with collision checks around buildings, gathering locations, and existing furniture. A 60-piece limit keeps the browser scene bounded. Existing saves migrate automatically.
 
-## Workshop and building
 
-Click the workshop to enter its 3D interior; use Craft furniture to open recipes. Enlarge the room twice using 10 wood + 6 stone, then 18 wood + 12 stone. The build palette offers 11 modular pieces and furniture types, wood/stone materials, colors, quarter-turn rotation, and two construction levels. Outdoors, put a floor down before other pieces; upper floors need supporting floors below. Inspect placed pieces to move/recolor/rotate them or refund their original materials. Supported floors cannot be removed or moved until their contents are cleared. A 150-piece limit bounds the saved structures.
+## Building on the island
 
-Decorate → Build a house opens the island construction view. Structures appear on the main island. Walk inside switches the interior/construction scene to a ground-level first-person camera (W/S forward/back, A/D turn, with on-screen alternatives); Build view returns to the overhead editor. Upper floors can be built and viewed from above; stair climbing and a full first-person island camera are not yet included. Roofs are hidden in the overhead editor so interiors remain selectable.
+The house editor zooms the existing island camera onto the house. There is one shared scene and saved collection of parts, including floors, walls, windows, doorway, door, roofs, chimney, awning, posts, railings, window boxes, and furniture. Select pieces to move, rotate, paint, or return materials. Extend the footprint by adding floors and completing the walls and roof; both construction levels require floor support. The island terrain, resources, and 400-piece limit bound construction. Roofs and awnings are hidden during editing and can be shown with the roof toggle.
 
-Click outdoor furniture to edit it directly. Moving preserves the original item until a valid new spot is confirmed. Ord now searches an offline Swedish/English island dictionary, including inflected forms, examples, audio, and encountered/discover distinctions. Searching does not grant learning credit.
+Legacy interiors migrate into island coordinates once. Existing inventory and progress remain saved; removing the original house does not regenerate it on reload. The legacy workshop-level field remains for save compatibility but no longer gates room dimensions.
 
-## Scene-first editor revamp
-
-Building now uses a fullscreen scene with a bottom hotbar, contextual selection tools, an actual translucent piece preview, and an orbit/pan/zoom camera. Drag the scene to orbit; right-drag to pan; scroll to zoom. Click a piece to select it, use Move and click a valid destination, or use Focus to inspect it closely. Island furniture editing stays in a compact scene overlay and automatically frames the selected piece.
-
-Explore uses a 75-degree first-person view, mouse capture on clicking the scene, WASD forward/strafe movement, Shift sprint, and mouse pitch/yaw. Escape releases the mouse. Drag-to-look and on-screen walking controls remain available when mouse capture is unavailable. Returning to build mode restores the previous camera.
+Drag to orbit, right-drag to pan, scroll to zoom, and use Focus on a selected piece. Explore uses pointer-lock mouse look, WASD movement and Shift sprint. Escape releases the pointer; drag-to-look and touch buttons provide alternatives. Upstairs remains editable from above; first-person stair climbing is not implemented.

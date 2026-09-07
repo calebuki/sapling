@@ -1901,3 +1901,44 @@ body {
 .furniture-hud {
   bottom: 24px;
 }
+
+/* Build directly over the live island; only the compact HUD captures input. */
+.game-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+  pointer-events: none;
+}
+.game-editor .studio-viewport {
+  display: none;
+}
+.game-editor button,
+.game-editor input,
+.game-editor select,
+.game-editor details,
+.game-editor .editor-selection,
+.game-editor .editor-options,
+.game-editor .build-palette {
+  pointer-events: auto;
+}
+.game:has(.game-editor)
+  > :is(
+    .topbar,
+    .island-title,
+    .coach,
+    .request-card,
+    .side-tools,
+    .dock-ui,
+    .placement-toolbar,
+    .furniture-hud
+  ) {
+  display: none;
+}
+
+.game-editor .editor-hotbar {
+  pointer-events: auto;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  justify-content: flex-start;
+}

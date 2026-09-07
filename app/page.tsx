@@ -32,6 +32,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import World from './world';
 import BuildStudio from './build-studio';
+import type { IslandScene } from './island-scene';
 import { WordBook, VoicePractice } from './learning';
 import Vocab from './vocab';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -77,6 +78,7 @@ export default function Home() {
     [placement, setPlacement] = useState<Item | null>(null),
     [crafted, setCrafted] = useState<Item | null>(null),
     [pop, setPop] = useState<{ item: Item; id: number } | null>(null);
+  const [islandScene, setIslandScene] = useState<IslandScene | null>(null);
   const [studio, setStudio] = useState<'workshop' | 'island' | null>(null);
   const [studioSelection, setStudioSelection] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null),
@@ -371,6 +373,8 @@ export default function Home() {
     <TooltipProvider delay={120}>
       <main className="game">
         <World
+          buildActive={!!studio}
+          onSceneReady={setIslandScene}
           buildings={state.buildings}
           onEdit={(id) => {
             setEditing(id);
@@ -1357,38 +1361,23 @@ export default function Home() {
             )}
           </DialogContent>
         </Dialog>
-        <Dialog
-          open={!!studio}
-          onOpenChange={(open) => {
-            if (!open) {
+        {studio && islandScene && (
+          <BuildStudio
+            islandScene={islandScene}
+            initialSelected={studioSelection}
+            area={studio}
+            state={state}
+            act={act}
+            onExit={() => {
               setStudio(null);
               setStudioSelection(null);
-            }
-          }}
-        >
-          <DialogContent className="studio-modal">
-            <DialogTitle className="sr-only">Build and explore</DialogTitle>
-            <DialogDescription className="sr-only">
-              Customize your workshop or build a home on your island.
-            </DialogDescription>
-            {studio && (
-              <BuildStudio
-                initialSelected={studioSelection}
-                area={studio}
-                state={state}
-                act={act}
-                onExit={() => {
-                  setStudio(null);
-                  setStudioSelection(null);
-                }}
-                onCraft={() => {
-                  setStudio(null);
-                  setPanel('workshop');
-                }}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+            }}
+            onCraft={() => {
+              setStudio(null);
+              setPanel('workshop');
+            }}
+          />
+        )}
         {editing && (
           <section
             className="furniture-hud"

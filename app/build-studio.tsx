@@ -5,7 +5,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   BUILD_PARTS,
   COLORS,
-  WORKSHOP_COSTS,
   buildCost,
   validBuild,
   type State,
@@ -18,8 +17,10 @@ import { pieceMesh, disposeGroup } from './build-mesh';
 
 import { VoicePractice } from './learning';
 import Vocab from './vocab';
+import type { IslandScene } from './island-scene';
 
 type Props = {
+  islandScene: IslandScene;
   state: State;
   act: (a: Action) => Result;
   area: 'workshop' | 'island';
@@ -28,6 +29,7 @@ type Props = {
   initialSelected?: string | null;
 };
 export default function BuildStudio({
+  islandScene,
   state,
   act,
   area,
@@ -48,8 +50,11 @@ export default function BuildStudio({
     [practice, setPractice] = useState<BuildKind | null>(null),
     [walk, setWalk] = useState(false),
     [showRoofs, setShowRoofs] = useState(false),
-    [ready, setReady] = useState(false),
-    [failure, setFailure] = useState(false);
+    [ready, setReady] = useState(false);
+  const sceneRef = useRef(islandScene);
+  useEffect(() => {
+    sceneRef.current = islandScene;
+  }, [islandScene]);
   const live = useRef({
     state,
     kind,
@@ -117,150 +122,49 @@ export default function BuildStudio({
     focus: () => void;
   } | null>(null);
   useEffect(() => {
-    const el = host.current;
-    if (!el) return;
-    let renderer: T.WebGLRenderer;
-    try {
-      renderer = new T.WebGLRenderer({ antialias: true });
-    } catch {
-      queueMicrotask(() => setFailure(true));
-      return;
-    }
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    el.appendChild(renderer.domElement);
-    const scene = new T.Scene();
-    scene.background = new T.Color(area === 'workshop' ? '#eee9dc' : '#82c5ce');
-    scene.add(new T.HemisphereLight('#fff6df', '#8b9679', 2.4));
-    const sun = new T.DirectionalLight('#fff1dc', 3);
-    sun.position.set(8, 14, 7);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, {
-      left: -20,
-      right: 20,
-      top: 20,
-      bottom: -20,
-    });
-    sun.shadow.bias = -0.0005;
-    scene.add(sun);
-    renderer.toneMapping = T.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
-    const camera = new T.PerspectiveCamera(48, 1, 0.1, 150),
-      root = new T.Group();
-    scene.add(root);
-    const position = new T.Vector3(0, 1.65, 3);
+    const {
+      scene,
+      renderer,
+      camera,
+      buildings: root,
+      surface: el,
+    } = sceneRef.current;
+    const entryCamera = camera.position.clone(),
+      entryFov = camera.fov;
+    const entryTarget = new T.Vector3(0, 0, 0);
+    const startPiece = live.current.state.buildings.find(
+      (p) => p.id === initialSelected,
+    );
+    const focusTarget = startPiece
+      ? new T.Vector3(
+          startPiece.x * 1.5,
+          startPiece.level * 2.4 + 1,
+          startPiece.z * 1.5,
+        )
+      : new T.Vector3(0, 1, -3);
+    const focusCamera = focusTarget.clone().add(new T.Vector3(7, 9, 11));
+    let intro = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 1
+      : 0;
+    const position = new T.Vector3(0, 2.38, -1.3);
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
     orbit.minDistance = 3;
     orbit.maxDistance = 48;
     orbit.maxPolarAngle = Math.PI / 2.05;
-    orbit.target.set(0, 0.8, 0);
-    camera.position.set(11, 13, 15);
+    orbit.target.copy(entryTarget);
     orbit.update();
+    if (intro === 1) {
+      camera.position.copy(focusCamera);
+      orbit.target.copy(focusTarget);
+      orbit.update();
+    }
     let pitch = 0;
     let yaw = 0,
       frame = 0,
       last = performance.now();
     const keys = new Set<string>();
-    function refresh() {
-      disposeGroup(root);
-      root.clear();
-      const s = live.current.state;
-      const size = area === 'workshop' ? (3 + s.workshopLevel) * 3 + 1.5 : 30;
-      const floor = new T.Mesh(
-        area === 'workshop'
-          ? new T.BoxGeometry(size, 0.2, size)
-          : new T.CylinderGeometry(
-              9.9 * (1 + s.expansion * 0.19),
-              9.9 * (1 + s.expansion * 0.19),
-              0.2,
-              48,
-            ),
-        new T.MeshStandardMaterial({
-          color: area === 'workshop' ? '#dfd1ae' : '#94cf70',
-        }),
-      );
-      floor.receiveShadow = true;
-      floor.position.y = -0.1;
-      if (area === 'island') floor.scale.z = 0.82;
-      root.add(floor);
-      const grid = new T.GridHelper(
-        size,
-        Math.round(size / 1.5),
-        '#a8b1a1',
-        '#c3c5b0',
-      );
-      grid.position.set(0, 0.012, 0);
-      root.add(grid);
-      if (area === 'island') {
-        const obstacles = [
-          [-5, -2],
-          [-6, 3],
-          [-7.2, 1.3],
-          [-6.6, -3.5],
-          [-3.4, -5],
-          [3.4, -5.5],
-          [7, 0],
-          [6, 2],
-          [5, -3],
-          [4, 4],
-        ];
-        for (const [x, z] of obstacles) {
-          const m = new T.Mesh(
-            new T.ConeGeometry(1, 2.8, 7),
-            new T.MeshStandardMaterial({ color: '#668e6b' }),
-          );
-          m.position.set(x, 1.4, z);
-          m.castShadow = true;
-          root.add(m);
-        }
-        const cabin = new T.Mesh(
-          new T.BoxGeometry(3.4, 2.5, 3.05),
-          new T.MeshStandardMaterial({ color: '#dfcba9' }),
-        );
-        cabin.position.set(0, 1.25, -3.725);
-        root.add(cabin);
-        for (const d of s.decorations) {
-          const m = pieceMesh({
-            id: d.id,
-            kind: d.kind as BuildKind,
-            x: 0,
-            z: 0,
-            level: 0,
-            color: d.color ?? COLORS[0],
-            rotation: d.rotation ?? 0,
-            material: 'wood',
-            area: 'island',
-          });
-          m.position.set(d.x, 0, d.z);
-          delete m.userData.pieceId;
-          root.add(m);
-        }
-      }
-      if (area === 'workshop') {
-        for (const x of [-1, 1]) {
-          const wall = new T.Mesh(
-            new T.BoxGeometry(0.15, 2.6, size),
-            new T.MeshStandardMaterial({ color: '#d9c9b5' }),
-          );
-          wall.position.set((x * size) / 2, 1.3, 0);
-          wall.userData.shell = true;
-          root.add(wall);
-        }
-        const back = new T.Mesh(
-          new T.BoxGeometry(size, 2.6, 0.15),
-          new T.MeshStandardMaterial({ color: '#d9c9b5' }),
-        );
-        back.position.set(0, 1.3, -size / 2);
-        back.userData.shell = true;
-        root.add(back);
-      }
-      for (const p of s.buildings.filter((p) => p.area === area)) {
-        const model = pieceMesh(p);
-        root.add(model);
-      }
-    }
+    function refresh() {}
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
@@ -290,7 +194,7 @@ export default function BuildStudio({
       );
       ray.setFromCamera(pointer, camera);
       const p = new T.Vector3();
-      plane.constant = -live.current.level * 2.4;
+      plane.constant = -0.73 - live.current.level * 2.4;
       if (!ray.ray.intersectPlane(plane, p)) return;
       let id: string | undefined;
       if (!live.current.kind && !live.current.moving) {
@@ -342,12 +246,12 @@ export default function BuildStudio({
         (-(e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       ray.setFromCamera(pointer, camera);
-      plane.constant = -l.level * 2.4;
+      plane.constant = -0.73 - l.level * 2.4;
       const p = new T.Vector3();
       if (ray.ray.intersectPlane(plane, p)) {
         const x = Math.round(p.x / 1.5),
           z = Math.round(p.z / 1.5);
-        ghost.position.set(x * 1.5, l.level * 2.4 + 0.16, z * 1.5);
+        ghost.position.set(x * 1.5, l.level * 2.4 + 0.89, z * 1.5);
         ghost.visible = true;
         const picked = l.state.buildings.find((p) => p.id === l.selected);
         const candidate = {
@@ -374,6 +278,7 @@ export default function BuildStudio({
               o.material.depthWrite = false;
             }
           });
+          preview.position.y += 0.73;
           scene.add(preview);
           previewKey = key;
         }
@@ -437,20 +342,23 @@ export default function BuildStudio({
       n.x += Math.cos(yaw) * strafe;
       n.z -= Math.cos(yaw) * amount;
       n.z -= Math.sin(yaw) * strafe;
-      const s = live.current.state,
-        bound = (3 + s.workshopLevel) * 1.5;
+      const s = live.current.state;
       const terrain =
-        area === 'workshop'
-          ? Math.abs(n.x) < bound && Math.abs(n.z) < bound
-          : (n.x / (9.2 + s.expansion * 1.8)) ** 2 +
-              (n.z / (7.3 + s.expansion * 1.45)) ** 2 <
-            1;
+        (n.x / (9.2 + s.expansion * 1.8)) ** 2 +
+          (n.z / (7.3 + s.expansion * 1.45)) ** 2 <
+        1;
       const blocked =
         s.buildings.some((p) => {
           if (
-            p.area !== area ||
             p.level !== 0 ||
-            ['floor', 'roof', 'stairs'].includes(p.kind)
+            [
+              'floor',
+              'roof',
+              'stairs',
+              'awning',
+              'chimney',
+              'windowbox',
+            ].includes(p.kind)
           )
             return false;
           const dx = n.x - p.x * 1.5,
@@ -464,13 +372,11 @@ export default function BuildStudio({
               Math.abs(lx) < 0.9 &&
               (p.kind !== 'doorway' || Math.abs(lx) > 0.3)
             );
+          if (p.kind === 'door')
+            return Math.abs(lx + 0.48) < 0.23 && Math.abs(lz + 0.23) < 0.6;
           return Math.abs(lx) < 0.7 && Math.abs(lz) < 0.6;
         }) ||
-        (area === 'island' &&
-          ((n.x > -1.95 && n.x < 1.95 && n.z > -5.5 && n.z < -2) ||
-            s.decorations.some(
-              (d) => Math.hypot(d.x - n.x, d.z - n.z) < 0.65,
-            )));
+        s.decorations.some((d) => Math.hypot(d.x - n.x, d.z - n.z) < 0.65);
       if (terrain && !blocked) position.copy(n);
     }
     api.current = {
@@ -480,7 +386,7 @@ export default function BuildStudio({
           (p) => p.id === live.current.selected,
         );
         if (p) {
-          orbit.target.set(p.x * 1.5, p.level * 2.4 + 0.6, p.z * 1.5);
+          orbit.target.set(p.x * 1.5, p.level * 2.4 + 1.33, p.z * 1.5);
           camera.position.copy(orbit.target).add(new T.Vector3(4, 4, 5));
           orbit.update();
         }
@@ -532,7 +438,7 @@ export default function BuildStudio({
       } else {
         orbit.update();
       }
-      orbit.enabled = !live.current.walk;
+      orbit.enabled = !live.current.walk && intro >= 1;
       camera.fov = live.current.walk ? 75 : 48;
       camera.updateProjectionMatrix();
       if (
@@ -558,9 +464,16 @@ export default function BuildStudio({
           o.visible =
             live.current.walk || (o.position.z < 0 && camera.position.z > 0);
         if (o instanceof T.GridHelper) o.visible = !live.current.walk;
-        if (o.userData.kind === 'roof')
+        if (['roof', 'awning'].includes(o.userData.kind))
           o.visible = live.current.walk || live.current.showRoofs;
       });
+      if (intro < 1 && !live.current.walk) {
+        intro = Math.min(1, intro + dt / 0.8);
+        const t = intro * intro * (3 - 2 * intro);
+        camera.position.lerpVectors(entryCamera, focusCamera, t);
+        orbit.target.lerpVectors(entryTarget, focusTarget, t);
+        camera.lookAt(orbit.target);
+      }
       renderer.render(scene, camera);
     }
     el.addEventListener('pointerdown', pressed);
@@ -588,19 +501,16 @@ export default function BuildStudio({
       window.removeEventListener('keydown', keydown);
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
-      disposeGroup(root);
-      root.traverse((o) => {
-        if (o instanceof T.LineSegments) {
-          o.geometry.dispose();
-          const m = o.material;
-          if (!Array.isArray(m)) m.dispose();
-        }
-      });
-      renderer.dispose();
-      renderer.domElement.remove();
+      scene.remove(ghost, selection);
+      if (preview) scene.remove(preview);
+      root.children.forEach((o) => (o.visible = true));
+      camera.position.copy(entryCamera);
+      camera.fov = entryFov;
+      camera.lookAt(entryTarget);
+      camera.updateProjectionMatrix();
       api.current = null;
     };
-  }, [area]);
+  }, [area, islandScene, initialSelected]);
   useEffect(
     () => api.current?.refresh(),
     [state.buildings, state.workshopLevel, state.expansion],
@@ -634,7 +544,7 @@ export default function BuildStudio({
             setWalk(!walk);
             setKind(null);
             setMoving(false);
-            host.current?.focus();
+            islandScene.surface.focus();
           }}
         >
           {walk ? 'Build mode' : 'Explore'}
@@ -642,13 +552,7 @@ export default function BuildStudio({
         <button onClick={onCraft}>Craft</button>
         <button onClick={onExit}>Done</button>
       </header>
-      {!ready && (
-        <div className="editor-message">
-          {failure
-            ? 'This device could not start 3D.'
-            : 'Opening the workshop…'}
-        </div>
-      )}
+      {!ready && <div className="editor-message">Opening the house…</div>}
       {walk ? (
         <>
           <div className="crosshair" aria-hidden="true">
@@ -687,18 +591,15 @@ export default function BuildStudio({
             >
               {material === 'wood' ? 'Wood' : 'Stone'}
             </button>
-            {area === 'workshop' && (
-              <button
-                disabled={state.workshopLevel >= 2}
-                onClick={() =>
-                  setNotice(act({ type: 'workshop-expand' }).message)
-                }
-              >
-                {state.workshopLevel >= 2
-                  ? 'Room expanded'
-                  : `Expand · 🪵${WORKSHOP_COSTS[state.workshopLevel].wood} 🪨${WORKSHOP_COSTS[state.workshopLevel].stone}`}
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setKind('floor');
+                setSelected(null);
+                setMoving(false);
+              }}
+            >
+              Extend house · add floors
+            </button>
           </div>
           {(selectedPiece || kind) && (
             <div className="editor-selection">
@@ -787,7 +688,7 @@ export default function BuildStudio({
             >
               ↖<small>Select</small>
             </button>
-            {(Object.keys(BUILD_PARTS) as BuildKind[]).map((k, i) => (
+            {(Object.keys(BUILD_PARTS) as BuildKind[]).map((k) => (
               <Vocab
                 sv={BUILD_PARTS[k].sv}
                 en={BUILD_PARTS[k].en}
@@ -800,7 +701,27 @@ export default function BuildStudio({
                 }}
               >
                 <span>
-                  {['▱', '▥', 'Π', '⊞', '⌂', '▟', '▤', '⚒', '♧', '▰', '❀'][i]}
+                  {
+                    {
+                      door: '▯',
+                      chimney: '▥',
+                      awning: '▱',
+                      post: '│',
+                      windowbox: '❀',
+                      railing: '╫',
+                      floor: '▱',
+                      wall: '▥',
+                      doorway: 'Π',
+                      window: '⊞',
+                      roof: '⌂',
+                      stairs: '▟',
+                      shelf: '▤',
+                      bench: '⚒',
+                      chair: '♧',
+                      table: '▰',
+                      planter: '❀',
+                    }[k]
+                  }
                 </span>
                 <VocabLabel text={BUILD_PARTS[k].sv} />
               </Vocab>

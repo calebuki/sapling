@@ -6,6 +6,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { canPlace, type BuildPiece } from '@/lib/game';
 import { routeTo, walkable } from '@/lib/navigation';
 import Vocab from './vocab';
+import type { IslandScene } from './island-scene';
 import { pieceMesh, disposeGroup } from './build-mesh';
 export type Decoration = {
   id: string;
@@ -16,6 +17,8 @@ export type Decoration = {
   color?: string;
 };
 type Props = {
+  buildActive: boolean;
+  onSceneReady: (value: IslandScene) => void;
   onInteract: (id: string) => boolean;
   buildings: BuildPiece[];
   onEdit: (id: string) => void;
@@ -56,6 +59,8 @@ const points: Record<string, [number, number]> = {
   visitor: [1.3, 4.6],
 };
 export default function World({
+  buildActive,
+  onSceneReady,
   onInteract,
   buildings,
   onEdit,
@@ -78,6 +83,8 @@ export default function World({
 }: Props) {
   const pins = useRef<Record<string, HTMLButtonElement | null>>({});
   const live = useRef({
+    buildActive,
+    onSceneReady,
     onTravel,
     onEdit,
     onBuildEdit,
@@ -96,6 +103,8 @@ export default function World({
   });
   useEffect(() => {
     live.current = {
+      buildActive,
+      onSceneReady,
       onTravel,
       onEdit,
       onBuildEdit,
@@ -113,6 +122,8 @@ export default function World({
       decorations,
     };
   }, [
+    buildActive,
+    onSceneReady,
     editingId,
     placementColor,
     placementRotation,
@@ -330,67 +341,6 @@ export default function World({
         0.4;
     }
     mark(garden, 'flower');
-    const house = new T.Group();
-    house.position.set(0, 0.72, -3.7);
-    scene.add(house);
-    box(3, 2.3, 2.6, '#b85745', 0, 1.15, 0, house);
-    for (const x of [-1.46, 1.46])
-      box(0.12, 2.4, 2.68, '#f6e5c0', x, 1.2, 0, house);
-    const roof = mesh(
-      new T.CylinderGeometry(0, 2.45, 1.45, 4),
-      '#455c66',
-      0,
-      3,
-      0,
-      house,
-    );
-    roof.rotation.y = Math.PI / 4;
-    roof.scale.z = 0.92;
-    box(0.76, 1.55, 0.1, '#f6dc9d', 0, 0.78, 1.34, house);
-    box(0.57, 1.25, 0.12, '#739b91', 0, 0.7, 1.41, house);
-    ball(0.045, '#e8b75c', 0.19, 0.8, 1.5, house);
-    for (const x of [-1, 1]) {
-      box(0.63, 0.66, 0.1, '#f5dfbb', x, 1.3, 1.34, house);
-      box(0.43, 0.48, 0.12, '#97d8dd', x, 1.3, 1.4, house);
-      box(0.035, 0.52, 0.14, '#fff3d9', x, 1.3, 1.48, house);
-    }
-    box(0.45, 1, 0.5, '#b0a992', 0.8, 3.5, -0.4, house);
-    mark(house, 'workshop');
-    const bench = new T.Group();
-    scene.add(bench);
-    box(2, 0.18, 0.85, '#ac8052', -1.6, 1.4, -1.5, bench);
-    for (const x of [-2.35, -0.9])
-      box(0.15, 0.8, 0.65, '#775d44', x, 1, -1.5, bench);
-    box(0.65, 0.12, 0.35, '#eedfb2', -1.9, 1.58, -1.5, bench);
-    mark(bench, 'workshop');
-    // Striped workshop awning, flower boxes, path stones, and garden fences.
-    for (let i = 0; i < 7; i++) {
-      const awning = box(
-        0.48,
-        0.12,
-        1.1,
-        i % 2 ? '#fff4dc' : '#edae73',
-        -1.45 + i * 0.48,
-        2.4,
-        1.7,
-        house,
-      );
-      awning.rotation.x = 0.16;
-    }
-    for (const x of [-1.5, 1.5])
-      cyl(0.045, 0.045, 2.35, '#f6e6bd', x, 1.1, 2.1, house);
-    for (const x of [-1, 1]) {
-      box(0.72, 0.23, 0.36, '#916947', x, 0.9, 1.55, house);
-      for (let i = 0; i < 3; i++)
-        ball(
-          0.12,
-          i % 2 ? '#f4bbd6' : '#ffcf73',
-          x - 0.22 + i * 0.22,
-          1.1,
-          1.55,
-          house,
-        );
-    }
     for (let i = 0; i < 8; i++) {
       const p = ball(
         0.32,
@@ -601,6 +551,7 @@ export default function World({
         player.position,
         { x, z },
         live.current.expansion,
+        live.current.buildings,
       ).map((p) => new T.Vector3(p.x, 0.73, p.z));
       goal = waypoints.shift() ?? null;
       return !!goal;
@@ -642,10 +593,16 @@ export default function World({
     function structures(pieces: BuildPiece[]) {
       disposeGroup(buildingGroup);
       buildingGroup.clear();
-      for (const p of pieces.filter((p) => p.area === 'island'))
-        buildingGroup.add(pieceMesh(p));
+      for (const p of pieces) buildingGroup.add(pieceMesh(p));
     }
     api.current = { go, decorate, zoom, structures };
+    live.current.onSceneReady({
+      scene,
+      renderer,
+      camera,
+      buildings: buildingGroup,
+      surface: el,
+    });
     const ray = new T.Raycaster(),
       pointer = new T.Vector2(),
       plane = new T.Plane(new T.Vector3(0, 1, 0), -0.73);
@@ -661,6 +618,7 @@ export default function World({
       press = { x: e.clientX, y: e.clientY };
     };
     const down = (e: PointerEvent) => {
+      if (live.current.buildActive) return;
       if (
         e.button !== 0 ||
         Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5
@@ -714,7 +672,7 @@ export default function World({
       const p = new T.Vector3();
       if (
         ray.ray.intersectPlane(plane, p) &&
-        walkable(p, live.current.expansion)
+        walkable(p, live.current.expansion, live.current.buildings)
       ) {
         if (!plan(p.x, p.z)) return;
         pending = null;
@@ -741,6 +699,7 @@ export default function World({
     selection.renderOrder = 100;
     scene.add(selection);
     const move = (e: PointerEvent) => {
+      if (live.current.buildActive) return;
       if (live.current.placement) {
         const rect = el.getBoundingClientRect();
         pointer.set(
@@ -848,14 +807,15 @@ export default function World({
         h = el!.clientHeight;
       renderer.setSize(w, h);
       camera.aspect = w / h;
-      camera.position
-        .set(17, 23, 26)
-        .multiplyScalar(
-          Math.max(1, 0.94 / (w / h)) *
-            zoomLevel *
-            (1 + live.current.expansion * 0.15),
-        );
-      camera.lookAt(0, 0, 0);
+      if (!live.current.buildActive)
+        camera.position
+          .set(17, 23, 26)
+          .multiplyScalar(
+            Math.max(1, 0.94 / (w / h)) *
+              zoomLevel *
+              (1 + live.current.expansion * 0.15),
+          );
+      if (!live.current.buildActive) camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
     }
     const ro = new ResizeObserver(resize);
@@ -877,7 +837,7 @@ export default function World({
         shores.forEach((o) => o.scale.set(scale, scale * 0.82, 1));
         resize();
       }
-      roof.material = mat(live.current.roofColor);
+
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       const viewWidth = el!.clientWidth,
@@ -921,7 +881,13 @@ export default function World({
           const nx =
               player.position.x + ((dx * 0.8 + dz * 0.6) * dt * 4) / length,
             nz = player.position.z + ((dz * 0.8 - dx * 0.6) * dt * 4) / length;
-          if (walkable({ x: nx, z: nz }, live.current.expansion)) {
+          if (
+            walkable(
+              { x: nx, z: nz },
+              live.current.expansion,
+              live.current.buildings,
+            )
+          ) {
             player.rotation.y = Math.atan2(
               dx * 0.8 + dz * 0.6,
               dz * 0.8 - dx * 0.6,
@@ -1034,7 +1000,9 @@ export default function World({
         resize();
       }
       lastEditMode = editMode;
-      orbit.enabled = !!live.current.editingId || !!live.current.placement;
+      orbit.enabled =
+        !live.current.buildActive &&
+        (!!live.current.editingId || !!live.current.placement);
       if (orbit.enabled) orbit.update();
       const selected = deco.children.find(
         (o) =>
@@ -1092,7 +1060,7 @@ export default function World({
         preview.position.copy(placementRing.position);
         preview.visible = placementRing.visible && !!live.current.placement;
       }
-      renderer.render(scene, camera);
+      if (!live.current.buildActive) renderer.render(scene, camera);
     }
     frame = requestAnimationFrame(animate);
     queueMicrotask(() => setReady(true));

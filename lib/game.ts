@@ -223,7 +223,6 @@ export function canPlace(
     (x / (8.8 + s.expansion * 1.8)) ** 2 +
       (z / (6.9 + s.expansion * 1.45)) ** 2 <
       1 &&
-    !(x > -2.5 && x < 2.5 && z > -6 && z < -1.4) &&
     !(x > -0.8 && x < 2.8 && z > 5.4) &&
     !(x > 2.2 && x < 6.5 && z > 4.2 && z < 5.4) &&
     ![
@@ -242,7 +241,6 @@ export function canPlace(
     !s.decorations.some((d) => Math.hypot(d.x - x, d.z - z) < 1.3) &&
     !(s.buildings ?? []).some(
       (b) =>
-        b.area === 'island' &&
         b.level === 0 &&
         !['floor', 'roof', 'doorway'].includes(b.kind) &&
         Math.hypot(b.x * 1.5 - x, b.z * 1.5 - z) < 1.2,
@@ -252,6 +250,12 @@ export function canPlace(
 export const visitorDelay = (random = Math.random()) =>
   25000 + Math.floor(Math.max(0, Math.min(1, random)) * 65000);
 export const BUILD_PARTS = {
+  door: { sv: 'dörr', en: 'door', wood: 2, stone: 0 },
+  chimney: { sv: 'skorsten', en: 'chimney', wood: 0, stone: 4 },
+  awning: { sv: 'markis', en: 'awning', wood: 3, stone: 0 },
+  post: { sv: 'stolpe', en: 'post', wood: 1, stone: 0 },
+  windowbox: { sv: 'blomlåda', en: 'window box', wood: 2, stone: 0 },
+  railing: { sv: 'räcke', en: 'railing', wood: 2, stone: 0 },
   floor: { sv: 'golv', en: 'floor', wood: 2, stone: 0 },
   wall: { sv: 'vägg', en: 'wall', wood: 3, stone: 0 },
   doorway: { sv: 'dörröppning', en: 'doorway', wood: 3, stone: 0 },
@@ -303,18 +307,13 @@ export function validBuild(
     !['workshop', 'island'].includes(p.area)
   )
     return false;
-  const room = 3 + s.workshopLevel;
-  if (
-    p.area === 'workshop'
-      ? Math.abs(p.x) > room ||
-        Math.abs(p.z) > room ||
-        (p.z === room && p.x === 0)
-      : !canPlace({ ...s, buildings: [] }, p.x * 1.5, p.z * 1.5)
-  )
-    return false;
-  const pieces = s.buildings.filter(
-    (b) => b.id !== ignore && b.area === p.area,
+  // The house and the island use one physical grid. Existing cells remain editable.
+  const occupied = s.buildings.some(
+    (b) => b.id === ignore && b.x === p.x && b.z === p.z,
   );
+  if (!occupied && !canPlace({ ...s, buildings: [] }, p.x * 1.5, p.z * 1.5))
+    return false;
+  const pieces = s.buildings.filter((b) => b.id !== ignore);
   const same = pieces.filter((b) => b.x === p.x && b.z === p.z);
   const category = (k: BuildKind) =>
     k === 'floor'
@@ -323,7 +322,16 @@ export function validBuild(
         ? 'roof'
         : ['wall', 'window', 'doorway'].includes(k)
           ? 'edge'
-          : 'object';
+          : [
+                'door',
+                'chimney',
+                'awning',
+                'post',
+                'windowbox',
+                'railing',
+              ].includes(k)
+            ? k
+            : 'object';
   const edge = (b: Omit<BuildPiece, 'id'>) => [
     b.x * 2 - Math.round(Math.sin((b.rotation * Math.PI) / 180)),
     b.z * 2 - Math.round(Math.cos((b.rotation * Math.PI) / 180)),
@@ -357,15 +365,105 @@ export function validBuild(
   if (p.level === 1 && !same.some((b) => b.level === 0 && b.kind === 'floor'))
     return false;
   if (
-    p.area === 'island' &&
     p.kind !== 'floor' &&
     !same.some((b) => b.kind === 'floor' && b.level === p.level)
   )
     return false;
   return true;
 }
+export function starterHouse(): BuildPiece[] {
+  const out: BuildPiece[] = [];
+  const add = (kind: BuildKind, x: number, z: number, rotation = 0) =>
+    out.push({
+      id: `home-${kind}-${x}-${z}-${rotation}`,
+      kind,
+      x,
+      z,
+      level: 0,
+      rotation,
+      color: COLORS[0],
+      material: kind === 'chimney' ? 'stone' : 'wood',
+      area: 'workshop',
+    });
+  for (let x = -1; x <= 1; x++)
+    for (let z = -3; z <= -1; z++) {
+      add('floor', x, z);
+      if (z < -1) add('roof', x, z);
+    }
+  for (let x = -1; x <= 1; x++) {
+    add('wall', x, -3);
+    add(x === 0 ? 'doorway' : 'window', x, -2, 180);
+  }
+  for (let z = -3; z <= -2; z++) {
+    add('wall', -1, z, 90);
+    add('wall', 1, z, 270);
+  }
+  add('door', 0, -2, 180);
+  add('chimney', 1, -3);
+  add('bench', -1, -2);
+  for (let x = -1; x <= 1; x++) add('awning', x, -1);
+  add('post', -1, -1);
+  add('post', 1, -1);
+  add('windowbox', -1, -2, 180);
+  add('windowbox', 1, -2, 180);
+  return out;
+}
+function migrateHouse(s: State & { houseVersion?: number }): State {
+  if (s.houseVersion === 1) return s;
+  const old = s.buildings.map((b) =>
+    b.area === 'workshop' ? { ...b, z: b.z - 2 } : b,
+  );
+  const parts = starterHouse().filter(
+    (p) =>
+      !old.some(
+        (b) =>
+          b.kind === p.kind &&
+          b.x === p.x &&
+          b.z === p.z &&
+          b.level === p.level &&
+          b.rotation === p.rotation,
+      ),
+  );
+  // Floors under existing interior items preserve their old positions and materials.
+  for (const b of old) {
+    if (
+      b.area === 'workshop' &&
+      !old.some(
+        (f) =>
+          f.kind === 'floor' &&
+          f.x === b.x &&
+          f.z === b.z &&
+          f.level === b.level,
+      ) &&
+      !parts.some(
+        (f) =>
+          f.kind === 'floor' &&
+          f.x === b.x &&
+          f.z === b.z &&
+          f.level === b.level,
+      )
+    )
+      parts.push({
+        ...b,
+        id: 'support-' + b.id,
+        kind: 'floor',
+        rotation: 0,
+        material: 'wood',
+      });
+  }
+  return {
+    ...s,
+    houseVersion: 1,
+    expansion: Math.max(
+      s.expansion,
+      old.some((b) => Math.abs(b.x) > 4 || Math.abs(b.z) > 4) ? 3 : 0,
+    ),
+    buildings: [...old, ...parts],
+  };
+}
 export type State = {
   version: 1;
+  houseVersion: 1;
   workshopLevel: number;
   buildings: BuildPiece[];
   nextVisitorAt: number;
@@ -388,8 +486,9 @@ export type State = {
 };
 export const initialState = (): State => ({
   version: 1,
+  houseVersion: 1,
   workshopLevel: 0,
-  buildings: [],
+  buildings: starterHouse(),
   nextVisitorAt: 0,
   expansion: 0,
   islandName: 'Lilla',
@@ -657,14 +756,13 @@ export function transition(s: State, a: Action): Result {
       s.buildings.some(
         (b) =>
           b.id !== old.id &&
-          b.area === old.area &&
           b.x === old.x &&
           b.z === old.z &&
           b.level >= old.level,
       )
     )
       return fail('Move the pieces supported by this floor first.');
-    if (!validBuild(s, a.piece, old?.id) || (!old && s.buildings.length >= 150))
+    if (!validBuild(s, a.piece, old?.id) || (!old && s.buildings.length >= 400))
       return fail(
         'Choose a clear grid square. Upstairs needs a floor below; outdoor pieces need a floor beneath them.',
       );
@@ -705,11 +803,7 @@ export function transition(s: State, a: Action): Result {
       b.kind === 'floor' &&
       s.buildings.some(
         (v) =>
-          v.id !== b.id &&
-          v.area === b.area &&
-          v.x === b.x &&
-          v.z === b.z &&
-          v.level >= b.level,
+          v.id !== b.id && v.x === b.x && v.z === b.z && v.level >= b.level,
       )
     )
       return fail('Remove the pieces supported by this floor first.');
@@ -737,6 +831,9 @@ export function transition(s: State, a: Action): Result {
       return fail('Choose a name up to 24 characters and a palette color.');
     next.islandName = a.name.trim();
     next.roofColor = a.color;
+    next.buildings = s.buildings.map((b) =>
+      b.kind === 'roof' ? { ...b, color: a.color } : b,
+    );
     message = 'Welcome home.';
   } else if (a.type === 'remove') {
     const d = s.decorations.find((v) => v.id === a.id);
@@ -794,9 +891,32 @@ export function restore(raw: string | null): State {
         !Number.isFinite(w.help)
       )
         return initialState();
-    return {
+    return migrateHouse({
       ...initialState(),
       ...s,
+      houseVersion: s.houseVersion === 1 ? 1 : 0,
+      workshopLevel: Number.isInteger(s.workshopLevel)
+        ? Math.min(2, Math.max(0, s.workshopLevel))
+        : 0,
+      buildings: Array.isArray(s.buildings)
+        ? s.buildings
+            .slice(0, 400)
+            .filter(
+              (b: BuildPiece) =>
+                b &&
+                typeof b.id === 'string' &&
+                BUILD_PARTS[b.kind] &&
+                Number.isInteger(b.x) &&
+                Number.isInteger(b.z) &&
+                Math.abs(b.x) <= 12 &&
+                Math.abs(b.z) <= 12 &&
+                [0, 1].includes(b.level) &&
+                [0, 90, 180, 270].includes(b.rotation) &&
+                COLORS.includes(b.color as (typeof COLORS)[number]) &&
+                ['wood', 'stone'].includes(b.material) &&
+                ['workshop', 'island'].includes(b.area),
+            )
+        : [],
       expansion:
         Number.isInteger(s.expansion) && s.expansion >= 0 && s.expansion <= 3
           ? s.expansion
@@ -821,7 +941,7 @@ export function restore(raw: string | null): State {
         typeof s.cooldowns === 'object' && s.cooldowns !== null
           ? s.cooldowns
           : {},
-    };
+    } as State);
   } catch {
     return initialState();
   }

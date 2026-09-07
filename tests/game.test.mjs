@@ -112,20 +112,21 @@ test('invalid save data falls back safely', () => {
   assert.deepEqual(restore(JSON.stringify(s)), initialState());
 });
 import { routeTo, walkable, clearPath } from '../lib/navigation.ts';
-test('walking routes around the workshop and refuses water or indoor destinations', () => {
+test('walking follows editable walls and opens routes after their removal', () => {
   const start = { x: -4, z: -4 },
     end = { x: 4, z: -4 };
-  assert.equal(clearPath(start, end), false);
-  const route = routeTo(start, end);
+  const buildings = initialState().buildings;
+  assert.equal(clearPath(start, end, 0, buildings), false);
+  const route = routeTo(start, end, 0, buildings);
   assert.ok(route.length >= 3);
   assert.deepEqual(route.at(-1), end);
   let previous = start;
   for (const p of route) {
     assert.ok(walkable(p));
-    assert.ok(clearPath(previous, p));
+    assert.ok(clearPath(previous, p, 0, buildings));
     previous = p;
   }
-  assert.deepEqual(routeTo({ x: 0, z: 2 }, { x: 0, z: -3.5 }), []);
+  assert.deepEqual(routeTo(start, end, 0, []), [end]);
   assert.deepEqual(routeTo({ x: 0, z: 2 }, { x: 20, z: 0 }), []);
 });
 test('all canonical gathering and visitor points remain mutually reachable', () => {
@@ -242,26 +243,32 @@ const piece = (kind = 'floor', extras = {}) => ({
   area: 'workshop',
   ...extras,
 });
-test('workshop expansion charges once, unlocks space, and survives restore', () => {
+test('house expands physically with floors and keeps a single shared grid', () => {
   let s = initialState();
-  assert.equal(transition(s, { type: 'workshop-expand' }).ok, false);
   s.bag.wood = 50;
-  s.bag.stone = 30;
+  s = run(s, { type: 'build', piece: piece('floor', { x: 2, z: -2 }) });
+  assert.ok(
+    s.buildings.some((b) => b.kind === 'floor' && b.x === 2 && b.z === -2),
+  );
   assert.equal(
-    transition(s, { type: 'build', piece: piece('floor', { x: 4 }) }).ok,
+    transition(s, {
+      type: 'build',
+      piece: piece('floor', { x: 2, z: -2, area: 'island' }),
+    }).ok,
     false,
   );
-  s = run(s, { type: 'workshop-expand' });
-  assert.equal(s.bag.wood, 40);
-  assert.equal(s.bag.stone, 24);
-  s = run(s, { type: 'build', piece: piece('floor', { x: 4 }) });
-  assert.equal(s.buildings.length, 1);
-  s = run(s, { type: 'workshop-expand' });
-  assert.equal(transition(s, { type: 'workshop-expand' }).ok, false);
+  s = run(s, {
+    type: 'build',
+    piece: piece('wall', { x: 2, z: -2, rotation: 270 }),
+  });
   assert.deepEqual(restore(JSON.stringify(s)), s);
 });
 test('building costs, duplicate rejection and refunds preserve materials', () => {
   let s = initialState();
+  s.buildings = [
+    { ...piece('floor'), id: 'support-a' },
+    { ...piece('floor', { x: -1 }), id: 'support-b' },
+  ];
   s.bag.wood = 20;
   s.bag.stone = 20;
   s = run(s, { type: 'build', piece: piece('wall', { material: 'stone' }) });
@@ -273,7 +280,7 @@ test('building costs, duplicate rejection and refunds preserve materials', () =>
   const before = structuredClone(s.bag);
   s = run(s, {
     type: 'build-edit',
-    id: s.buildings[0].id,
+    id: s.buildings.find((b) => b.kind === 'wall').id,
     piece: piece('wall', {
       material: 'stone',
       rotation: 90,
@@ -285,17 +292,24 @@ test('building costs, duplicate rejection and refunds preserve materials', () =>
   assert.equal(
     transition(s, {
       type: 'build-edit',
-      id: s.buildings[0].id,
+      id: s.buildings.find((b) => b.kind === 'wall').id,
       piece: piece('wall'),
     }).ok,
     false,
   );
-  s = run(s, { type: 'build-remove', id: s.buildings[0].id });
+  s = run(s, {
+    type: 'build-remove',
+    id: s.buildings.find((b) => b.kind === 'wall').id,
+  });
   assert.equal(s.bag.stone, 20);
   assert.equal(s.bag.wood, 20);
 });
 test('furniture inside uses inventory, can be edited, and is refundable', () => {
   let s = initialState();
+  s.buildings = [
+    { ...piece('floor'), id: 'support-a' },
+    { ...piece('floor', { x: 1 }), id: 'support-b' },
+  ];
   assert.equal(
     transition(s, { type: 'build', piece: piece('chair') }).ok,
     false,
@@ -303,19 +317,20 @@ test('furniture inside uses inventory, can be edited, and is refundable', () => 
   s.bag.chair = 1;
   s = run(s, { type: 'build', piece: piece('chair') });
   assert.equal(s.bag.chair, 0);
-  const id = s.buildings[0].id;
+  const id = s.buildings.find((b) => b.kind === 'chair').id;
   s = run(s, {
     type: 'build-edit',
     id,
     piece: piece('chair', { x: 1, rotation: 180, color: COLORS[2] }),
   });
-  assert.equal(s.buildings[0].x, 1);
+  assert.equal(s.buildings.find((b) => b.id === id).x, 1);
   assert.equal(s.bag.chair, 0);
   s = run(s, { type: 'build-remove', id });
   assert.equal(s.bag.chair, 1);
 });
 test('outdoor and upstairs structures require floors and protect their supports', () => {
   let s = initialState();
+  s.buildings = [];
   s.bag.wood = 99;
   s.bag.stone = 99;
   assert.equal(
@@ -374,15 +389,36 @@ test('outdoor furniture moves atomically and rejects overlaps without consuming 
   assert.equal(s.bag.chair, 0);
   assert.equal(s.decorations[0].z, 0);
 });
-test('legacy saves gain an empty workshop without losing progress', () => {
+test('legacy saves gain an editable house without losing progress', () => {
   const s = initialState();
   s.completed = 8;
   s.bag.wood = 12;
+  delete s.houseVersion;
   delete s.buildings;
   delete s.workshopLevel;
   const restored = restore(JSON.stringify(s));
   assert.equal(restored.completed, 8);
   assert.equal(restored.bag.wood, 12);
-  assert.deepEqual(restored.buildings, []);
+  assert.deepEqual(restored.buildings, initialState().buildings);
   assert.equal(restored.workshopLevel, 0);
+});
+
+test('existing interiors migrate once and removed house pieces stay removed', () => {
+  let s = initialState();
+  delete s.houseVersion;
+  s.buildings = [{ ...piece('chair', { x: 0, z: 0 }), id: 'old-chair' }];
+  s.bag.wood = 12;
+  s = restore(JSON.stringify(s));
+  assert.equal(s.buildings.find((b) => b.id === 'old-chair').z, -2);
+  assert.equal(s.bag.wood, 12);
+  assert.deepEqual(restore(JSON.stringify(s)), s);
+  for (const b of [...s.buildings].sort(
+    (a, b) => (a.kind === 'floor' ? 1 : 0) - (b.kind === 'floor' ? 1 : 0),
+  )) {
+    const r = transition(s, { type: 'build-remove', id: b.id });
+    assert.ok(r.ok, r.message);
+    s = r.state;
+  }
+  assert.equal(s.buildings.length, 0);
+  assert.equal(restore(JSON.stringify(s)).buildings.length, 0);
 });
