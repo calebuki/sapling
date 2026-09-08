@@ -36,6 +36,12 @@ import {
 } from "@/components/island/ui/tabs";
 import { Switch } from "@/components/island/ui/switch";
 import World from "./world";
+import { AppearanceEditor } from "./appearance-editor";
+import {
+  defaultAppearance,
+  restoreAppearance,
+  type Appearance,
+} from "@/lib/island/appearance";
 import BuildStudio from "./build-studio";
 import type { IslandScene } from "./island-scene";
 import { WordBook, VoicePractice } from "./learning";
@@ -86,6 +92,7 @@ export default function IslandGame({
   };
   const invitation =
     islandInvitations.find((q) => q.id === recommended) ?? islandInvitations[0];
+  const [appearance, setAppearance] = useState<Appearance>(defaultAppearance);
   const importInput = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State>(initialState),
     current = useRef(state),
@@ -238,6 +245,9 @@ export default function IslandGame({
       let s: State;
       try {
         s = restore(localStorage.getItem(KEY));
+        setAppearance(
+          restoreAppearance(localStorage.getItem(`${KEY}.appearance.v1`)),
+        );
       } catch {
         s = initialState();
         setSaving(false);
@@ -478,6 +488,7 @@ export default function IslandGame({
           </aside>
         )}
         <World
+          appearance={appearance}
           learningGrowth={practiceSnapshot.completedScenarioIds.length}
           buildActive={!!studio}
           onSceneReady={setIslandScene}
@@ -1059,6 +1070,22 @@ export default function IslandGame({
             </DialogDescription>
             {panel === "settings" && (
               <>
+                <AppearanceEditor
+                  value={appearance}
+                  onChange={(next) => {
+                    setAppearance(next);
+                    try {
+                      localStorage.setItem(
+                        `${KEY}.appearance.v1`,
+                        JSON.stringify(next),
+                      );
+                    } catch {
+                      setToast(
+                        "Your look changed, but this browser could not save it.",
+                      );
+                    }
+                  }}
+                />
                 <div className="island-save-tools">
                   <b>Your island, on this browser</b>
                   <p>Bring a saved Lilla island here, or keep a backup.</p>

@@ -1,9 +1,13 @@
 "use client";
 
-import { Check, Coffee, Cookie, CupSoda, Leaf, RotateCcw } from "lucide-react";
-import Image from "next/image";
+import { Check, Coffee, Cookie, CupSoda, RotateCcw } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import townImage from "@/assets/home/lindbacken-storybook.png";
+const CharacterScene = dynamic(
+  () =>
+    import("@/components/island/character-scene").then((m) => m.CharacterScene),
+  { ssr: false },
+);
 import { TargetAudioButton } from "@/components/target-audio-button";
 
 const menu = [
@@ -50,7 +54,7 @@ export function PracticeRoom({
   busy: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const cafe = sceneId === "fika-order" || sceneId === "meet-elin";
+  const cafe = sceneId === "fika-order";
   const theme = cafe
     ? "cafe"
     : sceneId.includes("station")
@@ -58,32 +62,19 @@ export function PracticeRoom({
       : "park";
   const item = menu.find((option) => option.id === selected);
   return (
-    <div className={`life-room room-${theme}`}>
-      <div className="life-room-scenery" aria-hidden="true">
-        <div className="life-room-window">
-          <Image src={townImage} alt="" fill sizes="440px" />
-          <span />
-        </div>
-        <div className="life-room-sign">
-          {cafe
-            ? "Kafé Linden"
-            : theme === "station"
-              ? "Centralstationen"
-              : "Stadsparken"}
-        </div>
-        <div className="life-room-plant">
-          <Leaf size={50} strokeWidth={1} />
-        </div>
-        <div className="life-room-lamp" />
-      </div>
-      <div className="life-character" aria-label={name} role="img">
-        <div className="life-character-hair" />
-        <div className="life-character-face">
-          <span className="life-character-eyes" />
-          <span className="life-character-smile" />
-        </div>
-        <div className="life-character-body" />
-        <span className="life-character-name">{name}</span>
+    <div className={`life-room island-practice-room room-${theme}`}>
+      <div className="island-practice-setting">
+        <CharacterScene sceneId={sceneId} />
+        <span className="island-scene-place">
+          {sceneId === "meet-elin"
+            ? "Vid äppelträden"
+            : cafe
+              ? "Dags för fika"
+              : theme === "station"
+                ? "Vid bryggan"
+                : "I blomsterträdgården"}
+        </span>
+        <span className="island-scene-name">{name}</span>
       </div>
       <div className="life-dialogue" aria-live="polite">
         <span className="life-small-label">{name}</span>
@@ -120,7 +111,7 @@ export function PracticeRoom({
                   }}
                 >
                   <Icon size={26} strokeWidth={1.5} />
-                  <span>{option.english.replace(/^an? /, "")}</span>
+                  <span>{option.target}</span>
                 </button>
               );
             })}

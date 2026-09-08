@@ -7,6 +7,7 @@ import { useLearningModel } from "@/components/providers/learning-model-provider
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import {
   islandStorageKey,
+  islandInvitations,
   parseIslandActivity,
   type IslandActivity,
 } from "@/lib/island/progression";
@@ -70,7 +71,8 @@ export default function IslandHome() {
         ? "Post till dig"
         : activity === "journal"
           ? "Din dagbok"
-          : "En stund med Elin";
+          : (islandInvitations.find((q) => q.id === activity)?.target ??
+            "En stund med Elin");
   return (
     <div className="sapling-island">
       <IslandGame
@@ -114,6 +116,7 @@ export default function IslandHome() {
               <TownJournal />
             ) : activity ? (
               <PracticeSession
+                autoStart
                 scenarioIds={[activity]}
                 onReturnToWorld={() => open(null)}
               />

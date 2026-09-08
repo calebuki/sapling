@@ -15,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { useUiSounds } from "@/components/providers/ui-sound-provider";
 import { PracticeRoom, PhraseWarmup } from "@/components/practice-room";
@@ -30,7 +30,11 @@ import type {
   PracticeTurnResponse,
 } from "@/types/practice";
 
-type Props = { scenarioIds?: readonly string[]; onReturnToWorld?: () => void };
+type Props = {
+  autoStart?: boolean;
+  scenarioIds?: readonly string[];
+  onReturnToWorld?: () => void;
+};
 type PendingTurn = {
   body: PracticeTurnResponse;
   text: string;
@@ -48,7 +52,11 @@ export function PracticeSession(props: Props = {}) {
   );
 }
 
-function LanguagePracticeSession({ scenarioIds, onReturnToWorld }: Props) {
+function LanguagePracticeSession({
+  autoStart = false,
+  scenarioIds,
+  onReturnToWorld,
+}: Props) {
   const { playSound } = useUiSounds();
   const {
     concepts,
@@ -105,7 +113,7 @@ function LanguagePracticeSession({ scenarioIds, onReturnToWorld }: Props) {
   const [isFinishing, setIsFinishing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [typedReply, setTypedReply] = useState("");
-  const [inputMode, setInputMode] = useState<"speech" | "text">("speech");
+  const [inputMode, setInputMode] = useState<"speech" | "text">("text");
   const [showHints, setShowHints] = useState(false);
   const [showWarmup, setShowWarmup] = useState(false);
   const [translations, setTranslations] = useState<string[]>([]);
@@ -173,6 +181,17 @@ function LanguagePracticeSession({ scenarioIds, onReturnToWorld }: Props) {
       setIsStarting(false);
     }
   }
+
+  const autoStartAttempted = useRef(false);
+  const beginOnOpen = useEffectEvent(() => {
+    void beginPractice();
+  });
+  useEffect(() => {
+    if (autoStart && !isLoading && !autoStartAttempted.current) {
+      autoStartAttempted.current = true;
+      beginOnOpen();
+    }
+  }, [autoStart, isLoading]);
 
   async function finishPractice(
     summary: string,
@@ -281,6 +300,7 @@ function LanguagePracticeSession({ scenarioIds, onReturnToWorld }: Props) {
         const response = await fetch("/api/practice/respond", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(30_000),
           body: JSON.stringify({
             languageCode: targetLanguage.code,
             scenarioId: scenario.id,
@@ -417,7 +437,11 @@ function LanguagePracticeSession({ scenarioIds, onReturnToWorld }: Props) {
         {quest && nextQuest ? (
           <Link
             className="life-next-memory"
-            href={`/practice?scene=${nextQuest.id}`}
+            href={
+              onReturnToWorld
+                ? `/?activity=${nextQuest.id}`
+                : `/practice?scene=${nextQuest.id}`
+            }
           >
             Your next little adventure
             <strong>

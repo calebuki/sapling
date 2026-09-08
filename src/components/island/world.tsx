@@ -6,6 +6,8 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { canPlace, type BuildPiece } from "@/lib/island/game";
 import { routeTo, walkable } from "@/lib/island/navigation";
 import Vocab from "./vocab";
+import { characterMesh } from "./character-mesh";
+import type { Appearance } from "@/lib/island/appearance";
 import type { IslandScene } from "./island-scene";
 import { pieceMesh, disposeGroup } from "./build-mesh";
 export type Decoration = {
@@ -17,6 +19,7 @@ export type Decoration = {
   color?: string;
 };
 type Props = {
+  appearance: Appearance;
   learningGrowth: number;
   buildActive: boolean;
   onSceneReady: (value: IslandScene) => void;
@@ -78,6 +81,7 @@ const points: Record<string, [number, number]> = {
   visitor: [1.3, 4.6],
 };
 export default function World({
+  appearance,
   learningGrowth,
   buildActive,
   onSceneReady,
@@ -166,6 +170,7 @@ export default function World({
   const host = useRef<HTMLDivElement>(null),
     api = useRef<{
       go: (id: string) => void;
+      look: (value: Appearance) => void;
       decorate: (d: Decoration[]) => void;
       zoom: (delta: number) => void;
       structures: (pieces: BuildPiece[]) => void;
@@ -390,31 +395,24 @@ export default function World({
     const boat = cyl(0.65, 0.5, 0.4, "#b46a4d", 3.2, -0.25, 8.5);
     boat.scale.z = 2.2;
     box(0.13, 1.2, 0.12, "#d4b980", 3.2, 0.4, 8.5);
-    function person(x: number, z: number, color: string) {
-      const g = new T.Group();
-      g.position.set(x, 0.73, z);
-      scene.add(g);
-      cyl(0.2, 0.28, 0.62, color, 0, 0.66, 0, g);
-      ball(0.24, "#edc7a3", 0, 1.22, 0, g);
-      ball(0.245, "#76503c", 0, 1.34, -0.045, g).scale.y = 0.65;
-      for (const sx of [-0.08, 0.08])
-        ball(0.026, "#343546", sx, 1.25, 0.216, g);
-      ball(0.035, "#e8a38c", 0, 1.17, 0.237, g);
-      const hat = cyl(0.34, 0.34, 0.075, color, 0, 1.47, 0, g);
-      hat.rotation.z = -0.08;
-      cyl(0.23, 0.24, 0.17, color, 0, 1.57, 0, g);
-      for (const sx of [-0.14, 0.14]) {
-        const leg = box(0.13, 0.36, 0.15, "#425868", sx, 0.23, 0, g);
-        leg.userData.limb = sx < 0 ? -1 : 1;
-        const arm = ball(0.08, "#edc7a3", sx * 2, 0.65, 0, g);
-        arm.userData.arm = sx < 0 ? -1 : 1;
-      }
-      return g;
-    }
-    const visitor = person(1.3, 4.6, "#f2bb64");
+    const visitor = characterMesh({
+      skin: "#dba77b",
+      hair: "#49352c",
+      shirt: "#e2ba62",
+      style: "curls",
+    });
+    visitor.position.set(1.3, 0.73, 4.6);
+    scene.add(visitor);
     mark(visitor, "visitor");
-    const player = person(0, 2, "#9373d5");
-    box(0.34, 0.39, 0.2, "#d6a771", 0, 0.73, -0.23, player);
+    const player = characterMesh();
+    player.position.set(0, 0.73, 2);
+    scene.add(player);
+    function look(value: Appearance) {
+      disposeGroup(player);
+      player.clear();
+      const updated = characterMesh(value);
+      player.add(...[...updated.children]);
+    }
     const halo = mesh(new T.RingGeometry(0.32, 0.4, 32), "#fff4c9", 0, 0.75, 2);
     halo.rotation.x = -Math.PI / 2;
     const marker = mesh(
@@ -653,7 +651,7 @@ export default function World({
       buildingGroup.clear();
       for (const p of pieces) buildingGroup.add(pieceMesh(p));
     }
-    api.current = { go, decorate, zoom, structures };
+    api.current = { go, decorate, zoom, structures, look };
     live.current.onSceneReady({
       scene,
       renderer,
@@ -991,15 +989,14 @@ export default function World({
               ? Math.sin(now * 0.015) * 0.55 * limb.userData.limb
               : 0;
           if (limb.userData.arm)
-            limb.position.z = moving
-              ? Math.sin(now * 0.015) * 0.12 * limb.userData.arm
+            limb.rotation.x = moving
+              ? -Math.sin(now * 0.015) * 0.4 * limb.userData.arm
               : 0;
         });
         visitor.rotation.y = Math.sin(t * 0.4) * 0.15;
         visitor.children.forEach((o) => {
           if (o.userData.arm === 1) {
-            o.position.y = 0.85 + Math.sin(t * 3) * 0.12;
-            o.position.x = 0.34;
+            o.rotation.z = 0.3 + Math.sin(t * 3) * 0.12;
           }
         });
         clouds.forEach((g, i) => {
@@ -1143,6 +1140,8 @@ export default function World({
         if (o instanceof T.Mesh) o.geometry.dispose();
       });
       disposeGroup(buildingGroup);
+      disposeGroup(player);
+      disposeGroup(visitor);
       mats.forEach((m) => m.dispose());
       extraMaterials.forEach((m) => m.dispose());
       renderer.dispose();
@@ -1150,6 +1149,7 @@ export default function World({
       api.current = null;
     };
   }, []);
+  useEffect(() => api.current?.look(appearance), [appearance]);
   useEffect(() => api.current?.decorate(decorations), [decorations]);
   useEffect(() => api.current?.structures(buildings), [buildings]);
   useEffect(() => {
