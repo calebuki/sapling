@@ -623,6 +623,13 @@
   min-width: 40px;
   transition: background 0.15s;
 }
+/* Global button hover/active transforms must not replace the projected anchor. */
+.sapling-island .world-pin,
+.sapling-island .world-pin:not(:disabled):hover,
+.sapling-island .world-pin:not(:disabled):active,
+.sapling-island .world-pin:focus-visible {
+  transform: translate(-50%, -100%);
+}
 .sapling-island .world-pin .world-word {
   opacity: 1;
   white-space: nowrap;
