@@ -17,7 +17,9 @@ export default async function HomePage() {
 
   return (
     <LearningModelProvider learnerId={learnerId}>
-      <AppShell><HomeLanding /></AppShell>
+      <AppShell>
+        <HomeLanding />
+      </AppShell>
     </LearningModelProvider>
   );
 }
