@@ -9,7 +9,7 @@ const inputSchema = z.object({ sdp: z.string().min(1).max(60000), scenarioId: z.
 export const maxDuration = 30;
 
 export async function GET() {
-  return Response.json({ available: Boolean(process.env.OPENAI_API_KEY && hasSupabase) },
+  return Response.json({ available: Boolean(process.env.OPENAI_LIVE_VOICE_KEY && hasSupabase) },
     { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const db = await createClient();
   const { data: auth } = await db.auth.getUser();
   if (!auth.user) return Response.json({ error: "Sign in to use live voice." }, { status: 401 });
-  if (!process.env.OPENAI_API_KEY) return Response.json({ error: "Live voice is not configured. Listening and typed practice are available." }, { status: 503 });
+  if (!process.env.OPENAI_LIVE_VOICE_KEY) return Response.json({ error: "Live voice is not configured. Listening and typed practice are available." }, { status: 503 });
   if (Number(request.headers.get("content-length")) > 65000) return new Response(null, { status: 413 });
   const input = inputSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return Response.json({ error: "Invalid voice request." }, { status: 400 });
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     const upstream = await fetch("https://api.openai.com/v1/live/sessions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${process.env.OPENAI_LIVE_VOICE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         session: { model: "gpt-live-1", store: false, instructions: voiceInstructions(context), delegation: { type: "client" } },
         transport: { type: "webrtc", sdp: input.data.sdp },
