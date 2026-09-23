@@ -1,4 +1,5 @@
 import { demoConcepts, initialDemoStates } from "@/lib/learning/demo-data";
+import { applyObservation } from "@/lib/learning/adaptive";
 import { swedishDemoConcepts } from "@/lib/learning/swedish-demo-data";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
 import {
@@ -53,6 +54,7 @@ type DemoEvent = {
   id: string;
   occurredAt: string;
   eventType:
+    | "exposure"
     | "retrieval_attempt"
     | "listening_attempt"
     | "speaking_attempt"
@@ -171,9 +173,21 @@ function replaceState(updated: LearnerConceptState) {
 export function createDemoLearningRepository(): LearningRepository {
   return {
     mode: "local",
+    async recordObservation(input) {
+      const language = languageForConcept(input.conceptId);
+      const current = readStates(language).find(s => s.conceptId === input.conceptId) ?? createEmptyState(input.conceptId);
+      const events = JSON.parse(window.localStorage.getItem(eventStorageKey(language)) ?? "[]") as DemoEvent[];
+      if (events.some(e => e.payload.attemptId === input.attemptId)) return current;
+      const eventType = input.dimension === "exposure" ? "exposure"
+        : input.assisted ? "repair"
+        : input.dimension === "recognitionAudio" ? "listening_attempt"
+        : "retrieval_attempt";
+      appendEvent({ eventType, conceptId: input.conceptId, payload: { ...input } });
+      return replaceState(applyObservation(current, input));
+    },
     async getTargetLanguage() {
       const stored = window.localStorage.getItem(targetLanguageStorageKey);
-      return isTargetLanguageCode(stored) ? stored : "da";
+      return isTargetLanguageCode(stored) ? stored : "sv";
     },
     async setTargetLanguage(languageCode: TargetLanguageCode) {
       window.localStorage.setItem(targetLanguageStorageKey, languageCode);

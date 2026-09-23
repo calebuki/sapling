@@ -1,9 +1,10 @@
 import type { Lesson, ListenSpeakItem } from "./course.ts";
+import { foundationLessons, foundationListening } from "./swedish-foundations";
 
 const sofie = "sv-SE-SofieNeural" as const;
 const mattias = "sv-SE-MattiasNeural" as const;
 
-export const swedishLessons: Lesson[] = [
+const originalLessons: Lesson[] = [
   {
     id: "sv-first-words",
     number: 1,
@@ -426,7 +427,17 @@ export const swedishLessons: Lesson[] = [
   },
 ];
 
+export const swedishLessons: Lesson[] = [
+  originalLessons[0],
+  ...foundationLessons.slice(0, 3),
+  originalLessons[1],
+  ...foundationLessons.slice(3, 8),
+  ...originalLessons.slice(2),
+  ...foundationLessons.slice(8),
+].map((lesson, index) => ({ ...lesson, number: index + 1 }));
+
 export const swedishListenSpeakItems: ListenSpeakItem[] = [
+  ...foundationListening,
   {
     id: "sv-maybe-later",
     conceptSlug: "kanske",

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { AdaptiveSession } from "./adaptive-session";
 
 import { TargetAudioButton } from "@/components/target-audio-button";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
@@ -40,6 +41,7 @@ type Phase = "attempt" | "feedback" | "reveal" | "complete";
 export function LearnSession() {
   const { targetLanguage } = useLearningModel();
 
+  if (targetLanguage.code === "sv") return <AdaptiveSession key={targetLanguage.code} />;
   return <LanguageLearnSession key={targetLanguage.code} />;
 }
 

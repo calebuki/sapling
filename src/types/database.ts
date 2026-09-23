@@ -258,6 +258,14 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      record_learning_observation: {
+        Args: { p_input: Json };
+        Returns: number;
+      };
+      reserve_live_session: {
+        Args: { p_scenario_id: string };
+        Returns: string;
+      };
       record_retrieval_attempt: {
         Args: {
           p_concept_id: string;

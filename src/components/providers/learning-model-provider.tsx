@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { createLearningRepository } from "@/lib/repositories";
+import type { Observation } from "@/lib/learning/adaptive";
 import {
   getTargetLanguage,
   type TargetLanguage,
@@ -38,6 +39,7 @@ const emptyPracticeSnapshot: PracticeSnapshot = {
 };
 
 type LearningModelContextValue = {
+  recordObservation: (input: Observation) => Promise<LearnerConceptState>;
   learnerId: string;
   concepts: Concept[];
   states: LearnerConceptState[];
@@ -81,7 +83,7 @@ export function LearningModelProvider({
     emptyPracticeSnapshot,
   );
   const [targetLanguageCode, setTargetLanguageCode] =
-    useState<TargetLanguageCode>("da");
+    useState<TargetLanguageCode>("sv");
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitchingLanguage, setIsSwitchingLanguage] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +191,10 @@ export function LearningModelProvider({
     },
     [repository, upsertState],
   );
+
+  const recordObservation = useCallback(async (input: Observation) => {
+    return upsertState(await repository.recordObservation(input));
+  }, [repository, upsertState]);
 
   const recordRepair = useCallback(
     async (input: RepairInput) => {
@@ -320,6 +326,7 @@ export function LearningModelProvider({
   return (
     <LearningModelContext.Provider
       value={{
+        recordObservation,
         learnerId,
         concepts,
         states,

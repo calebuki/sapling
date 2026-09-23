@@ -7,6 +7,7 @@ import type {
   SpeakingAttemptInput,
 } from "@/types/learning";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
+import type { Observation } from "@/lib/learning/adaptive";
 import type {
   CompletePracticeSessionInput,
   PracticeSnapshot,
@@ -15,6 +16,7 @@ import type {
 } from "@/types/practice";
 
 export interface LearningRepository {
+  recordObservation(input: Observation): Promise<LearnerConceptState>;
   mode: "local" | "supabase";
   getTargetLanguage(): Promise<TargetLanguageCode>;
   setTargetLanguage(languageCode: TargetLanguageCode): Promise<void>;

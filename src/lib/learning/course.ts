@@ -742,5 +742,8 @@ export function getSpeechAudioUrl(id: string) {
   }
 
   const language = getTargetLanguage(clip.languageCode);
+  if (clip.id.startsWith("sv-foundation-")) {
+    return `/api/speech/audio/${encodeURIComponent(clip.id)}`;
+  }
   return `/audio/${language.audioDirectory}/${encodeURIComponent(clip.id)}.mp3?v=${speechClipVersion(clip)}`;
 }

@@ -24,7 +24,7 @@ import type {
 type ConceptRow = Database["public"]["Tables"]["concepts"]["Row"];
 type StateRow = Database["public"]["Tables"]["learner_concept_state"]["Row"];
 
-function mapConcept(row: ConceptRow): Concept {
+export function mapConcept(row: ConceptRow): Concept {
   return {
     id: row.id,
     languageCode: row.language_code,
@@ -37,7 +37,7 @@ function mapConcept(row: ConceptRow): Concept {
   };
 }
 
-function mapState(row: StateRow): LearnerConceptState {
+export function mapState(row: StateRow): LearnerConceptState {
   return {
     conceptId: row.concept_id,
     recognitionText: row.recognition_text,
@@ -231,6 +231,13 @@ async function loadPracticeStates(
 export function createSupabaseLearningRepository(): LearningRepository {
   return {
     mode: "supabase",
+    async recordObservation(input) {
+      const supabase = createClient();
+      const userId = await getCurrentUserId();
+      const { error } = await supabase.rpc("record_learning_observation", { p_input: input as unknown as Json });
+      if (error) throw error;
+      return loadState(input.conceptId, userId);
+    },
     async getTargetLanguage() {
       const supabase = createClient();
       const userId = await getCurrentUserId();
