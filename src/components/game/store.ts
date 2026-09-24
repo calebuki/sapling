@@ -18,6 +18,7 @@ export type SaveData = {
   // Onboarding: what the learner told us, and where the placement check put them.
   experience: Experience | null;
   placedBand: number;
+  grammarSeen: string[];
   // English under Swedish lines: "auto" shows it to brand-new learners early on.
   english: "auto" | "on" | "off";
 };
@@ -44,6 +45,7 @@ const emptySave: SaveData = {
   outfit: 0,
   experience: null,
   placedBand: 0,
+  grammarSeen: [],
   english: "auto",
 };
 
@@ -115,6 +117,7 @@ export function loadSave(learnerId: string) {
           ...emptySave,
           ...parsed,
           discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
+          grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
           // Saves from before onboarding existed already met Elin; don't quiz them again.
           experience: parsed.experience ?? (parsed.introDone ? "little" : null),
         };

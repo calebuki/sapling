@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Lightbulb, Mic, Snail, Volume2, X } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { chooseNextActivity, type AdaptiveActivity, type SessionAttempt } from "@/lib/learning/adaptive";
+import { gatedSlugs } from "@/lib/game/grammar";
 import { buildTiles, checkAnswer, expectedFor, meaningOf, type Check as CheckResult } from "@/lib/game/lesson";
 import { conceptStage, conceptXp, stageNames, type Stage } from "@/lib/game/progression";
 import { ui } from "@/lib/game/ui-text";
@@ -17,7 +18,7 @@ import { StageIcon } from "./stage-icon";
 
 const ROUND_LENGTH = 8;
 
-type Outcome = {
+export type Outcome = {
   correct: boolean;
   check: CheckResult | "choice" | "ai";
   line: Line;
@@ -28,22 +29,41 @@ type Outcome = {
 
 type RoundSummary = { correct: number; total: number; xp: number; grown: Array<{ text: string; to: Stage }> };
 
-export function LessonRound({
-  villager,
-  onFinish,
-}: {
-  villager: Villager;
-  onFinish: (summary: RoundSummary) => void;
-}) {
+// Everything a lesson round needs besides how it looks: the adaptive schedule,
+// evidence recording and the round summary. Villagers present it their own way.
+export function useLessonRound(
+  villager: Villager,
+  onFinish: (summary: RoundSummary) => void,
+  {
+    roundLength = ROUND_LENGTH,
+    later = [],
+    adapt = (activity) => activity,
+  }: {
+    roundLength?: number;
+    later?: readonly string[];
+    // Lets a villager re-stage the scheduled activity (e.g. hear-and-point instead of recall).
+    adapt?: (activity: AdaptiveActivity | null, states: LearnerConceptState[]) => AdaptiveActivity | null;
+  } = {},
+) {
   const model = useLearningModel();
   const name = useGame((s) => s.save.name);
-  const scoped = useMemo(
-    () => model.concepts.filter((c) => c.languageCode === "sv" && villager.conceptSlugs.includes(c.slug)),
-    [model.concepts, villager],
-  );
+  const grammarSeen = useGame((s) => s.save.grammarSeen);
+  // Phrases behind an unread grammar tip wait, unless they were met before tips existed.
+  const scoped = useMemo(() => {
+    const gated = gatedSlugs(grammarSeen);
+    const exposed = new Set(model.states.filter((s) => s.exposureCount > 0).map((s) => s.conceptId));
+    const open = model.concepts.filter(
+      (c) => c.languageCode === "sv" && villager.conceptSlugs.includes(c.slug) && (!gated.has(c.slug) || exposed.has(c.id)),
+    );
+    // "later" phrases wait until the villager's own situation is familiar.
+    const familiar = open.filter((c) => exposed.has(c.id) && !later.includes(c.slug)).length >= 5;
+    return familiar ? open : open.filter((c) => !later.includes(c.slug) || exposed.has(c.id));
+    // Fixed for the round: evidence recorded mid-round must not reshuffle the pool.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.concepts, villager, grammarSeen]);
   const [attempts, setAttempts] = useState<SessionAttempt[]>([]);
   const [activity, setActivity] = useState<AdaptiveActivity | null>(() =>
-    chooseNextActivity({ languageCode: "sv", concepts: scoped, states: model.states }),
+    adapt(chooseNextActivity({ languageCode: "sv", concepts: scoped, states: model.states }), model.states),
   );
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [queued, setQueued] = useState<AdaptiveActivity | null>(null);
@@ -54,17 +74,8 @@ export function LessonRound({
   const startedAt = useRef(performance.now());
 
 
-  if (!activity) {
-    return (
-      <div className="dialogue-actions">
-        <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
-        </button>
-      </div>
-    );
-  }
-  const concept = scoped.find((c) => c.id === activity.conceptId)!;
-  const stateBefore = model.states.find((s) => s.conceptId === activity.conceptId);
+  const concept = activity ? scoped.find((c) => c.id === activity.conceptId) : undefined;
+  const stateBefore = activity ? model.states.find((s) => s.conceptId === activity.conceptId) : undefined;
 
   async function record(params: {
     successful: boolean;
@@ -121,9 +132,9 @@ export function LessonRound({
       ? [...model.states.filter((s) => s.conceptId !== after!.conceptId), after]
       : model.states;
     const upcoming =
-      nextAttempts.length >= ROUND_LENGTH
+      nextAttempts.length >= roundLength
         ? null
-        : chooseNextActivity({ languageCode: "sv", concepts: scoped, states: freshStates, attempts: nextAttempts });
+        : adapt(chooseNextActivity({ languageCode: "sv", concepts: scoped, states: freshStates, attempts: nextAttempts }), freshStates);
     const gained = Math.max(0, conceptXp(after) - conceptXp(stateBefore));
     const from = conceptStage(stateBefore);
     const to = conceptStage(after);
@@ -133,7 +144,7 @@ export function LessonRound({
       if (params.successful) summary.current.correct++;
     }
     summary.current.xp += gained;
-    if (stageUp) summary.current.grown.push({ text: concept.canonicalForm, to });
+    if (stageUp && concept) summary.current.grown.push({ text: concept.canonicalForm, to });
     if (encounter) {
       setBusy(false);
       advance(upcoming);
@@ -172,6 +183,27 @@ export function LessonRound({
     setActivity(next);
   }
 
+  return { model, name, scoped, attempts, activity, concept, stateBefore, outcome, queued, busy, error, setError, summary, record, advance, roundLength };
+}
+
+export function LessonRound({
+  villager,
+  onFinish,
+}: {
+  villager: Villager;
+  onFinish: (summary: RoundSummary) => void;
+}) {
+  const { name, scoped, attempts, activity, stateBefore, outcome, queued, busy, error, setError, summary, record, advance } =
+    useLessonRound(villager, onFinish);
+  if (!activity) {
+    return (
+      <div className="dialogue-actions">
+        <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
+          <SvLine line={ui.next} /> <ArrowRight size={18} />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="lesson" aria-busy={busy}>
       <div className="lesson-progress" aria-hidden="true">
@@ -202,7 +234,7 @@ export function LessonRound({
   );
 }
 
-function Feedback({ outcome, onNext }: { outcome: Outcome; onNext: () => void }) {
+export function Feedback({ outcome, onNext }: { outcome: Outcome; onNext: () => void }) {
   const next = useRef<HTMLButtonElement>(null);
   useEffect(() => next.current?.focus(), []);
   return (
@@ -412,25 +444,7 @@ export function ActivityView({
           busy={busy}
           hint={expected}
           onSubmit={async (answer, via, hinted) => {
-            let check: Outcome["check"] = checkAnswer(answer, expected);
-            let successful = check !== "wrong";
-            // Open prompts accept any natural answer through the constrained evaluator.
-            if (!successful && exercise.mode !== "repeat" && answer.trim()) {
-              try {
-                const response = await fetch("/api/learning/evaluate-answer", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ languageCode: "sv", lessonId: activity.lessonId, exerciseId: exercise.audioId, transcript: answer, alternatives: [] }),
-                });
-                if (response.ok) {
-                  const result = await response.json();
-                  if (result.successful === true) {
-                    successful = true;
-                    check = "ai";
-                  }
-                }
-              } catch {}
-            }
+            const { successful, check } = await judgeAnswer(activity, answer, expected);
             return onRecord({ successful, assisted: hinted, response: answer, expected, check, replays: 0, input: via });
           }}
         />
@@ -439,11 +453,36 @@ export function ActivityView({
   );
 }
 
-function Tiles({ expected, pool, busy, onSubmit }: { expected: string; pool: string[]; busy: boolean; onSubmit: (answer: string) => Promise<void> }) {
+// Exact (or nearly exact) answers pass locally; open prompts also accept any
+// natural answer through the constrained evaluator.
+export async function judgeAnswer(activity: AdaptiveActivity, answer: string, expected: string) {
+  let check: Outcome["check"] = checkAnswer(answer, expected);
+  let successful = check !== "wrong";
+  if (!successful && activity.exercise.mode !== "repeat" && answer.trim()) {
+    try {
+      const response = await fetch("/api/learning/evaluate-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ languageCode: "sv", lessonId: activity.lessonId, exerciseId: activity.exercise.audioId, transcript: answer, alternatives: [] }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        if (result.successful === true) {
+          successful = true;
+          check = "ai";
+        }
+      }
+    } catch {}
+  }
+  return { successful, check };
+}
+
+export function Tiles({ expected, pool, busy, onSubmit, onChange }: { expected: string; pool: string[]; busy: boolean; onSubmit: (answer: string) => Promise<void>; onChange?: (answer: string) => void }) {
   const tiles = useMemo(() => buildTiles(expected, pool, expected.length * 7919), [expected, pool]);
   const [chosen, setChosen] = useState<string[]>([]);
   const byId = new Map(tiles.map((t) => [t.id, t]));
   const answer = chosen.map((id) => byId.get(id)!.word).join(" ");
+  useEffect(() => onChange?.(answer), [answer, onChange]);
   return (
     <div className="tiles">
       <div className="tile-answer" aria-live="polite">
@@ -478,14 +517,16 @@ function Tiles({ expected, pool, busy, onSubmit }: { expected: string; pool: str
   );
 }
 
-function FreeAnswer({
+export function FreeAnswer({
   busy,
   hint,
   onSubmit,
+  onChange,
 }: {
   busy: boolean;
   hint: string;
   onSubmit: (answer: string, via: "text" | "speech", hinted: boolean) => Promise<void>;
+  onChange?: (answer: string) => void;
 }) {
   const [answer, setAnswer] = useState("");
   const [hinted, setHinted] = useState(false);
@@ -494,6 +535,7 @@ function FreeAnswer({
   const input = useRef<HTMLInputElement>(null);
   const micSupported = useMemo(() => canRecognizeSpeech(), []);
   useEffect(() => input.current?.focus(), []);
+  useEffect(() => onChange?.(answer), [answer, onChange]);
 
   const insert = (letter: string) => {
     const el = input.current;
@@ -586,7 +628,7 @@ function FreeAnswer({
 }
 
 // Optional pronunciation play: say the new phrase and see what was heard.
-function SayItPractice({ expected }: { expected: string }) {
+export function SayItPractice({ expected }: { expected: string }) {
   const [heard, setHeard] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const supported = useMemo(() => canRecognizeSpeech(), []);

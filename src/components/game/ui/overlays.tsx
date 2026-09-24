@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Languages, Lock, LogOut, Music, Volume2, X } from "lucide-react";
+import { GraduationCap, Languages, Lock, LogOut, Music, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { getCourse } from "@/lib/learning/course";
 import { discoveries } from "@/lib/game/discoveries";
+import { grammarTips, type GrammarTip } from "@/lib/game/grammar";
 import { conceptStage, stageNames, type GameProgress } from "@/lib/game/progression";
 import { ui } from "@/lib/game/ui-text";
 import { villagers } from "@/lib/game/villagers";
@@ -15,6 +16,7 @@ import { sound } from "../audio/sfx";
 import { speakSwedish } from "../audio/speech";
 import { setGame, updateSave, useGame } from "../store";
 import { outfits } from "../world/actors";
+import { GrammarTipModal } from "./grammar-tip";
 import { StageIcon } from "./stage-icon";
 import { Sv, SvLine } from "./sv";
 
@@ -41,7 +43,9 @@ export function Overlays({ progress }: { progress: GameProgress }) {
 function Ordbok({ progress }: { progress: GameProgress }) {
   const model = useLearningModel();
   const discovered = useGame((s) => s.save.discovered);
-  const [tab, setTab] = useState<"phrases" | "things">("phrases");
+  const grammarSeen = useGame((s) => s.save.grammarSeen);
+  const [tab, setTab] = useState<"phrases" | "grammar" | "things">("phrases");
+  const [reading, setReading] = useState<GrammarTip | null>(null);
   const exercises = new Map(getCourse("sv").lessons.flatMap((l) => l.exercises.map((e) => [e.conceptSlug, e] as const)));
   const byConcept = new Map(model.states.map((s) => [s.conceptId, s]));
 
@@ -54,11 +58,36 @@ function Ordbok({ progress }: { progress: GameProgress }) {
         <button role="tab" aria-selected={tab === "phrases"} onClick={() => setTab("phrases")}>
           <SvLine line={ui.phrases} /> <span className="count">{progress.wordsMet}/{progress.wordsTotal}</span>
         </button>
+        <button role="tab" aria-selected={tab === "grammar"} onClick={() => setTab("grammar")}>
+          <Sv text="Grammatik" en="Grammar" /> <span className="count">{grammarSeen.length}/{grammarTips.length}</span>
+        </button>
         <button role="tab" aria-selected={tab === "things"} onClick={() => setTab("things")}>
           <SvLine line={ui.things} /> <span className="count">{discovered.length}/{discoveries.length}</span>
         </button>
       </div>
-      {tab === "phrases" ? (
+      {reading ? <GrammarTipModal tip={reading} review onDone={() => setReading(null)} /> : null}
+      {tab === "grammar" ? (
+        <div className="ordbok-scroll grammar-list">
+          {grammarTips.map((tip) => {
+            const villager = villagers.find((v) => v.id === tip.villager)!;
+            const seen = grammarSeen.includes(tip.id);
+            return seen ? (
+              <button key={tip.id} className="thing is-found" onClick={() => { sound.play("click"); setReading(tip); }}>
+                <GraduationCap size={18} />
+                <SvLine line={tip.title} />
+                <span className="thing-en">
+                  {tip.title.en} · {villager.name}
+                </span>
+              </button>
+            ) : (
+              <div key={tip.id} className="thing">
+                <Lock size={16} />
+                <span className="thing-en">{villager.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : tab === "phrases" ? (
         <div className="ordbok-scroll">
           {villagers.map((v) => {
             const standing = progress.villagers[v.id];

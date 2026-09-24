@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, MessageCircle, Phone, Volume2 } from "lucide-react";
+import { BookOpen, GraduationCap, MessageCircle, Phone, Volume2 } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
+import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
 import type { GameProgress } from "@/lib/game/progression";
 import { ui } from "@/lib/game/ui-text";
 import { elinAfterName, elinIntro, getVillager, pick, type Line, type VillagerId } from "@/lib/game/villagers";
@@ -12,13 +13,15 @@ import { endDialogue } from "../actions";
 import { sound } from "../audio/sfx";
 import { speakSwedish, stopSpeaking } from "../audio/speech";
 import { emote, updateSave, useGame } from "../store";
+import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
+import { GrammarTipModal } from "./grammar-tip";
 import { LessonRound, RoundSummaryView, type RoundSummary } from "./lesson-round";
 import { LiveCall } from "./live-call";
 import { registerGloss, Sv, SvLine } from "./sv";
 import { Typewriter } from "./typewriter";
 
-type Mode = "lines" | "name" | "menu" | "lesson" | "summary" | "live" | "chat";
+type Mode = "lines" | "name" | "menu" | "tip" | "lesson" | "summary" | "live" | "chat";
 
 export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; progress: GameProgress; liveAvailable: boolean }) {
   const villager = getVillager(id);
@@ -40,7 +43,23 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   const [round, setRound] = useState(0);
   const [summary, setSummary] = useState<RoundSummary | null>(null);
   const after = useRef<() => void>(() => (opening.then === "end" ? endDialogue() : setMode(opening.then)));
+  const [tip, setTip] = useState<GrammarTip | null>(null);
+  const upcomingTip = pendingTip(id, standing.met, save.grammarSeen);
   const showEnglish = save.english === "on" || (save.english === "auto" && save.experience === "new" && progress.level < 5);
+
+  const finishRound = (result: RoundSummary) => {
+    setSummary(result);
+    setMode("summary");
+  };
+
+  // A pending grammar tip always comes before the next lesson round.
+  const startLesson = () => {
+    setRound((r) => r + 1);
+    if (upcomingTip) {
+      setTip(upcomingTip);
+      setMode("tip");
+    } else setMode("lesson");
+  };
 
   const say = (next: Line[], then: () => void) => {
     setLines(next);
@@ -135,7 +154,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
               emote(id, "happy", 1600);
               say(elinAfterName(name), () => {
                 updateSave({ introDone: true });
-                setMode("lesson");
+                startLesson();
               });
             }}
           />
@@ -143,8 +162,13 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
 
         {mode === "menu" ? (
           <div className="dialogue-menu">
-            <button className="btn btn-primary" onClick={() => { sound.play("click"); setRound((r) => r + 1); setMode("lesson"); }} autoFocus>
+            <button className="btn btn-primary" onClick={() => { sound.play("click"); startLesson(); }} autoFocus>
               <BookOpen size={18} /> <SvLine line={villager.teach} />
+              {upcomingTip ? (
+                <span className="tip-badge">
+                  <GraduationCap size={14} /> <Sv text="Ny grammatik" en="New grammar tip" />
+                </span>
+              ) : null}
             </button>
             <button
               className="btn"
@@ -168,25 +192,36 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
           </div>
         ) : null}
 
+        {mode === "tip" && tip ? (
+          <>
+            <p className="dialogue-hint">
+              <Sv text={`${villager.name} förklarar…`} en={`${villager.name} explains…`} />
+            </p>
+            <GrammarTipModal
+              tip={tip}
+              onDone={() => {
+                updateSave({ grammarSeen: [...new Set([...save.grammarSeen, tip.id])] });
+                setTip(null);
+                setMode("lesson");
+              }}
+            />
+          </>
+        ) : null}
+
         {mode === "lesson" ? (
-          <LessonRound
-            key={round}
-            villager={villager}
-            onFinish={(result) => {
-              setSummary(result);
-              setMode("summary");
-            }}
-          />
+          // Bosse teaches at his counter; the others still use the classic round for now.
+          villager.id === "bosse" ? (
+            <CafeRound key={round} villager={villager} onFinish={finishRound} />
+          ) : (
+            <LessonRound key={round} villager={villager} onFinish={finishRound} />
+          )
         ) : null}
 
         {mode === "summary" && summary ? (
           <RoundSummaryView
             summary={summary}
             villager={villager}
-            onAgain={() => {
-              setRound((r) => r + 1);
-              setMode("lesson");
-            }}
+            onAgain={startLesson}
             onBye={() => say([pick(villager.goodbye)], endDialogue)}
             extra={
               canTalk ? (
