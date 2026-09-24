@@ -1,18 +1,37 @@
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import type { PracticeCharacter, PracticeScenario } from "@/types/practice";
 
-export const practiceCharacters: Record<TargetLanguageCode, PracticeCharacter> = {
-  da: {
+const characters: PracticeCharacter[] = [
+  {
     id: "emil",
     name: "Emil",
     description: "Patient, dryly funny, and usually on his way to a bakery.",
   },
-  sv: {
+  {
     id: "elin",
     name: "Elin",
-    description: "Warm, quick-witted, and always aware of the nearest fika.",
+    description: "Warm, quick-witted harbour keeper of Lilla Ö who greets every new arrival at the dock.",
   },
-};
+  {
+    id: "bosse",
+    name: "Bosse",
+    description: "Jolly, round-bellied owner of Café Kanel; proud of his cinnamon buns and a little theatrical.",
+  },
+  {
+    id: "stina",
+    name: "Stina",
+    description: "Brisk, kind station master who loves timetables and gently teases travellers who rush.",
+  },
+  {
+    id: "astrid",
+    name: "Astrid",
+    description: "Unhurried old gardener on the hill who has seen every summer on the island and loves making plans.",
+  },
+];
+
+export function getPracticeCharacter(characterId: string): PracticeCharacter {
+  return characters.find((character) => character.id === characterId) ?? characters[1];
+}
 
 const danishScenarios: PracticeScenario[] = [
   {
@@ -131,9 +150,9 @@ const swedishScenarios: PracticeScenario[] = [
     languageCode: "sv",
     characterId: "elin",
     title: "Meet Elin",
-    setting: "You meet outside a café in Södermalm.",
+    setting: "You have just stepped off the ferry onto the dock of Lilla Ö, a small Swedish island village.",
     learnerRole: "Introduce yourself and get to know Elin.",
-    characterRole: "A friendly local meeting you for the first time.",
+    characterRole: "The friendly harbour keeper meeting you for the first time.",
     goal: "Exchange names and complete a short, natural introduction.",
     openingLine: "Hej! Jag heter Elin. Vad heter du?",
     openingEnglish: "Hi! My name is Elin. What is your name?",
@@ -156,14 +175,14 @@ const swedishScenarios: PracticeScenario[] = [
   {
     id: "fika-order",
     languageCode: "sv",
-    characterId: "elin",
-    title: "Fika with Elin",
-    setting: "Elin has brought you to her favorite café.",
+    characterId: "bosse",
+    title: "Fika at Café Kanel",
+    setting: "You step up to the counter of Café Kanel, the island's cosy café.",
     learnerRole: "Choose something and order it naturally.",
-    characterRole: "Your friend, helping only when the conversation stalls.",
+    characterRole: "Bosse, the café owner taking your order and chatting while he works.",
     goal: "Order a drink or pastry and respond to one follow-up question.",
-    openingLine: "Vad är du sugen på? Jag tar en kaffe.",
-    openingEnglish: "What are you in the mood for? I’m having a coffee.",
+    openingLine: "Välkommen till Café Kanel! Vad är du sugen på?",
+    openingEnglish: "Welcome to Café Kanel! What are you in the mood for?",
     style: "roleplay",
     requiredConceptSlugs: ["jag-skulle-vilja", "kaffe", "tack"],
     optionalConceptSlugs: ["te", "vatten", "kanelbulle", "med-mjoelk", "notan-tack"],
@@ -176,21 +195,21 @@ const swedishScenarios: PracticeScenario[] = [
     ],
     fallbackReplies: [
       { target: "Bra val. Vill du också ha en kanelbulle?", english: "Good choice. Would you also like a cinnamon roll?" },
-      { target: "Ska vi sitta här eller ta med det?", english: "Should we sit here or take it with us?" },
-      { target: "Perfekt. Jag hittar ett bord.", english: "Perfect. I’ll find a table." },
+      { target: "Vill du sitta här eller ta med?", english: "Do you want to sit here or take it away?" },
+      { target: "Varsågod! Det blir fyrtio kronor.", english: "Here you go! That will be forty kronor." },
     ],
   },
   {
     id: "centralstation-change",
     languageCode: "sv",
-    characterId: "elin",
-    title: "A change at Centralstationen",
-    setting: "Your platform changes while you and Elin are travelling.",
+    characterId: "stina",
+    title: "A change at the station",
+    setting: "You are at the island's little railway station, about to take the train to the mainland.",
     learnerRole: "Find the right train and explain where you need to get off.",
-    characterRole: "Your travelling companion.",
+    characterRole: "Stina, the station master helping travellers.",
     goal: "Ask for direction, check the train, and confirm your stop.",
-    openingLine: "Spåret har ändrats. Vet du var tåget till Stockholm går?",
-    openingEnglish: "The platform changed. Do you know where the train to Stockholm leaves from?",
+    openingLine: "Hej hej! Spåret har ändrats idag. Vart ska du?",
+    openingEnglish: "Hi there! The platform has changed today. Where are you going?",
     style: "roleplay",
     requiredConceptSlugs: ["var-ligger-stationen", "taget-till-stockholm", "jag-ska-av-haer"],
     optionalConceptSlugs: ["kan-du-upprepa", "prata-langsammare", "jag-foerstar-inte"],
@@ -202,19 +221,19 @@ const swedishScenarios: PracticeScenario[] = [
       { target: "Går det här tåget till …?", english: "Does this train go to …?" },
     ],
     fallbackReplies: [
-      { target: "Jag tror att det är spår fem. Ska vi fråga någon?", english: "I think it is platform five. Should we ask someone?" },
+      { target: "Tåget till Stockholm går från spår två.", english: "The train to Stockholm leaves from platform two." },
       { target: "Ja, det är rätt tåg. Var ska du gå av?", english: "Yes, this is the right train. Where are you getting off?" },
-      { target: "Bra, då säger jag till när vi är där.", english: "Great, then I’ll tell you when we are there." },
+      { target: "Bra. Trevlig resa!", english: "Good. Have a nice trip!" },
     ],
   },
   {
     id: "make-weekend-plans",
     languageCode: "sv",
-    characterId: "elin",
+    characterId: "astrid",
     title: "Make a plan",
-    setting: "Elin asks what you want to do this weekend.",
+    setting: "Astrid, resting in her hilltop garden, asks what you want to do this weekend.",
     learnerRole: "Share a preference and suggest a plan.",
-    characterRole: "A friend making plans with you.",
+    characterRole: "Astrid, an old friend making plans with you.",
     goal: "Respond openly, suggest an activity, and agree on a next step.",
     openingLine: "Har du planer i helgen? Ska vi hitta på något?",
     openingEnglish: "Do you have plans this weekend? Should we think of something to do?",

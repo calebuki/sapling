@@ -742,8 +742,9 @@ export function getSpeechAudioUrl(id: string) {
   }
 
   const language = getTargetLanguage(clip.languageCode);
+  // Foundation phrases have no recording yet; the game synthesizes them.
   if (clip.id.startsWith("sv-foundation-")) {
-    return `/api/speech/audio/${encodeURIComponent(clip.id)}`;
+    return null;
   }
   return `/audio/${language.audioDirectory}/${encodeURIComponent(clip.id)}.mp3?v=${speechClipVersion(clip)}`;
 }

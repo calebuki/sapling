@@ -7,10 +7,8 @@ produce, pronounce, and understand across contexts and speakers.
 
 The current product includes:
 
-- a small adaptive Learn loop built around attempt, reveal, compare, and repair
-- an adaptive Practice loop with recurring characters, push-to-talk
-  conversation, contextual speech resolution, and automatic personal memory
-- a language-specific progress view that keeps learning dimensions separate
+- Lilla Ö, an immersive 3D island game where villagers teach Swedish through
+  adaptive dialogue and live spoken conversations (see below)
 - a Supabase schema for concepts, learner state, multi-concept conversation
   evidence, character continuity, and append-only learning history
 - local demo persistence when Sapling's Supabase project is not configured
@@ -45,8 +43,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). With no Supabase variables,
-Sapling uses a local demo repository in the browser so Learn, Practice, and
-progress can be exercised immediately.
+Sapling uses a local demo repository in the browser so the whole island can be
+played immediately without signing in.
 
 To connect a new Sapling Supabase project, create `.env.local` from the variable
 names in `.env.example` and use values from **Sapling's own project**:
@@ -91,12 +89,40 @@ npm run build
 - [Architecture](docs/architecture.md)
 - [Staged implementation plan](docs/implementation-plan.md)
 
-## Sapling Island
+## Lilla Ö — the island game
 
-The Swedish home is now Lilla's live Three.js island. The existing Sapling lessons, adaptive practice planner, Elin conversations, speech evaluation, authenticated repository, and journal remain the learning source of truth. Learn and Practice open over the island; legacy Swedish Learn/Practice links lead into the same flow. Danish keeps its course and separate records.
+The whole product is one 3D game at `/`. You arrive by ferry on Lilla Ö, a
+small Swedish island where nobody speaks English. Every Swedish word on
+screen — interface, speech bubbles, signs, live captions — shows its English
+meaning when hovered.
 
-Island invitations connect to the four existing Sapling scenarios. Completed conversations and each five saved successful retrievals earn one claimable cosmetic supply delivery. Passive exposure, word lookups, construction, and unfinished conversations do not create mastery evidence. Claims persist with the island, and a sapling grows with completed journal adventures. Ord combines the island dictionary with the current Swedish course concepts.
+- **Villagers teach.** Elin (dock), Bosse (Café Kanel), Stina (the station) and
+  Astrid (the hilltop garden) each own a slice of the Swedish course. Talking
+  to one runs an adaptive round (hear → build with tiles → recall → listen),
+  using the existing scheduler in `src/lib/learning/adaptive.ts` scoped to that
+  villager's concepts. Evidence is recorded through the learning repository,
+  exactly as before.
+- **Talk for real.** Once you know enough, each villager's capstone is a live
+  spoken conversation through GPT-Live (`/api/voice/*`, persona per villager).
+  Without Live voice it falls back to a typed chat via `/api/practice/respond`.
+- **Progression** is derived from the learning model, not a separate score:
+  XP and levels come from concept strength, the next villager unlocks when
+  60% of the previous one's phrases have been met, and the tree in the square
+  grows with your level. Found objects (25 hidden words) add a little XP but
+  never mastery.
+- **Sound** is synthesized at runtime (footsteps, voice blips, chimes, waves,
+  birds and a generative music box); Swedish speech uses the recorded clips
+  in `public/audio/swedish`, falling back to the browser's Swedish voice.
+  Speaking answers uses the browser's speech recognition when available.
 
-Construction and furniture retain the Lilla editor, first-person exploration, resource loop, varied visitors, and expandable island. Island state is browser-local and scoped to the signed-in account; it is not cloud-synced. Settings can export/import an island JSON file across domains. Imports preserve current reward claims and save the previous island under the same storage key with a .before-import suffix. Sapling learning records stay in their existing repository.
+Code map: game content and pure logic live in `src/lib/game` (villagers,
+glossary, world geometry, progression, lesson checking) and are covered by
+`scripts/game-content.test.ts`, which fails if any Swedish word the game shows
+lacks an English gloss. The React Three Fiber scene and UI live in
+`src/components/game`. Words outside the glossary are glossed on demand by
+`/api/gloss` through the AI Gateway.
 
-Development starts from the working production branch codex/learn-practice-overhaul (e3392ee), with Lilla code imported from 78d8655. The combined product is maintained on codex/sapling-island-integration; the standalone island branch and Sapling main remain independently recoverable.
+Local island state (name, outfit, found objects) is stored per account in
+`localStorage`; learning evidence stays in the repository (Supabase or the
+local demo repository). Danish content remains in `src/lib/learning` but has
+no interface.

@@ -3,14 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
 
-const protectedPrefixes = [
-  "/learn",
-  "/ear",
-  "/my-danish",
-  "/progress",
-  "/world",
-];
-
 export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const publishableKey =
@@ -42,23 +34,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
+  // Signed-out visitors see the island's title screen at "/", so nothing
+  // here redirects to /login; signed-in visitors skip the login page.
   const { data } = await supabase.auth.getClaims();
-  const isProtected = protectedPrefixes.some((prefix) =>
-    request.nextUrl.pathname.startsWith(prefix),
-  );
-
-  if (!data?.claims && isProtected) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
   if (data?.claims && request.nextUrl.pathname === "/login") {
-    const learnUrl = request.nextUrl.clone();
-    learnUrl.pathname = "/learn";
-    learnUrl.search = "";
-    return NextResponse.redirect(learnUrl);
+    const homeUrl = request.nextUrl.clone();
+    homeUrl.pathname = "/";
+    homeUrl.search = "";
+    return NextResponse.redirect(homeUrl);
   }
 
   return response;

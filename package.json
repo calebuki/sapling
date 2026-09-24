@@ -12,9 +12,9 @@
     "test": "tsx --test scripts/*.test.ts scripts/*.test.mjs"
   },
   "dependencies": {
-    "@base-ui/react": "^1.8.0",
     "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.6.1",
+    "@react-three/fiber": "^9.8.0",
+    "@react-three/postprocessing": "^3.1.2",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "@types/three": "^0.185.0",
@@ -22,8 +22,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.30.0",
-    "microsoft-cognitiveservices-speech-sdk": "^1.51.0",
     "next": "16.3.0",
+    "postprocessing": "^6.39.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.6.0",

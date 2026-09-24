@@ -5,7 +5,7 @@ import { hasSupabase } from "@/lib/env";
 import { getTargetLanguage } from "@/lib/learning/languages";
 import {
   getPracticeScenario,
-  practiceCharacters,
+  getPracticeCharacter,
 } from "@/lib/practice/scenarios";
 import { createClient } from "@/lib/supabase/server";
 import type { PracticeTurnResponse } from "@/types/practice";
@@ -200,7 +200,7 @@ export async function POST(request: Request) {
   }
 
   const language = getTargetLanguage(input.languageCode);
-  const character = practiceCharacters[input.languageCode];
+  const character = getPracticeCharacter(scenario.characterId);
   const fallback = fallbackResponse({
     transcript: input.transcript,
     alternatives: input.alternatives,

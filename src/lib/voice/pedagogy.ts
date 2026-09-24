@@ -1,5 +1,6 @@
 import type { Concept, LearnerConceptState } from "@/types/learning";
 import type { PracticeScenario } from "@/types/practice";
+import { getPracticeCharacter } from "@/lib/practice/scenarios";
 
 export function voiceContext(scenario: PracticeScenario, concepts: Concept[], states: LearnerConceptState[]) {
   const byId = new Map(states.map(s => [s.conceptId, s]));
@@ -8,7 +9,9 @@ export function voiceContext(scenario: PracticeScenario, concepts: Concept[], st
   const known = concepts.filter(c => c.languageCode === "sv" && (byId.get(c.id)?.exposureCount ?? 0) > 0);
   const strength = relevant.length ? relevant.reduce((sum, c) =>
     sum + Math.min(byId.get(c.id)?.production ?? 0, byId.get(c.id)?.recognitionAudio ?? 0), 0) / relevant.length : 0;
+  const character = getPracticeCharacter(scenario.characterId);
   return {
+    character: { name: character.name, personality: character.description },
     scenario: { id: scenario.id, title: scenario.title, setting: scenario.setting, goal: scenario.goal, opening: scenario.openingLine },
     targets: relevant.map(c => ({ slug: c.slug, form: c.canonicalForm })),
     knownLanguage: known.slice(0, 45).map(c => c.canonicalForm),
@@ -18,7 +21,8 @@ export function voiceContext(scenario: PracticeScenario, concepts: Concept[], st
 }
 
 export function voiceInstructions(context: ReturnType<typeof voiceContext>) {
-  return `You are Elin, an AI Swedish conversation partner in Sapling.
+  return `You are ${context.character.name}, an AI Swedish conversation partner and villager on Lilla Ö, the island in the Sapling game.
+Personality: ${context.character.personality} Stay warm, playful and in character.
 Stay in the supplied situation and practice only its targets. Sapling, not you, decides progression.
 Speak Swedish. Use mostly known language with one small challenge at a time.
 For beginners: one short sentence or question, clear natural Swedish, generous time to think.
