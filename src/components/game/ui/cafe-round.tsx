@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Receipt } from "lucide-react";
-import { cafeItem, cafeLines, cafeMenu, introduceLine, itemsIn, mixUp, orderSlugs, priceLine, withArticle, type CafeIcon, type CafeItem } from "@/lib/game/cafe";
+import { cafeItem, cafeLines, cafeMenu, introduceLine, itemsIn, mixUp, orderSlugs, orderVariants, priceLine, trayOrders, withArticle, type CafeIcon, type CafeItem } from "@/lib/game/cafe";
+import { acceptsAnswer, pickVariant, type SceneBeat } from "@/lib/game/scenes";
 import { checkAnswer, expectedFor, meaningOf } from "@/lib/game/lesson";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
 import type { LearnerConceptState } from "@/types/learning";
@@ -22,21 +23,39 @@ import {
   type RecordFn,
   type RoundSummary,
 } from "./lesson-round";
-import { ListenButtons } from "./scene-round";
+import { Exchange, ListenButtons } from "./scene-round";
 import { Sv, SvLine } from "./sv";
 
 const CAFE_ROUND = 6;
 // Everyday constructions Bosse also owns; they join once the menu is familiar.
 const GENERAL_PHRASES = ["har", "gillar", "vill-ha"];
 
-// Menu words have no listening drills in the course, so the counter supplies
-// one: when hearing an item lags behind saying it, point at it instead.
+// Menu words and orders have few listening drills in the course, so the
+// counter supplies them: point at the item you hear, or fill a customer's tray
+// from what they order, whenever hearing lags behind saying.
 function pointWhenListeningLags(activity: AdaptiveActivity | null, states: LearnerConceptState[]) {
-  if (!activity || activity.mode !== "recall" || !cafeItemByConcept(activity)) return activity;
+  if (!activity || activity.mode !== "recall") return activity;
+  const isItem = Boolean(cafeItemByConcept(activity));
+  if (!isItem && !orderSlugs.has(activity.exercise.conceptSlug)) return activity;
   const state = states.find((s) => s.conceptId === activity.conceptId);
-  const lagging = (state?.recognitionAudio ?? 0) < Math.max(0.45, (state?.recall ?? 0) - 0.15);
+  const floor = isItem ? 0.45 : 0;
+  const lagging = (state?.recognitionAudio ?? 0) < Math.max(floor, (state?.recall ?? 0) - 0.15);
   return lagging ? { ...activity, id: activity.id.replace(":recall:", ":listen:"), mode: "listen" as const } : activity;
 }
+
+// Bosse's side of an order, so he can answer what you actually asked for.
+const orderExchange: SceneBeat = {
+  situation: "You're ordering at the counter of Café Kanel.",
+  speaker: "Bosse",
+  cue: { sv: "Hej! Vad vill du ha?", en: "Hi! What would you like?" },
+  reaction: { sv: "Varsågod! Det blir gott.", en: "Here you go! It'll taste good." },
+};
+const billExchange: SceneBeat = {
+  situation: "You've finished your fika at Café Kanel.",
+  speaker: "Bosse",
+  cue: { sv: "Var det gott?", en: "Did you enjoy it?" },
+  reaction: { sv: "Det blir femtiofem kronor, tack.", en: "That'll be fifty-five kronor, thanks." },
+};
 
 const cafeItemByConcept = (activity: AdaptiveActivity) => cafeItem(activity.exercise.conceptSlug);
 
@@ -50,6 +69,9 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
   const [preview, setPreview] = useState<CafeItem[]>([]);
   const [fix, setFix] = useState<(ReturnType<typeof mixUp> & { want: CafeItem; picked: number | null }) | null>(null);
   const [pointed, setPointed] = useState<{ picked: string; answer: string } | null>(null);
+  const [answer, setAnswer] = useState<string | null>(null);
+  // Varies the order variants from one round to the next.
+  const [seed] = useState(() => Math.floor(Math.random() * 1e6));
   const fixUsed = useRef(false);
   const lastOrder = useRef<CafeItem[]>([]);
 
@@ -64,13 +86,22 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
   }
 
   const exercise = activity.exercise;
-  const expected = expectedFor(exercise, name);
+  // Stable for one activity, from its prompt through its feedback.
+  const key = `${activity.id}:${attempts.length - (outcome ? 1 : 0)}`;
   const item = cafeItem(concept.slug);
   const isOrder = orderSlugs.has(concept.slug);
+  // Orders come in several variants (other drinks, other buns) so tickets rarely repeat.
+  const variants = isOrder ? orderVariants[concept.slug] ?? [] : [];
+  const variant = variants.length ? pickVariant(variants, `${key}:${seed}`) : null;
+  const courseExpected = expectedFor(exercise, name);
+  const expected = variant?.sv ?? courseExpected;
+  const meaning = variant?.en ?? meaningOf(exercise, name);
   const orderItems = isOrder ? itemsIn(expected) : [];
+  const listening = activity.mode === "listen" || activity.mode === "dictation";
 
   // Served items land on the tray once an answer is right.
   const record: RecordFn = async (p) => {
+    setAnswer(p.input === "choice" ? null : p.response);
     await round.record(p);
     const served = item ? [item] : orderItems;
     lastOrder.current = p.successful && activity.mode !== "encounter" ? orderItems : [];
@@ -80,6 +111,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
 
   const next = () => {
     setPointed(null);
+    setAnswer(null);
     // Once per round, after a correct order, Bosse fumbles it and you fix it.
     if (!fixUsed.current && lastOrder.current.length && attempts.length >= 2) {
       fixUsed.current = true;
@@ -123,14 +155,18 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
     body = null; // the counter itself is the exercise
   } else if (item) {
     body = <NameItem key={activity.id + attempts.length} item={item} expected={expected} busy={busy} onRecord={record} />;
-  } else if (isOrder && activity.mode !== "listen" && activity.mode !== "dictation") {
+  } else if (isOrder && activity.mode === "listen") {
+    body = <TrayCheck key={key} villager={villager} busy={busy} onRecord={record} />;
+  } else if (isOrder && !listening) {
     body = (
       <OrderTicket
-        key={activity.id + attempts.length}
+        key={key}
         round={round}
         items={orderItems}
         expected={expected}
-        meaning={meaningOf(exercise, name)}
+        meaning={meaning}
+        accept={variant?.accept}
+        course={expected === courseExpected}
         encounter={activity.mode === "encounter"}
         onPreview={setPreview}
         onRecord={record}
@@ -185,6 +221,16 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
           hideNames={Boolean(item && !outcome && !fix && activity.mode !== "encounter")}
         />
       )}
+      {isOrder && !listening && activity.mode !== "encounter" && !fix ? (
+        <Exchange
+          key={`exchange:${key}`}
+          villager={villager}
+          beat={concept.slug === "cafe-ask-bill" ? billExchange : orderExchange}
+          target={expected}
+          answer={outcome?.correct ? answer : null}
+          name={name}
+        />
+      ) : null}
       {body}
       {round.error ? (
         <p className="lesson-error" role="alert">
@@ -416,6 +462,8 @@ function OrderTicket({
   items,
   expected,
   meaning,
+  accept,
+  course,
   encounter,
   onPreview,
   onRecord,
@@ -424,6 +472,8 @@ function OrderTicket({
   items: CafeItem[];
   expected: string;
   meaning: string;
+  accept?: string[];
+  course: boolean;
   encounter: boolean;
   onPreview: (items: CafeItem[]) => void;
   onRecord: RecordFn;
@@ -453,7 +503,7 @@ function OrderTicket({
         {ticket}
         <div className="activity-phrase">
           <Sv text={expected} en={meaning} as="h3" />
-          <ListenButtons onPlay={(slow) => void speakSwedish(expected, { clipId: activity.exercise.audioId, slow })} />
+          <ListenButtons onPlay={(slow) => void speakSwedish(expected, { clipId: course ? activity.exercise.audioId : undefined, slow })} />
         </div>
         <SayItPractice expected={expected} />
         <div className="dialogue-actions">
@@ -471,6 +521,15 @@ function OrderTicket({
   }
 
   const useTiles = (stateBefore?.recall ?? null) === null;
+  // The exact order, another natural way to order it, or (for the course's own
+  // sentence) whatever the evaluator accepts as doing the job.
+  const judge = async (answer: string) => {
+    const check = checkAnswer(answer, expected);
+    if (check !== "wrong") return { successful: true, check };
+    if (acceptsAnswer(accept, answer)) return { successful: true, check: "exact" as const };
+    if (course) return judgeAnswer(activity, answer, expected);
+    return { successful: false, check };
+  };
   return (
     <div className="activity">
       <p className="activity-kicker">
@@ -483,9 +542,9 @@ function OrderTicket({
           pool={pool}
           busy={busy}
           onChange={preview}
-          onSubmit={(answer) => {
-            const check = checkAnswer(answer, expected);
-            return onRecord({ successful: check !== "wrong", assisted: false, response: answer, expected, check, replays: 0, input: "tiles" });
+          onSubmit={async (answer) => {
+            const { successful, check } = await judge(answer);
+            return onRecord({ successful, assisted: false, response: answer, expected, check, replays: 0, input: "tiles" });
           }}
         />
       ) : (
@@ -494,10 +553,91 @@ function OrderTicket({
           hint={expected}
           onChange={preview}
           onSubmit={async (answer, via, hinted) => {
-            const { successful, check } = await judgeAnswer(activity, answer, expected);
+            const { successful, check } = await judge(answer);
             return onRecord({ successful, assisted: hinted, response: answer, expected, check, replays: 0, input: via });
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// Listen to a customer's order and fill their tray: tap everything they asked for.
+function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boolean; onRecord: RecordFn }) {
+  const [order] = useState(() => trayOrders[Math.floor(Math.random() * trayOrders.length)]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [done, setDone] = useState(false);
+  const replays = useRef(0);
+  const play = useCallback(
+    (slow = false) => {
+      replays.current++;
+      void speakSwedish(order.sv, { pitch: 1.15, slow });
+    },
+    [order.sv],
+  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => play(), 350);
+    return () => window.clearTimeout(timer);
+  }, [play]);
+  const want = new Set(order.items);
+  return (
+    <div className="activity">
+      <p className="scene-situation">A customer orders while {villager.name} is busy. Fill their tray!</p>
+      <div className="cafe-point-head">
+        <p className="activity-kicker">
+          <Sv text="Fyll brickan!" en="Fill the tray!" />
+        </p>
+        <ListenButtons onPlay={play} />
+      </div>
+      <div className="cafe-tray-pick">
+        {cafeMenu.map((entry) => {
+          const on = chosen.includes(entry.slug);
+          const state = done ? (want.has(entry.slug) ? "is-right" : on ? "is-wrong" : "") : on ? "is-on" : "";
+          return (
+            <button
+              key={entry.slug}
+              className={`cafe-item is-pickable ${state}`}
+              aria-pressed={on}
+              disabled={busy || done}
+              onClick={() => {
+                sound.play("tile");
+                setChosen((c) => (on ? c.filter((s) => s !== entry.slug) : [...c, entry.slug]));
+              }}
+            >
+              <CafeIconArt icon={entry.icon} />
+              <span className="cafe-item-name">
+                <Sv text={entry.sv} en={entry.en} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {done ? (
+        <p className="scene-reveal">
+          <Sv text={order.sv} en={order.en} /> <span className="scene-line-en">{order.en}</span>
+        </p>
+      ) : (
+        <div className="dialogue-actions">
+          <button
+            className="btn btn-primary"
+            disabled={busy || chosen.length === 0}
+            onClick={() => {
+              setDone(true);
+              const right = chosen.length === want.size && chosen.every((s) => want.has(s));
+              void onRecord({
+                successful: right,
+                assisted: false,
+                response: chosen.map((s) => cafeItem(s)!.sv).join(", "),
+                expected: order.sv,
+                check: "choice",
+                replays: Math.max(0, replays.current - 1),
+                input: "choice",
+              });
+            }}
+          >
+            <Sv text="Klar!" en="Done!" />
+          </button>
+        </div>
       )}
     </div>
   );

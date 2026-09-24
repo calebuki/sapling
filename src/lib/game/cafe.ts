@@ -68,3 +68,42 @@ export const cafeLines = {
   menu: { sv: "Meny", en: "Menu" },
   oops: { sv: "Bosse gör fel!", en: "Bosse gets it wrong!" },
 } satisfies Record<string, Line | ((item: CafeItem) => Line)>;
+
+// Several ways each order phrase comes up, so the same ticket rarely repeats.
+// Each variant is a complete right answer; `accept` lets looser natural orders through.
+export const orderVariants: Record<string, Array<{ sv: string; en: string; accept?: string[] }>> = {
+  "jag-skulle-vilja": [
+    { sv: "Jag skulle vilja ha en kaffe.", en: "I would like a coffee." },
+    { sv: "Jag skulle vilja ha ett te.", en: "I would like a tea." },
+    { sv: "Jag skulle vilja ha en kanelbulle.", en: "I would like a cinnamon bun." },
+    { sv: "Jag skulle vilja ha vatten.", en: "I would like water." },
+  ],
+  "vill-ha": [
+    { sv: "Jag vill ha kaffe.", en: "I want coffee." },
+    { sv: "Jag vill ha te.", en: "I want tea." },
+    { sv: "Jag vill ha en kanelbulle.", en: "I want a cinnamon bun." },
+  ],
+  "med-mjoelk": [
+    { sv: "En kaffe med mjölk.", en: "A coffee with milk." },
+    { sv: "Ett te med mjölk.", en: "A tea with milk." },
+  ],
+  "och-en-kanelbulle": [{ sv: "Och en kanelbulle, tack.", en: "And a cinnamon bun, please." }],
+  "cafe-order-drink": [
+    { sv: "Jag skulle vilja ha en kaffe med mjölk, tack.", en: "Order a coffee with milk.", accept: ["^(jag skulle vilja ha|jag vill ha|kan jag få) .*kaffe.*mjölk"] },
+    { sv: "Jag skulle vilja ha ett te, tack.", en: "Order a tea.", accept: ["^(jag skulle vilja ha|jag vill ha|kan jag få) (ett )?te\\b"] },
+    { sv: "Jag skulle vilja ha vatten, tack.", en: "Order some water.", accept: ["^(jag skulle vilja ha|jag vill ha|kan jag få) (ett glas )?vatten\\b"] },
+  ],
+  "cafe-order-food": [{ sv: "Och en kanelbulle, tack.", en: "Add a cinnamon bun.", accept: ["\\b(en )?kanelbulle\\b"] }],
+  "cafe-ask-bill": [{ sv: "Kan jag få notan, tack?", en: "Ask for the bill.", accept: ["^(kan jag få notan|notan tack)\\b"] }],
+};
+
+// Spoken orders for the tray drill: listen to a customer, fill their tray.
+export const trayOrders: Array<{ sv: string; en: string; items: string[] }> = [
+  { sv: "En kaffe och en kanelbulle, tack.", en: "A coffee and a cinnamon bun, please.", items: ["kaffe", "kanelbulle"] },
+  { sv: "Ett te med mjölk, tack.", en: "A tea with milk, please.", items: ["te", "mjoelk"] },
+  { sv: "Jag skulle vilja ha vatten och en kanelbulle.", en: "I would like water and a cinnamon bun.", items: ["vatten", "kanelbulle"] },
+  { sv: "Jag vill ha ett te och en kaffe.", en: "I want a tea and a coffee.", items: ["te", "kaffe"] },
+  { sv: "En kaffe med mjölk, tack.", en: "A coffee with milk, please.", items: ["kaffe", "mjoelk"] },
+  { sv: "Bara ett glas vatten, tack.", en: "Just a glass of water, please.", items: ["vatten"] },
+  { sv: "Två kanelbullar och ett te.", en: "Two cinnamon buns and a tea.", items: ["kanelbulle", "te"] },
+];

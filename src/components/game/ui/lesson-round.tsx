@@ -167,7 +167,9 @@ export function useLessonRound(
       gained,
       stageUp,
     });
-    void speakSwedish(params.expected, { clipId: activity.exercise.audioId, who: villager.id, pitch: villager.voicePitch });
+    // The recorded clip only fits when the answer is the course sentence itself (scenes vary it).
+    const clipId = params.expected === expectedFor(activity.exercise, name) ? activity.exercise.audioId : undefined;
+    void speakSwedish(params.expected, { clipId, who: villager.id, pitch: villager.voicePitch });
     setBusy(false);
   }
 

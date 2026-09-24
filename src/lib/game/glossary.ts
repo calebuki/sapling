@@ -60,6 +60,14 @@ trädgård=garden|tomat=tomato|tomater=tomatoes|jord=soil / earth|vattna=water (
 helg=weekend|lördag=Saturday|söndag=Sunday|tisdag=Tuesday|onsdag=Wednesday|torsdag=Thursday|imorse=this morning|ikväll=tonight|inatt=tonight / last night
 skall=shall|kommer du=are you coming|klar=done / ready|klart=of course / done|färdig=finished|börja=start|sluta=stop|försöka=try|öva=practise|lär dig=learn
 bilen=the car|cykla=cycle|promenera=walk|promenad=walk|bada=swim / bathe|fiska=fish|picknick=picnic|grilla=barbecue|kalas=party|fest=party
+borta=away / over there|bron=the bridge|brr=brr (cold!)|bullar=buns|byter=change(s)|cyklar=bikes|detsamma=likewise|direkt=direct / straight|dit=there (to)|dörren=the door
+elins=Elin's|england=England|enkel=single (ticket) / simple|fara=danger (ingen fara = no worries)|fick=got / caught|fikar=have fika|fryser=are cold|frågar=ask(s)|förut=before
+gjorde=did|glas=glass|greta=Greta (name)|gula=yellow|haha=haha|hamnen=the harbour|hamnstad=Hamnstad (a town)|heller=either (inte jag heller = me neither)|hit=here (to)|hos=at (someone's)
+hundratjugo=a hundred and twenty|hälsa=say hi / greet|inga=no (none)|ingen=nobody / no|jobbade=worked|johan=Johan (name)|karin=Karin (name)|karta=map|kiosken=the kiosk|knäna=the knees
+kusin=cousin|kvart=quarter|kyrkan=the church|köper=buy(s)|leo=Leo (name)|letar=look(s) for|listan=the list|lovar=promise|luktar=smell(s)|lycka=luck (lycka till = good luck)
+mina=my|minuter=minutes|nog=probably|nära=near|oj=oops / oh|olle=Olle (name)|orsak=reason (ingen orsak = no problem)|oss=us|plats=seat / place|skiner=shines|skönt=nice / a relief
+snällt=kind|spännande=exciting|stranden=the beach|synd=a shame|tar=take(s)|tjugo=twenty|tjugotre=twenty-three|toppen=great|törstiga=thirsty|va=huh / right?|vagnarna=the carriages
+vattnar=water(s)|vilken=what a / which|väska=bag|väskor=bags|åh=oh|åka=go / travel|åker=go / travel|öppen=open|lisa=Lisa (name)|kaptenen=the captain|seglaren=the sailor|gubben=the old man
 `;
 
 const glossary = new Map<string, string>();
