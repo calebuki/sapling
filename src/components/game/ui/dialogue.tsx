@@ -15,8 +15,9 @@ import { speakSwedish, stopSpeaking } from "../audio/speech";
 import { emote, updateSave, useGame } from "../store";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
+import { SceneRound } from "./scene-round";
 import { GrammarTipModal } from "./grammar-tip";
-import { LessonRound, RoundSummaryView, type RoundSummary } from "./lesson-round";
+import { RoundSummaryView, type RoundSummary } from "./lesson-round";
 import { LiveCall } from "./live-call";
 import { registerGloss, Sv, SvLine } from "./sv";
 import { Typewriter } from "./typewriter";
@@ -209,11 +210,11 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
         ) : null}
 
         {mode === "lesson" ? (
-          // Bosse teaches at his counter; the others still use the classic round for now.
+          // Every villager teaches in their own place: Bosse at his counter, the others through little exchanges.
           villager.id === "bosse" ? (
             <CafeRound key={round} villager={villager} onFinish={finishRound} />
           ) : (
-            <LessonRound key={round} villager={villager} onFinish={finishRound} />
+            <SceneRound key={round} villager={villager} onFinish={finishRound} />
           )
         ) : null}
 

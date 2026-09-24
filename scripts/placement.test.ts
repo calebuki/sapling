@@ -93,3 +93,20 @@ test("café orders put the right things on the tray", async () => {
     }
   }
 });
+
+test("every phrase Elin, Stina and Astrid teach has a scene beat", async () => {
+  const { sceneBeats, nameIn, journey, departures } = await import("../src/lib/game/scenes.ts");
+  const { swedishListenSpeakItems } = await import("../src/lib/learning/swedish-course.ts");
+  for (const id of ["elin", "stina", "astrid"] as const) {
+    const villager = villagers.find((v) => v.id === id)!;
+    const beats = sceneBeats[id]!;
+    assert.deepEqual(Object.keys(beats).sort(), [...villager.conceptSlugs].sort(), id);
+    for (const beat of Object.values(beats)) {
+      if (beat.ride) assert.ok(journey.includes(beat.ride), beat.ride);
+      if (beat.departure) assert.ok(departures.some((d) => d.to === beat.departure), beat.departure);
+    }
+  }
+  for (const item of swedishListenSpeakItems.filter((i) => i.conceptSlug === "jag-heter")) {
+    assert.ok(nameIn(item.text), item.text);
+  }
+});

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Receipt, Snail, Volume2 } from "lucide-react";
+import { ArrowRight, Receipt } from "lucide-react";
 import { cafeItem, cafeLines, cafeMenu, introduceLine, itemsIn, mixUp, orderSlugs, priceLine, withArticle, type CafeIcon, type CafeItem } from "@/lib/game/cafe";
 import { checkAnswer, expectedFor, meaningOf } from "@/lib/game/lesson";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
@@ -22,6 +22,7 @@ import {
   type RecordFn,
   type RoundSummary,
 } from "./lesson-round";
+import { ListenButtons } from "./scene-round";
 import { Sv, SvLine } from "./sv";
 
 const CAFE_ROUND = 6;
@@ -160,7 +161,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
       </div>
       {pointing ? (
         <PointAt
-          key={activity.id + attempts.length}
+          key={`point:${activity.id}:${attempts.length}`}
           item={item}
           expected={expected}
           clipId={exercise.audioId}
@@ -269,19 +270,6 @@ function Counter({
 }
 
 // ---------- Beats ----------
-
-function ListenButtons({ onPlay }: { onPlay: (slow: boolean) => void }) {
-  return (
-    <div className="listen-buttons">
-      <button className="icon-button big" aria-label="Lyssna (listen)" onClick={() => onPlay(false)}>
-        <Volume2 size={22} />
-      </button>
-      <button className="icon-button" aria-label="Långsamt (slowly)" onClick={() => onPlay(true)}>
-        <Snail size={18} />
-      </button>
-    </div>
-  );
-}
 
 function MeetItem({
   item,

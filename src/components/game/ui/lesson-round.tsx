@@ -186,54 +186,6 @@ export function useLessonRound(
   return { model, name, scoped, attempts, activity, concept, stateBefore, outcome, queued, busy, error, setError, summary, record, advance, roundLength };
 }
 
-export function LessonRound({
-  villager,
-  onFinish,
-}: {
-  villager: Villager;
-  onFinish: (summary: RoundSummary) => void;
-}) {
-  const { name, scoped, attempts, activity, stateBefore, outcome, queued, busy, error, setError, summary, record, advance } =
-    useLessonRound(villager, onFinish);
-  if (!activity) {
-    return (
-      <div className="dialogue-actions">
-        <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="lesson" aria-busy={busy}>
-      <div className="lesson-progress" aria-hidden="true">
-        {Array.from({ length: ROUND_LENGTH }, (_, i) => (
-          <span key={i} className={i < attempts.length ? "is-done" : i === attempts.length ? "is-current" : ""} />
-        ))}
-      </div>
-      {outcome ? (
-        <Feedback outcome={outcome} onNext={() => advance(queued)} />
-      ) : (
-        <ActivityView
-          key={activity.id + attempts.length}
-          activity={activity}
-          villager={villager}
-          name={name}
-          state={stateBefore}
-          pool={scoped.map((c) => c.canonicalForm)}
-          busy={busy}
-          onRecord={record}
-        />
-      )}
-      {error ? (
-        <p className="lesson-error" role="alert">
-          <SvLine line={ui.error} /> <button onClick={() => setError(false)}><SvLine line={ui.tryAgain} /></button>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 export function Feedback({ outcome, onNext }: { outcome: Outcome; onNext: () => void }) {
   const next = useRef<HTMLButtonElement>(null);
   useEffect(() => next.current?.focus(), []);
