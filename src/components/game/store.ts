@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { Experience } from "@/lib/game/placement";
 import type { Line, VillagerId } from "@/lib/game/villagers";
 
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
@@ -14,6 +15,11 @@ export type SaveData = {
   introDone: boolean;
   discovered: string[];
   outfit: number;
+  // Onboarding: what the learner told us, and where the placement check put them.
+  experience: Experience | null;
+  placedBand: number;
+  // English under Swedish lines: "auto" shows it to brand-new learners early on.
+  english: "auto" | "on" | "off";
 };
 
 export type GameState = {
@@ -30,7 +36,16 @@ export type GameState = {
   loadedFor: string | null;
 };
 
-const emptySave: SaveData = { v: 2, name: null, introDone: false, discovered: [], outfit: 0 };
+const emptySave: SaveData = {
+  v: 2,
+  name: null,
+  introDone: false,
+  discovered: [],
+  outfit: 0,
+  experience: null,
+  placedBand: 0,
+  english: "auto",
+};
 
 let state: GameState = {
   phase: "title",
@@ -95,7 +110,15 @@ export function loadSave(learnerId: string) {
     const raw = window.localStorage.getItem(saveKey);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SaveData>;
-      if (parsed.v === 2) save = { ...emptySave, ...parsed, discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [] };
+      if (parsed.v === 2) {
+        save = {
+          ...emptySave,
+          ...parsed,
+          discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
+          // Saves from before onboarding existed already met Elin; don't quiz them again.
+          experience: parsed.experience ?? (parsed.introDone ? "little" : null),
+        };
+      }
     }
     const audioRaw = window.localStorage.getItem("sapling:audio:v2");
     if (audioRaw) audio = { ...audio, ...JSON.parse(audioRaw) };

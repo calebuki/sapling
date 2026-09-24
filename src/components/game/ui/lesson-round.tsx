@@ -247,7 +247,7 @@ function shuffled<T>(items: readonly T[], key: string) {
     .map((x) => x.item);
 }
 
-type RecordFn = (p: {
+export type RecordFn = (p: {
   successful: boolean;
   assisted: boolean;
   response: string;
@@ -257,7 +257,7 @@ type RecordFn = (p: {
   input: "text" | "speech" | "tiles" | "choice";
 }) => Promise<void>;
 
-function ActivityView({
+export function ActivityView({
   activity,
   villager,
   name,

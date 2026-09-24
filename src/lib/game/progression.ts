@@ -73,6 +73,8 @@ export function computeProgress(
   concepts: Concept[],
   states: LearnerConceptState[],
   discoveredCount: number,
+  // Placement opens every villager up to this index without claiming mastery.
+  placedBand = 0,
 ): GameProgress {
   const bySlug = new Map(concepts.filter((c) => c.languageCode === "sv").map((c) => [c.slug, c]));
   const byConcept = new Map(states.map((s) => [s.conceptId, s]));
@@ -86,7 +88,7 @@ export function computeProgress(
   let wordsTotal = 0;
   const result = {} as Record<VillagerId, VillagerProgress>;
   let previousReady = true;
-  for (const villager of villagers) {
+  villagers.forEach((villager, index) => {
     const slugs = villager.conceptSlugs.filter((slug) => bySlug.has(slug));
     let met = 0;
     let strong = 0;
@@ -99,13 +101,14 @@ export function computeProgress(
     wordsMet += met;
     wordsTotal += slugs.length;
     const ready = slugs.length > 0 && met >= Math.ceil(slugs.length * 0.6);
-    result[villager.id] = { villager, unlocked: previousReady, total: slugs.length, met, strong, ready };
-    previousReady = previousReady && ready;
-  }
+    const unlocked = previousReady || index <= placedBand;
+    result[villager.id] = { villager, unlocked, total: slugs.length, met, strong, ready };
+    previousReady = unlocked && ready;
+  });
 
   const level = levelFromXp(xp);
-  const goal =
-    villagers.find((v) => result[v.id].unlocked && result[v.id].met < result[v.id].total)?.id ?? null;
+  const open = (v: Villager) => result[v.id].unlocked && result[v.id].met < result[v.id].total;
+  const goal = (villagers.slice(placedBand).find(open) ?? villagers.find(open))?.id ?? null;
   return {
     ...level,
     villagers: result,

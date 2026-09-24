@@ -208,20 +208,22 @@ function Prop({ kind }: { kind: PropKind }) {
     case "swing":
       return (
         <group>
+          {/* A-frame legs: feet spread along z, tops meet under the crossbar */}
           {[-1, 1].map((side) => (
             <group key={side} position={[side * 0.9, 0, 0]}>
-              <M g={cyl} c={palette.wood} p={[0, 1.2, 0.5]} s={[0.07, 2.6, 0.07]} r={[0.35, 0, 0]} />
-              <M g={cyl} c={palette.wood} p={[0, 1.2, -0.5]} s={[0.07, 2.6, 0.07]} r={[-0.35, 0, 0]} />
+              <M g={cyl} c={palette.wood} p={[0, 1.2, 0.45]} s={[0.07, 2.6, 0.07]} r={[-0.35, 0, 0]} />
+              <M g={cyl} c={palette.wood} p={[0, 1.2, -0.45]} s={[0.07, 2.6, 0.07]} r={[0.35, 0, 0]} />
             </group>
           ))}
           <M g={cyl} c={palette.wood} p={[0, 2.4, 0]} s={[0.07, 1.9, 0.07]} r={[0, 0, Math.PI / 2]} />
-          <Animated fn={(g, t) => { g.rotation.x = Math.sin(t * 1.4) * 0.35; }}>
-            <group position={[0, 2.4, 0]}>
+          {/* The seat hangs from, and pivots around, the crossbar. */}
+          <group position={[0, 2.4, 0]}>
+            <Animated fn={(g, t) => { g.rotation.x = Math.sin(t * 1.6) * 0.3; }}>
               <M g={cyl} c="#dfe6e9" p={[0.3, -0.9, 0]} s={[0.015, 1.8, 0.015]} />
               <M g={cyl} c="#dfe6e9" p={[-0.3, -0.9, 0]} s={[0.015, 1.8, 0.015]} />
               <M g={box} c="#d63031" p={[0, -1.8, 0]} s={[0.75, 0.07, 0.3]} />
-            </group>
-          </Animated>
+            </Animated>
+          </group>
         </group>
       );
     case "birch":

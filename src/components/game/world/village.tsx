@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { cottages, dock, groundAt, heightAt, places } from "@/lib/game/world";
+import { cottages, dock, heightAt, mulberry32, places } from "@/lib/game/world";
 import { glow, palette, toon } from "./materials";
 
 const box = new THREE.BoxGeometry(1, 1, 1);
@@ -166,16 +166,130 @@ export function Cafe({ open }: { open: boolean }) {
   );
 }
 
+// The line runs from a buffer stop on the island, over a low stone bridge, into
+// a tunnel on the mainland. The train keeps a timetable once Stina opens up.
+const track = { x: 24.6, buffer: 11.5, shore: -12.5, portal: -170, park: -2, away: -192 };
+const railY = heightAt(track.x, track.park) + 0.2;
+const deckY = railY - 0.2;
+const timetable = { travel: 22, dwell: 28, away: 14 };
+
+function trainZ(elapsed: number) {
+  const { travel, dwell, away } = timetable;
+  const t = elapsed % (travel * 2 + dwell + away);
+  const ease = (k: number) => k * k * (3 - 2 * k);
+  if (t < travel) return THREE.MathUtils.lerp(track.away, track.park, ease(t / travel));
+  if (t < travel + dwell) return track.park;
+  if (t < travel * 2 + dwell) return THREE.MathUtils.lerp(track.park, track.away, ease((t - travel - dwell) / travel));
+  return track.away;
+}
+
+function Sleepers() {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const zs = useMemo(() => {
+    const items: number[] = [];
+    for (let z = track.buffer - 0.6; z > track.portal; z -= 1.1) items.push(z);
+    return items;
+  }, []);
+  useLayoutEffect(() => {
+    if (!mesh.current) return;
+    const m = new THREE.Matrix4();
+    // Sleepers sit right under the rails; on land the terrain buries their feet.
+    zs.forEach((z, i) => {
+      m.compose(new THREE.Vector3(track.x, railY - 0.11, z), new THREE.Quaternion(), new THREE.Vector3(2, 0.12, 0.3));
+      mesh.current!.setMatrixAt(i, m);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
+  }, [zs]);
+  return <instancedMesh ref={mesh} args={[box, toon(palette.woodDark), zs.length]} receiveShadow />;
+}
+
+function Bridge() {
+  const length = track.shore - track.portal;
+  const mid = (track.shore + track.portal) / 2;
+  const piers = useMemo(() => {
+    const items: number[] = [];
+    for (let z = track.shore - 6; z > track.portal + 4; z -= 9) items.push(z);
+    return items;
+  }, []);
+  return (
+    <group>
+      {/* stone abutment where the line leaves the island */}
+      <Box p={[track.x, deckY - 1, track.shore - 1]} s={[3.4, 2.2, 5]} c={palette.stoneDark} />
+      <Box p={[track.x, deckY - 0.15, mid]} s={[3, 0.3, length]} c={palette.stone} shadow={false} />
+      {[-1, 1].map((side) => (
+        <Box key={side} p={[track.x + side * 1.45, deckY + 0.12, mid]} s={[0.18, 0.28, length]} c={palette.stoneDark} shadow={false} />
+      ))}
+      {piers.map((z) => (
+        <group key={z}>
+          <Box p={[track.x, deckY - 1.2, z]} s={[2.4, 2.2, 1.1]} c={palette.stoneDark} shadow={false} />
+          <mesh geometry={cyl} material={toon("#d9f1f0")} position={[track.x, 0.04, z]} scale={[1.6, 0.04, 0.9]} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+const mainlandTrees = (() => {
+  const random = mulberry32(19);
+  return Array.from({ length: 36 }, () => {
+    const x = -110 + random() * 220;
+    const z = -176 - random() * 14;
+    const s = 1.6 + random() * 1.8;
+    return Math.abs(x - track.x) < 6 ? null : { x, z, s };
+  }).filter((t): t is { x: number; z: number; s: number } => t !== null);
+})();
+
+// Far enough away that the fog turns it into a soft blue-green shore.
+function Mainland() {
+  const hills: Array<[number, number, number, number, number, number, string]> = [
+    [0, -4, -206, 170, 14, 34, "#6f9f55"],
+    [-70, -6, -196, 44, 22, 24, "#5f8f4a"],
+    [-18, -5, -200, 30, 16, 22, "#79a95c"],
+    [track.x, -4, -195, 28, 20, 24, "#5f8f4a"],
+    [70, -6, -198, 40, 24, 26, "#6a9a50"],
+  ];
+  return (
+    <group>
+      <mesh geometry={cyl} material={toon(palette.sand)} position={[0, 0.05, -200]} scale={[165, 0.2, 36]} />
+      {hills.map(([hx, hy, hz, sx, sy, sz, c]) => (
+        <mesh key={hx} geometry={sphere} material={toon(c)} position={[hx, hy, hz]} scale={[sx, sy, sz]} />
+      ))}
+      {mainlandTrees.map((t) => (
+        <mesh key={t.x} geometry={cone} material={toon(palette.pine)} position={[t.x, t.s * 1.2, t.z]} scale={[t.s, t.s * 2.6, t.s]} />
+      ))}
+      {[-44, -36, 48, 55].map((hx, i) => (
+        <group key={hx} position={[hx, 0.2, -171 - (i % 2) * 3]}>
+          <Box p={[0, 1, 0]} s={[3, 2, 2.4]} c={i % 2 ? palette.trim : palette.falu} shadow={false} />
+          <Box p={[0, 2.3, 0]} s={[3.3, 0.6, 2.6]} c={palette.roof} shadow={false} />
+        </group>
+      ))}
+      {/* tunnel portal the train disappears into */}
+      <group position={[track.x, deckY, track.portal - 3]}>
+        <Box p={[0, 2.3, 0]} s={[6, 4.6, 6]} c={palette.stoneDark} shadow={false} />
+        <mesh geometry={box} material={toon("#141419")} position={[0, 1.7, 3.01]} scale={[2.8, 3.4, 0.05]} />
+        <Box p={[0, 4.4, 3.1]} s={[6.4, 0.4, 0.3]} c={palette.stone} shadow={false} />
+      </group>
+    </group>
+  );
+}
+
 export function Station({ open }: { open: boolean }) {
   const { x, z } = places.station;
   const y = heightAt(x, z);
   const train = useRef<THREE.Group>(null);
-  const trainTarget = open ? -2 : -36;
-  useFrame((_, delta) => {
+  const since = useRef<number | null>(null);
+  useFrame((state) => {
     if (!train.current) return;
-    train.current.position.z = THREE.MathUtils.damp(train.current.position.z, trainTarget, 0.6, delta);
-    train.current.visible = train.current.position.z > -21;
+    if (!open) {
+      since.current = null;
+      train.current.position.z = track.away;
+      return;
+    }
+    since.current ??= state.clock.elapsedTime;
+    train.current.position.z = trainZ(state.clock.elapsedTime - since.current);
   });
+  const railLength = track.buffer - track.portal;
+  const railMid = (track.buffer + track.portal) / 2;
   return (
     <group>
       <group position={[x + 0.5, y - 0.05, z - 1.5]}>
@@ -183,14 +297,21 @@ export function Station({ open }: { open: boolean }) {
       </group>
       {/* platform and tracks */}
       <Box p={[22.6, heightAt(22.6, -4) + 0.1, -4]} s={[2.2, 0.35, 20]} c="#b9b4aa" />
-      {Array.from({ length: 34 }, (_, i) => {
-        const tz = -18 + i * 1.1;
-        return <Box key={i} p={[24.6, groundAt(24.6, tz) + 0.05, tz]} s={[2, 0.12, 0.3]} c={palette.woodDark} shadow={false} />;
-      })}
+      <Sleepers />
       {[-0.55, 0.55].map((dx) => (
-        <Box key={dx} p={[24.6 + dx, heightAt(24.6, -2) + 0.2, -1.5]} s={[0.1, 0.1, 38]} c="#6d6f75" shadow={false} />
+        <Box key={dx} p={[track.x + dx, railY, railMid]} s={[0.1, 0.1, railLength]} c="#6d6f75" shadow={false} />
       ))}
-      <group ref={train} position={[24.6, heightAt(24.6, -2) + 0.25, -36]}>
+      {/* buffer stop at the island end of the line */}
+      <group position={[track.x, railY, track.buffer]}>
+        <Box p={[0, 0.5, 0]} s={[2.2, 0.9, 0.5]} c={palette.falu} />
+        {[-0.6, 0.6].map((bx) => (
+          <Box key={bx} p={[bx, 0.55, -0.35]} s={[0.35, 0.35, 0.3]} c={palette.yellow} shadow={false} />
+        ))}
+      </group>
+      <Bridge />
+      <Mainland />
+      <group ref={train} position={[track.x, railY + 0.05, track.away]}>
+        <mesh geometry={box} material={glow("#fff4c8", 2)} position={[0, 1, -2.52]} scale={[0.5, 0.3, 0.05]} />
         <Box p={[0, 1.1, 0]} s={[2, 2, 5]} c="#c0392b" />
         <Box p={[0, 2.2, 0]} s={[2.1, 0.2, 5.1]} c="#1d1d24" />
         <mesh geometry={box} material={glow("#fff0c2", 1)} position={[0, 1.4, 0]} scale={[2.05, 0.6, 4]} />

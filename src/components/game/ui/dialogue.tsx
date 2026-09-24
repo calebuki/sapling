@@ -40,6 +40,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   const [round, setRound] = useState(0);
   const [summary, setSummary] = useState<RoundSummary | null>(null);
   const after = useRef<() => void>(() => (opening.then === "end" ? endDialogue() : setMode(opening.then)));
+  const showEnglish = save.english === "on" || (save.english === "auto" && save.experience === "new" && progress.level < 5);
 
   const say = (next: Line[], then: () => void) => {
     setLines(next);
@@ -108,7 +109,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
       <div className="dialogue-body">
         {mode === "lines" && line ? (
           <div className="dialogue-lines" onClick={advanceLine}>
-            <Typewriter key={`${index}:${line.sv}`} line={line} pitch={villager.voicePitch} done={typed} onDone={() => setTyped(true)} />
+            <Typewriter key={`${index}:${line.sv}`} line={line} pitch={villager.voicePitch} done={typed} onDone={() => setTyped(true)} english={showEnglish} />
             <div className="dialogue-line-tools">
               <button
                 className="icon-button"

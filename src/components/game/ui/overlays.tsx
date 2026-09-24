@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, LogOut, Music, Volume2, X } from "lucide-react";
+import { Languages, Lock, LogOut, Music, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { getCourse } from "@/lib/learning/course";
@@ -129,6 +129,8 @@ function Ordbok({ progress }: { progress: GameProgress }) {
 function GameMenu() {
   const music = useGame((s) => s.music);
   const outfit = useGame((s) => s.save.outfit);
+  const english = useGame((s) => s.save.english);
+  const englishLabel = { auto: { sv: "Engelska: auto", en: "English subtitles: automatic" }, on: { sv: "Engelska: på", en: "English subtitles: on" }, off: { sv: "Engelska: av", en: "English subtitles: off" } }[english];
   const router = useRouter();
   return (
     <div className="game-menu">
@@ -144,6 +146,15 @@ function GameMenu() {
         }}
       >
         <Music size={18} /> <SvLine line={music ? ui.musicOff : ui.musicOn} />
+      </button>
+      <button
+        className="btn"
+        onClick={() => {
+          sound.play("click");
+          updateSave({ english: english === "auto" ? "on" : english === "on" ? "off" : "auto" });
+        }}
+      >
+        <Languages size={18} /> <SvLine line={englishLabel} />
       </button>
       <div className="outfit-picker">
         <Sv text="Din stil" en="Your style" />

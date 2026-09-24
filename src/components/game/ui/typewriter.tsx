@@ -6,7 +6,7 @@ import { sound } from "../audio/sfx";
 import { Sv } from "./sv";
 
 // Types a line out with the speaker's voice blips; a click finishes it early.
-export function Typewriter({ line, pitch, onDone, done }: { line: Line; pitch: number; onDone: () => void; done: boolean }) {
+export function Typewriter({ line, pitch, onDone, done, english = false }: { line: Line; pitch: number; onDone: () => void; done: boolean; english?: boolean }) {
   const [shown, setShown] = useState(0);
   const skipped = useRef(done);
   useEffect(() => {
@@ -35,6 +35,7 @@ export function Typewriter({ line, pitch, onDone, done }: { line: Line; pitch: n
       <span className="typewriter-ghost" aria-hidden="true">
         {done ? "" : line.sv.slice(shown)}
       </span>
+      {english ? <span className={`typewriter-en ${done ? "is-shown" : ""}`}>{line.en}</span> : null}
     </p>
   );
 }

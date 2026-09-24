@@ -9,6 +9,7 @@ import { sound } from "./audio/sfx";
 import { getGame, loadSave, runtime, setGame, toast, useGame } from "./store";
 import { Dialogue } from "./ui/dialogue";
 import { Hud, Toasts } from "./ui/hud";
+import { Onboarding } from "./ui/onboarding";
 import { Overlays } from "./ui/overlays";
 import { registerGloss, TooltipLayer } from "./ui/sv";
 import { TitleScreen } from "./ui/title-screen";
@@ -62,6 +63,7 @@ export function Game() {
   const discovered = useGame((s) => s.save.discovered);
   const name = useGame((s) => s.save.name);
   const introDone = useGame((s) => s.save.introDone);
+  const placed = useGame((s) => s.save.placedBand);
   const loaded = useGame((s) => s.loadedFor === model.learnerId);
   const [liveAvailable, setLiveAvailable] = useState(false);
   useKeyboard();
@@ -96,8 +98,8 @@ export function Game() {
   }, [model.mode]);
 
   const progress = useMemo(
-    () => computeProgress(model.concepts, model.states, discovered.length),
-    [model.concepts, model.states, discovered.length],
+    () => computeProgress(model.concepts, model.states, discovered.length, placed),
+    [model.concepts, model.states, discovered.length, placed],
   );
 
   // Celebrate new levels and newly unlocked villagers, but not on first load.
@@ -142,6 +144,7 @@ export function Game() {
       <Hud progress={progress} />
       {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} liveAvailable={liveAvailable} /> : null}
       <Toasts />
+      {ready ? <Onboarding /> : null}
       <Overlays progress={progress} />
       <TitleScreen ready={ready} needsSignIn={false} onPlay={beginPlay} />
       {model.error ? (
