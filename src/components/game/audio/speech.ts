@@ -3,15 +3,49 @@
 import { getSpeechAudioUrl } from "@/lib/learning/course";
 import { runtime } from "../store";
 import { sound } from "./sfx";
+import { speechVoiceFor, type SpeechVoiceKey } from "@/lib/game/speech-voices";
 import type { VillagerId } from "@/lib/game/villagers";
 
-// Recorded neural voice clips are preferred. Everything else (villager chatter,
-// found objects, new lines) uses the device's Swedish voice, then server-side
-// neural speech when the device has none or its voice silently fails, and the
-// browser's default voice as a last resort. Each source reports whether it
-// actually started so a silent failure moves on to the next one.
+// Every line is spoken by a natural neural voice from /api/speech, one voice
+// per villager. If that is unavailable: the recorded course clip, the device's
+// Swedish voice, the Azure/OpenAI neural fallback, and finally the browser's
+// default voice. Each source reports whether it actually started so a silent
+// failure moves on to the next one.
 
 type SpeakOptions = { clipId?: string; slow?: boolean; who?: VillagerId | "player"; pitch?: number };
+
+let neuralAvailable = true;
+const neuralCache = new Map<string, Promise<string | null>>();
+
+function neuralClipUrl(text: string, voice: SpeechVoiceKey, slow: boolean) {
+  const key = `${voice}|${slow ? 1 : 0}|${text}`;
+  const cached = neuralCache.get(key);
+  if (cached) return cached;
+  const query = new URLSearchParams({ t: text, v: voice, s: slow ? "1" : "0" });
+  const pending = fetch(`/api/speech?${query}`)
+    .then(async (response) => {
+      if (response.status === 503) neuralAvailable = false;
+      if (!response.ok) throw new Error(String(response.status));
+      return URL.createObjectURL(await response.blob());
+    })
+    .catch(() => {
+      neuralCache.delete(key);
+      return null;
+    });
+  neuralCache.set(key, pending);
+  if (neuralCache.size > SERVER_CACHE_LIMIT) {
+    const [oldestKey, oldest] = neuralCache.entries().next().value!;
+    neuralCache.delete(oldestKey);
+    void oldest.then((url) => url && URL.revokeObjectURL(url));
+  }
+  return pending;
+}
+
+/** Warm the cache for lines that are about to be spoken. */
+export function prefetchSwedish(text: string, options: { who?: VillagerId | "player"; pitch?: number; slow?: boolean } = {}) {
+  if (!neuralAvailable || !text.trim()) return;
+  void neuralClipUrl(text.trim(), speechVoiceFor(options.who, options.pitch), Boolean(options.slow));
+}
 
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
 const SYNTH_START_TIMEOUT_MS = 2500;
@@ -95,6 +129,12 @@ export function speakSwedish(text: string, options: SpeakOptions = {}): Promise<
   const slow = options.slow ?? false;
   const pitch = options.pitch ?? 1;
   const steps = [
+    async () => {
+      if (!neuralAvailable || !text.trim()) return false;
+      // Slow lines are generated slowly rather than played back slowed down.
+      const url = await neuralClipUrl(text.trim(), speechVoiceFor(options.who, pitch), slow);
+      return id === generation ? playUrl(url, false) : true;
+    },
     () => playUrl(options.clipId ? getSpeechAudioUrl(options.clipId) : null, slow),
     () => speakOnDevice(text, { slow, pitch, anyVoice: false }),
     async () => {

@@ -11,7 +11,7 @@ import { ui } from "@/lib/game/ui-text";
 import { elinAfterName, elinIntro, getVillager, pick, type Line, type VillagerId } from "@/lib/game/villagers";
 import { endDialogue } from "../actions";
 import { sound } from "../audio/sfx";
-import { speakSwedish, stopSpeaking } from "../audio/speech";
+import { prefetchSwedish, speakSwedish, stopSpeaking } from "../audio/speech";
 import { emote, updateSave, useGame } from "../store";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
@@ -74,6 +74,12 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
     emote(id, "wave", 1400);
     return () => stopSpeaking();
   }, [id]);
+
+  // Fetch the voice for the line on screen so "listen" plays without a wait.
+  const shownLine = mode === "lines" ? lines[index]?.sv : undefined;
+  useEffect(() => {
+    if (shownLine) prefetchSwedish(shownLine, { who: id, pitch: villager.voicePitch });
+  }, [shownLine, id, villager.voicePitch]);
 
   const canTalk = useMemo(() => {
     const scenario = getPracticeScenario("sv", villager.scenarioId);
