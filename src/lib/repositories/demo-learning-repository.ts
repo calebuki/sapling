@@ -11,6 +11,7 @@ import {
   applyDemoPracticeEvidence,
   applyDemoRetrievalAttempt,
   applyDemoListeningAttempt,
+  applyDemoReadingAttempt,
   applyDemoSpeakingAttempt,
   createEmptyState,
 } from "@/lib/learning/model";
@@ -18,6 +19,7 @@ import type { LearningRepository } from "@/lib/repositories/types";
 import type {
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -46,6 +48,10 @@ function practiceStorageKey(languageCode: TargetLanguageCode) {
   return `sapling.demo.practice.${languageCode}.v1`;
 }
 
+function sessionStorageKey(languageCode: TargetLanguageCode) {
+  return `sapling.demo.learning-sessions.${languageCode}.v2`;
+}
+
 function languageForConcept(conceptId: string): TargetLanguageCode {
   return conceptId.startsWith("demo-sv-") ? "sv" : "da";
 }
@@ -56,6 +62,7 @@ type DemoEvent = {
   eventType:
     | "exposure"
     | "retrieval_attempt"
+    | "reading_attempt"
     | "listening_attempt"
     | "speaking_attempt"
     | "conversation_turn"
@@ -105,11 +112,23 @@ function writePracticeSnapshot(
   return snapshot;
 }
 
+function readEvents(languageCode: TargetLanguageCode) {
+  try {
+    const stored = window.localStorage.getItem(eventStorageKey(languageCode));
+    return stored ? (JSON.parse(stored) as DemoEvent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function readStates(languageCode: TargetLanguageCode) {
   try {
     const stored = window.localStorage.getItem(stateStorageKey(languageCode));
     return stored
-      ? (JSON.parse(stored) as LearnerConceptState[])
+      ? (JSON.parse(stored) as LearnerConceptState[]).map((state) => ({
+          ...createEmptyState(state.conceptId),
+          ...state,
+        }))
       : languageCode === "da"
         ? initialDemoStates.map((state) => ({ ...state }))
         : [];
@@ -137,8 +156,7 @@ function writeStates(
 function appendEvent(event: Omit<DemoEvent, "id" | "occurredAt">) {
   try {
     const languageCode = languageForConcept(event.conceptId);
-    const stored = window.localStorage.getItem(eventStorageKey(languageCode));
-    const events = stored ? (JSON.parse(stored) as DemoEvent[]) : [];
+    const events = readEvents(languageCode);
     events.push({
       ...event,
       id: crypto.randomUUID(),
@@ -146,7 +164,7 @@ function appendEvent(event: Omit<DemoEvent, "id" | "occurredAt">) {
     });
     window.localStorage.setItem(
       eventStorageKey(languageCode),
-      JSON.stringify(events.slice(-500)),
+      JSON.stringify(events),
     );
   } catch {
     // Event persistence is best-effort only in local demo mode.
@@ -202,6 +220,57 @@ export function createDemoLearningRepository(): LearningRepository {
         mode: "local",
       };
     },
+    async startSession(input) {
+      const id = crypto.randomUUID();
+      const itemIds = input.items.map(() => crypto.randomUUID());
+      const languageCode = languageForConcept(input.items[0]?.conceptId ?? "demo-da");
+
+      try {
+        const key = sessionStorageKey(languageCode);
+        const stored = window.localStorage.getItem(key);
+        const sessions = stored ? (JSON.parse(stored) as unknown[]) : [];
+        sessions.push({
+          id,
+          itemIds,
+          ...input,
+          status: "active",
+          startedAt: new Date().toISOString(),
+        });
+        window.localStorage.setItem(key, JSON.stringify(sessions.slice(-100)));
+      } catch {
+        // Session persistence is best-effort only in local demo mode.
+      }
+
+      return { id, itemIds };
+    },
+    async completeSession(sessionId) {
+      if (!sessionId) {
+        return;
+      }
+
+      for (const languageCode of ["da", "sv"] satisfies TargetLanguageCode[]) {
+        try {
+          const key = sessionStorageKey(languageCode);
+          const stored = window.localStorage.getItem(key);
+          if (!stored) {
+            continue;
+          }
+          const sessions = (JSON.parse(stored) as Array<Record<string, unknown>>).map(
+            (session) =>
+              session.id === sessionId
+                ? {
+                    ...session,
+                    status: "completed",
+                    completedAt: new Date().toISOString(),
+                  }
+                : session,
+          );
+          window.localStorage.setItem(key, JSON.stringify(sessions));
+        } catch {
+          // Keep the active in-memory session usable when storage is unavailable.
+        }
+      }
+    },
     async recordRetrievalAttempt(input: RetrievalAttemptInput) {
       const current =
         readStates(languageForConcept(input.conceptId)).find(
@@ -253,6 +322,36 @@ export function createDemoLearningRepository(): LearningRepository {
 
       appendEvent({
         eventType: "listening_attempt",
+        conceptId: input.conceptId,
+        payload: { ...input },
+      });
+
+      const listeningEvents = readEvents(languageForConcept(input.conceptId)).filter(
+        (event) => event.eventType === "listening_attempt" && event.conceptId === input.conceptId,
+      );
+      const uniqueSpeakers = new Set(
+        listeningEvents.map((event) => event.payload.speakerId).filter(Boolean),
+      ).size;
+      const uniqueContexts = new Set(
+        listeningEvents.map((event) => event.payload.contextId).filter(Boolean),
+      ).size;
+
+      return replaceState({
+        ...updated,
+        speakerDiversity: Math.min(1, uniqueSpeakers / 4),
+        contextDiversity: Math.min(1, uniqueContexts / 5),
+      });
+    },
+    async recordReadingAttempt(input: ReadingAttemptInput) {
+      const current =
+        readStates(languageForConcept(input.conceptId)).find(
+          (state) => state.conceptId === input.conceptId,
+        ) ??
+        createEmptyState(input.conceptId);
+      const updated = applyDemoReadingAttempt(current, input);
+
+      appendEvent({
+        eventType: "reading_attempt",
         conceptId: input.conceptId,
         payload: { ...input },
       });

@@ -24,6 +24,18 @@ type LearnerConceptStateRow = {
   estimate_confidence: number;
   exposure_count: number;
   successful_retrieval_count: number;
+  independent_retrieval_count: number;
+  delayed_independent_success_count: number;
+  last_independent_retrieval_at: string | null;
+  recall_due_at: string | null;
+  listening_due_at: string | null;
+  pronunciation_due_at: string | null;
+  recall_interval_hours: number;
+  listening_interval_hours: number;
+  pronunciation_interval_hours: number;
+  recall_lapses: number;
+  listening_lapses: number;
+  pronunciation_lapses: number;
   algorithm_version: number;
   created_at: string;
   updated_at: string;
@@ -115,6 +127,18 @@ export interface Database {
           estimate_confidence?: number;
           exposure_count?: number;
           successful_retrieval_count?: number;
+          independent_retrieval_count?: number;
+          delayed_independent_success_count?: number;
+          last_independent_retrieval_at?: string | null;
+          recall_due_at?: string | null;
+          listening_due_at?: string | null;
+          pronunciation_due_at?: string | null;
+          recall_interval_hours?: number;
+          listening_interval_hours?: number;
+          pronunciation_interval_hours?: number;
+          recall_lapses?: number;
+          listening_lapses?: number;
+          pronunciation_lapses?: number;
           algorithm_version?: number;
           created_at?: string;
           updated_at?: string;
@@ -128,7 +152,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          kind: "learn" | "ear" | "practice";
+          kind: "learn" | "practice" | "ear" | "text";
           status: "planned" | "active" | "completed" | "abandoned";
           planner_version: string | null;
           configuration: Json;
@@ -140,7 +164,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          kind: "learn" | "ear" | "practice";
+          kind: "learn" | "practice" | "ear" | "text";
           status?: "planned" | "active" | "completed" | "abandoned";
           planner_version?: string | null;
           configuration?: Json;
@@ -219,6 +243,38 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["character_continuity"]["Insert"]>;
         Relationships: [];
       };
+      session_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          session_id: string;
+          position: number;
+          activity_type: string;
+          primary_concept_id: string | null;
+          status: "planned" | "in_progress" | "completed" | "skipped";
+          prompt: Json;
+          started_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          session_id: string;
+          position: number;
+          activity_type: string;
+          primary_concept_id?: string | null;
+          status?: "planned" | "in_progress" | "completed" | "skipped";
+          prompt?: Json;
+          started_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["session_items"]["Insert"]>;
+        Relationships: [];
+      };
       learning_events: {
         Row: {
           id: number;
@@ -273,6 +329,11 @@ export interface Database {
           p_expected_response: string;
           p_successful: boolean;
           p_latency_ms: number;
+          p_evidence_kind: string;
+          p_answer_visible: boolean;
+          p_hint_count: number;
+          p_evaluator_version: string;
+          p_scorer_version: string;
           p_context?: Json;
           p_session_id?: string | null;
           p_session_item_id?: string | null;
@@ -297,8 +358,30 @@ export interface Database {
           p_score: number;
           p_latency_ms: number;
           p_speaker_id: string;
+          p_context_id: string;
           p_playback_count: number;
+          p_used_slow_playback: boolean;
+          p_task_type: string;
+          p_scorer_version: string;
           p_context?: Json;
+          p_session_id?: string | null;
+          p_session_item_id?: string | null;
+        };
+        Returns: number;
+      };
+      record_reading_attempt: {
+        Args: {
+          p_concept_id: string;
+          p_question_id: string;
+          p_selected_answer: string;
+          p_expected_answer: string;
+          p_successful: boolean;
+          p_score: number;
+          p_latency_ms: number;
+          p_scorer_version: string;
+          p_context?: Json;
+          p_session_id?: string | null;
+          p_session_item_id?: string | null;
         };
         Returns: number;
       };
@@ -312,8 +395,12 @@ export interface Database {
           p_completeness_score: number;
           p_pronunciation_score: number;
           p_successful: boolean;
+          p_evidence_kind: string;
+          p_scorer_version: string;
           p_word_details?: Json;
           p_context?: Json;
+          p_session_id?: string | null;
+          p_session_item_id?: string | null;
         };
         Returns: number;
       };

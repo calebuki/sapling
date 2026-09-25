@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { createEmptyState } from "../src/lib/learning/model";
 import { swedishLessons, swedishListenSpeakItems } from "../src/lib/learning/swedish-course";
 import { getPracticeScenario, getPracticeScenarios } from "../src/lib/practice/scenarios";
 import { discoveries } from "../src/lib/game/discoveries";
@@ -96,10 +97,8 @@ test("levels grow with learning evidence, not with activity alone", () => {
   assert.equal(fresh.villagers.bosse.unlocked, false);
 
   const states: LearnerConceptState[] = concepts.map((c) => ({
-    conceptId: c.id, recognitionText: null, recognitionAudio: 0.6, recall: 0.6, production: null, pronunciation: null,
-    automaticity: null, contextDiversity: null, speakerDiversity: null, retrievalLatencyMs: null, lastExposureAt: null,
-    lastSuccessfulRetrievalAt: null, retrievalStrength: 0.5, estimateConfidence: 0.3, exposureCount: 3,
-    successfulRetrievalCount: 2, algorithmVersion: 3,
+    ...createEmptyState(c.id), recognitionAudio: 0.6, recall: 0.6, retrievalStrength: 0.5, estimateConfidence: 0.3,
+    exposureCount: 3, successfulRetrievalCount: 2,
   }));
   const grown = computeProgress(concepts, states, 2);
   assert.ok(grown.level > fresh.level);

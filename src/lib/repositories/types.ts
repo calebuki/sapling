@@ -1,7 +1,10 @@
 import type {
   LearningSnapshot,
+  LearningSessionPlan,
+  LearningSessionPlanInput,
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -21,6 +24,8 @@ export interface LearningRepository {
   getTargetLanguage(): Promise<TargetLanguageCode>;
   setTargetLanguage(languageCode: TargetLanguageCode): Promise<void>;
   loadSnapshot(languageCode: TargetLanguageCode): Promise<LearningSnapshot>;
+  startSession(input: LearningSessionPlanInput): Promise<LearningSessionPlan>;
+  completeSession(sessionId: string | null): Promise<void>;
   recordRetrievalAttempt(
     input: RetrievalAttemptInput,
   ): Promise<LearnerConceptState>;
@@ -28,6 +33,7 @@ export interface LearningRepository {
   recordListeningAttempt(
     input: ListeningAttemptInput,
   ): Promise<LearnerConceptState>;
+  recordReadingAttempt(input: ReadingAttemptInput): Promise<LearnerConceptState>;
   recordSpeakingAttempt(input: SpeakingAttemptInput): Promise<LearnerConceptState>;
   loadPracticeSnapshot(
     languageCode: TargetLanguageCode,

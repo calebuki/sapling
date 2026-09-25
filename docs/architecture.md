@@ -129,6 +129,8 @@ that deserves validation and querying:
 
 - `retrieval_attempts` stores the response, expected response, self-assessed
   result, score, latency, and hints
+- `reading_attempts` stores the selected and expected answers, score, and
+  latency for text-comprehension evidence
 - `errors` stores one or more observed/target contrasts associated with an
   error event
 

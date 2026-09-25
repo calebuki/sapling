@@ -18,8 +18,11 @@ import {
 } from "@/lib/learning/languages";
 import type {
   Concept,
+  LearningSessionPlan,
+  LearningSessionPlanInput,
   LearnerConceptState,
   ListeningAttemptInput,
+  ReadingAttemptInput,
   RepairInput,
   RetrievalAttemptInput,
   SpeakingAttemptInput,
@@ -50,12 +53,17 @@ type LearningModelContextValue = {
   isSwitchingLanguage: boolean;
   error: string | null;
   selectTargetLanguage: (languageCode: TargetLanguageCode) => Promise<void>;
+  startSession: (input: LearningSessionPlanInput) => Promise<LearningSessionPlan>;
+  completeSession: (sessionId: string | null) => Promise<void>;
   recordRetrievalAttempt: (
     input: RetrievalAttemptInput,
   ) => Promise<LearnerConceptState>;
   recordRepair: (input: RepairInput) => Promise<LearnerConceptState>;
   recordListeningAttempt: (
     input: ListeningAttemptInput,
+  ) => Promise<LearnerConceptState>;
+  recordReadingAttempt: (
+    input: ReadingAttemptInput,
   ) => Promise<LearnerConceptState>;
   recordSpeakingAttempt: (
     input: SpeakingAttemptInput,
@@ -195,6 +203,39 @@ export function LearningModelProvider({
   const recordObservation = useCallback(async (input: Observation) => {
     return upsertState(await repository.recordObservation(input));
   }, [repository, upsertState]);
+  const startSession = useCallback(
+    async (input: LearningSessionPlanInput) => {
+      setError(null);
+      try {
+        return await repository.startSession(input);
+      } catch (sessionError) {
+        const message =
+          sessionError instanceof Error
+            ? sessionError.message
+            : "Sapling could not start this session.";
+        setError(message);
+        throw sessionError;
+      }
+    },
+    [repository],
+  );
+
+  const completeSession = useCallback(
+    async (sessionId: string | null) => {
+      setError(null);
+      try {
+        await repository.completeSession(sessionId);
+      } catch (sessionError) {
+        const message =
+          sessionError instanceof Error
+            ? sessionError.message
+            : "Sapling could not finish this session.";
+        setError(message);
+        throw sessionError;
+      }
+    },
+    [repository],
+  );
 
   const recordRepair = useCallback(
     async (input: RepairInput) => {
@@ -223,6 +264,23 @@ export function LearningModelProvider({
           recordError instanceof Error
             ? recordError.message
             : "Sapling could not save this listening attempt.";
+        setError(message);
+        throw recordError;
+      }
+    },
+    [repository, upsertState],
+  );
+
+  const recordReadingAttempt = useCallback(
+    async (input: ReadingAttemptInput) => {
+      setError(null);
+      try {
+        return upsertState(await repository.recordReadingAttempt(input));
+      } catch (recordError) {
+        const message =
+          recordError instanceof Error
+            ? recordError.message
+            : "Sapling could not save this reading attempt.";
         setError(message);
         throw recordError;
       }
@@ -337,9 +395,12 @@ export function LearningModelProvider({
         isSwitchingLanguage,
         error,
         selectTargetLanguage,
+        startSession,
+        completeSession,
         recordRetrievalAttempt,
         recordRepair,
         recordListeningAttempt,
+        recordReadingAttempt,
         recordSpeakingAttempt,
         startPracticeSession,
         recordPracticeTurn,

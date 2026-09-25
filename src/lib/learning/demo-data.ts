@@ -1,3 +1,4 @@
+import { createEmptyState } from "@/lib/learning/model";
 import type { Concept, LearnerConceptState } from "@/types/learning";
 
 export const demoConcepts: Concept[] = [
@@ -323,7 +324,7 @@ export const demoConcepts: Concept[] = [
   },
 ];
 
-export const initialDemoStates: LearnerConceptState[] = [
+const legacyInitialDemoStates = [
   {
     conceptId: "demo-maaske",
     recognitionText: 0.76,
@@ -341,7 +342,7 @@ export const initialDemoStates: LearnerConceptState[] = [
     estimateConfidence: 0.46,
     exposureCount: 8,
     successfulRetrievalCount: 4,
-    algorithmVersion: 1,
+    algorithmVersion: 2,
   },
   {
     conceptId: "demo-jeg-vil-gerne",
@@ -360,7 +361,7 @@ export const initialDemoStates: LearnerConceptState[] = [
     estimateConfidence: 0.54,
     exposureCount: 10,
     successfulRetrievalCount: 6,
-    algorithmVersion: 1,
+    algorithmVersion: 2,
   },
   {
     conceptId: "demo-skal-vi-infinitive",
@@ -379,7 +380,7 @@ export const initialDemoStates: LearnerConceptState[] = [
     estimateConfidence: 0.34,
     exposureCount: 5,
     successfulRetrievalCount: 2,
-    algorithmVersion: 1,
+    algorithmVersion: 2,
   },
   {
     conceptId: "demo-polite-request",
@@ -398,7 +399,7 @@ export const initialDemoStates: LearnerConceptState[] = [
     estimateConfidence: 0.24,
     exposureCount: 3,
     successfulRetrievalCount: 1,
-    algorithmVersion: 1,
+    algorithmVersion: 2,
   },
   {
     conceptId: "demo-soft-d",
@@ -417,6 +418,14 @@ export const initialDemoStates: LearnerConceptState[] = [
     estimateConfidence: 0.18,
     exposureCount: 2,
     successfulRetrievalCount: 0,
-    algorithmVersion: 1,
+    algorithmVersion: 2,
   },
 ];
+
+export const initialDemoStates: LearnerConceptState[] = legacyInitialDemoStates.map(
+  (state) => ({
+    ...createEmptyState(state.conceptId),
+    ...state,
+    algorithmVersion: 2,
+  }),
+);
