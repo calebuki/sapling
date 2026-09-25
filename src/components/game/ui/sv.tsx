@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ElementType } from "react";
+import { createPortal } from "react-dom";
 import { lookupGloss, normalizeWord } from "@/lib/game/glossary";
 import type { Line } from "@/lib/game/villagers";
 
@@ -141,7 +142,9 @@ export function TooltipLayer() {
 
   if (!current) return null;
   const showPhrase = current.phrase && current.phrase.toLowerCase() !== (current.gloss ?? "").toLowerCase();
-  return (
+  // Portaled so it stacks above body-level dialogs (grammar tips, onboarding)
+  // instead of being trapped in the game root's stacking context.
+  return createPortal(
     <div
       ref={ref}
       role="tooltip"
@@ -154,6 +157,7 @@ export function TooltipLayer() {
         <strong className="sv-tip-loading">…</strong>
       ) : null}
       {showPhrase ? <span>{current.phrase}</span> : null}
-    </div>
+    </div>,
+    document.body,
   );
 }
