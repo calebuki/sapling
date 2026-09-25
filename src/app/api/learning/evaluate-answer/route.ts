@@ -1,4 +1,5 @@
 import { generateText, Output } from "ai";
+import { textModel } from "@/lib/ai-models";
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
@@ -140,9 +141,9 @@ export async function POST(request: Request) {
     language.locale,
     exercise.fallbackPatterns,
   );
-  const canUseGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
+  const model = textModel("fast");
 
-  if (!canUseGateway) {
+  if (!model) {
     return fallback.successful
       ? Response.json(fallback, { headers: { "Cache-Control": "no-store" } })
       : Response.json(
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
 
   try {
     const { output } = await generateText({
-      model: "openai/gpt-5.4-nano",
+      model,
       output: Output.object({ schema: evaluationSchema }),
       reasoning: "none",
       maxOutputTokens: 500,

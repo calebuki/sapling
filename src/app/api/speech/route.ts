@@ -1,7 +1,7 @@
-import { google } from "@ai-sdk/google";
 import { generateSpeech } from "ai";
 import { z } from "zod";
 
+import { speechModel } from "@/lib/ai-models";
 import { hasSupabase } from "@/lib/env";
 import { isSpeechVoiceKey, speechVoices } from "@/lib/game/speech-voices";
 import { createClient } from "@/lib/supabase/server";
@@ -15,13 +15,6 @@ const inputSchema = z.object({
   v: z.string().refine(isSpeechVoiceKey),
   s: z.enum(["0", "1"]).default("0"),
 });
-
-// A Gemini API key calls Google directly; otherwise go through AI Gateway.
-function speechModel() {
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) return google.speech("gemini-3.8-flash-tts");
-  if (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL) return "google/gemini-3.8-flash-tts";
-  return null;
-}
 
 const everyday =
   "You are a native Swedish speaker from Stockholm chatting with a friend on a small island. Speak natural, relaxed, everyday rikssvenska with warm, lively intonation, natural rhythm and the usual Swedish pitch accent. Never sound like you are reading aloud.";

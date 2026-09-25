@@ -1,4 +1,5 @@
 import { generateText, Output } from "ai";
+import { textModel } from "@/lib/ai-models";
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
@@ -208,8 +209,8 @@ export async function POST(request: Request) {
     turnIndex: input.turnIndex,
     scenario,
   });
-  const canUseGateway = Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL);
-  if (!canUseGateway) {
+  const model = textModel("smart");
+  if (!model) {
     return Response.json(fallback, { headers: { "Cache-Control": "no-store" } });
   }
 
@@ -219,7 +220,7 @@ export async function POST(request: Request) {
       ...scenario.optionalConceptSlugs,
     ]);
     const { output } = await generateText({
-      model: "openai/gpt-5.6-luna",
+      model,
       output: Output.object({ schema: responseSchema }),
       reasoning: "none",
       maxOutputTokens: 1_100,

@@ -1,6 +1,7 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
+import { textModel } from "@/lib/ai-models";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,13 +26,14 @@ export async function POST(request: Request) {
   }
   const parsed = inputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return new Response(null, { status: 400 });
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
+  const model = textModel("fast");
+  if (!model) {
     return Response.json({ gloss: null }, { headers: { "Cache-Control": "no-store" } });
   }
 
   try {
     const { output } = await generateText({
-      model: "openai/gpt-5.4-nano",
+      model,
       output: Output.object({ schema: z.object({ gloss: z.string().max(60) }) }),
       reasoning: "none",
       maxOutputTokens: 60,

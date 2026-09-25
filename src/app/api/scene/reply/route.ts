@@ -1,4 +1,5 @@
 import { generateText, Output } from "ai";
+import { textModel } from "@/lib/ai-models";
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
@@ -47,7 +48,8 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid exchange." }, { status: 400 });
   }
 
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
+  const model = textModel("fast");
+  if (!model) {
     return Response.json({ error: "Replies are unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
 
   try {
     const { output } = await generateText({
-      model: "openai/gpt-5.4-nano",
+      model,
       output: Output.object({ schema: replySchema }),
       reasoning: "none",
       maxOutputTokens: 200,
