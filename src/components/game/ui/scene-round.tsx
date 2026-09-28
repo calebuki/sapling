@@ -611,15 +611,22 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
   const { play, replays } = useHeard(cue.t, villager, beat ? undefined : activity.listening?.audioId, beat?.pitch);
   const [picked, setPicked] = useState<string | null>(null);
   const [options] = useState(() => {
-    const others = Object.entries(island().scenes[villager.id] ?? {})
-      .filter(([other]) => other !== slug && !beat?.notWith?.includes(other))
-      .map(([other, vs]) => {
-        const exercise = course.lessons.flatMap((lesson) => lesson.exercises).find((e) => e.conceptSlug === other);
-        return vs[0].expect ? vs[0].expect.t : exercise ? expectedFor(exercise, name) : "";
-      })
-      .filter((text) => text && text !== expected);
-    const distractors = others.sort(() => Math.random() - 0.5).slice(0, 2);
-    return [expected, ...distractors].sort(() => Math.random() - 0.5);
+    // Wrong answers come from units the learner has reached, never ones still locked.
+    const unit = course.units.findIndex((u) => u.slugs.includes(slug));
+    const reached = new Set(course.units.slice(0, unit + 1).flatMap((u) => u.slugs));
+    const usable = (other: string) => other !== slug && !beat?.notWith?.includes(other);
+    const said = (other: string) => {
+      const exercise = course.lessons.flatMap((lesson) => lesson.exercises).find((e) => e.conceptSlug === other);
+      return exercise ? expectedFor(exercise, name) : "";
+    };
+    const shuffle = (texts: string[]) => texts.sort(() => Math.random() - 0.5);
+    const scenes = Object.entries(island().scenes[villager.id] ?? {})
+      .filter(([other]) => usable(other) && reached.has(other))
+      .map(([other, vs]) => vs[0].expect?.t ?? said(other));
+    // A villager's first unit may have few scenes; the unit's other phrases fill in.
+    const phrases = (course.units[unit]?.slugs ?? []).filter(usable).map(said);
+    const distractors = [...new Set([...shuffle(scenes), ...shuffle(phrases)])].filter((text) => text && text !== expected).slice(0, 2);
+    return shuffle([expected, ...distractors]);
   });
   const who = beat ? (beat.speaker === "?" ? "Someone" : beat.speaker) : "Someone";
   return (

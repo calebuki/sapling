@@ -45,13 +45,16 @@ const defaultFlora: Flora = { pines: 46, rounds: 26, birches: 18, bushes: 40, ro
 
 export function Vegetation({ flora = defaultFlora }: { flora?: Flora }) {
   const { world, discoveries } = island();
-  const { heightAt, places, scatter } = world;
+  const { heightAt, pathDistance, places, scatter } = world;
   const data = useMemo(() => {
     // Keep scattered scenery off discovery props so found objects stay visible.
     const clear = (points: Scattered, radius: number) =>
       points.filter((p) => discoveries.every((d) => Math.hypot(p.x - d.x, p.z - d.z) > radius));
     const random = mulberry32(99);
-    const pines = clear(scatter(flora.pines, 11, 3.2), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 1.15 }));
+    // Pines stand back so their lowest branches (1.3 × scale) clear the dirt path (1.9).
+    const pines = clear(scatter(flora.pines, 11, 3.2), 2.5)
+      .map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 1.15 }))
+      .filter((p) => pathDistance(p.x, p.z) > 2.3 + 1.3 * p.s);
     const rounds = clear(scatter(flora.rounds, 23, 3.4), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
     const birches = clear(scatter(flora.birches, 5, 3), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
     const bushes = clear(scatter(flora.bushes, 77, 1.8), 1.6).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 0.8 }));
@@ -79,7 +82,7 @@ export function Vegetation({ flora = defaultFlora }: { flora?: Flora }) {
       flowers.push({ x, z, y: heightAt(x, z) + 0.15, s: 0.1, r: 0, color: flowerColors[i % flowerColors.length] });
     }
     return { pines, rounds, birches, bushes, rocks, flowers, grass };
-  }, [flora, discoveries, heightAt, places, scatter]);
+  }, [flora, discoveries, heightAt, pathDistance, places, scatter]);
 
   const geo = useMemo(() => {
     const pine = new THREE.ConeGeometry(1.3, 2.4, 7);
