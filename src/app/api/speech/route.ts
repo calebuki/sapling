@@ -1,4 +1,4 @@
-import { generateSpeech } from "ai";
+import { APICallError, generateSpeech, RetryError } from "ai";
 import { z } from "zod";
 
 import { speechModel } from "@/lib/ai-models";
@@ -35,6 +35,13 @@ const direction: Record<TargetLanguageCode, { everyday: string; slow: string }> 
     slow: "You are a friendly native Danish speaker helping a beginner. Speak slowly and clearly with natural Danish intonation, like a patient teacher, not a robot.",
   },
 };
+
+// The provider refusing us (bad key, no credits) won't fix itself on the next
+// line, so tell the game to stop asking and use device voices instead.
+function refusedByProvider(error: unknown) {
+  const cause = RetryError.isInstance(error) ? error.lastError : error;
+  return APICallError.isInstance(cause) && [401, 402, 403].includes(cause.statusCode ?? 0);
+}
 
 export const maxDuration = 30;
 
@@ -73,6 +80,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("speech generation failed", error);
-    return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+    const status = refusedByProvider(error) ? 503 : 502;
+    return new Response(null, { status, headers: { "Cache-Control": "no-store" } });
   }
 }
