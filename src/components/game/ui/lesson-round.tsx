@@ -7,6 +7,7 @@ import { chooseNextActivity, type AdaptiveActivity, type SessionAttempt } from "
 import { gatedSlugs } from "@/lib/game/grammar";
 import { buildTiles, checkAnswer, expectedFor, meaningOf, type Check as CheckResult } from "@/lib/game/lesson";
 import { pick, type Line } from "@/lib/game/line";
+import { acceptsAnswer } from "@/lib/game/scenes";
 import { conceptStage, conceptXp, type Stage } from "@/lib/game/progression";
 import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
@@ -420,6 +421,7 @@ export function ActivityView({
 export async function judgeAnswer(activity: AdaptiveActivity, answer: string, expected: string) {
   const code = island().code;
   let check: Outcome["check"] = checkAnswer(answer, expected, code);
+  if (check === "wrong" && acceptsAnswer(activity.exercise.accept, answer, code)) check = "exact";
   let successful = check !== "wrong";
   if (!successful && activity.exercise.mode !== "repeat" && answer.trim()) {
     try {

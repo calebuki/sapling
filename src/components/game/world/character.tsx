@@ -265,6 +265,34 @@ function Hat({ look }: { look: CharacterLook }) {
           <mesh geometry={g.sphere} material={toon("#ffffff")} position={[0, 0.44, 0]} scale={0.09} castShadow />
         </group>
       );
+    case "cap":
+      return (
+        <group position={[0, 0.56, 0]} rotation-x={-0.1}>
+          <mesh geometry={g.topHalf} material={toon(look.accent)} scale={[0.37, 0.24, 0.36]} castShadow />
+          <mesh geometry={g.cylinder} material={toon(look.accent)} position={[0, 0.01, 0.24]} scale={[0.24, 0.02, 0.2]} />
+          <mesh geometry={g.sphere} material={toon("#3f6f4a")} position={[0.3, 0.1, -0.05]} scale={[0.03, 0.12, 0.03]} />
+        </group>
+      );
+    // The Black Forest Bollenhut: a straw hat crowned with red woollen pom-poms.
+    case "bollenhut":
+      return (
+        <group position={[0, 0.6, -0.02]} rotation-x={-0.08}>
+          <mesh geometry={g.cylinder} material={toon("#f3ead8")} scale={[0.46, 0.03, 0.46]} castShadow />
+          <mesh geometry={g.cylinder} material={toon("#f3ead8")} position={[0, 0.05, 0]} scale={[0.3, 0.08, 0.3]} castShadow />
+          {[
+            [0, 0.2, 0.12],
+            [-0.17, 0.16, 0.1],
+            [0.17, 0.16, 0.1],
+            [-0.12, 0.17, -0.12],
+            [0.12, 0.17, -0.12],
+            [0, 0.2, -0.16],
+            [-0.26, 0.1, -0.02],
+            [0.26, 0.1, -0.02],
+          ].map(([x, y, z], i) => (
+            <mesh key={i} geometry={g.sphere} material={toon("#d42a2a")} position={[x, y, z]} scale={0.1} castShadow />
+          ))}
+        </group>
+      );
     default:
       return null;
   }

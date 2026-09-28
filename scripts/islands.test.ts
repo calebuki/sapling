@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { coreText, extraText, missingGlosses } from "../src/content/audit";
+import { island as de } from "../src/content/de";
 import { island as sv } from "../src/content/sv";
 import type { IslandPack } from "../src/content/types";
 import { gatedSlugs, pendingTip } from "../src/lib/game/grammar";
@@ -14,36 +16,7 @@ import type { Concept, LearnerConceptState } from "../src/types/learning";
 
 // Every island must hold together the same way: its course, its people, its
 // words and its ground. These run once per island.
-export const islands: IslandPack[] = [sv];
-
-// Everything an island shows in its target language, for the gloss check.
-export function shownText(pack: IslandPack) {
-  const texts: string[] = [];
-  for (const lesson of pack.course.lessons) {
-    for (const exercise of lesson.exercises) texts.push(exercise.expected);
-    for (const word of [...(lesson.support?.words ?? []), ...(lesson.support?.starters ?? [])]) texts.push(word.target);
-  }
-  for (const item of pack.course.listenSpeakItems) texts.push(item.text);
-  for (const unit of pack.course.units) texts.push(unit.title.t);
-  for (const scenario of pack.scenarios) {
-    texts.push(scenario.openingLine, ...scenario.starterHints.map((h) => h.target), ...scenario.fallbackReplies.map((h) => h.target));
-  }
-  for (const v of pack.villagers) {
-    for (const line of [v.role, v.place, v.locked, v.teach, v.talk, ...v.greetings, ...v.chatter, ...v.goodbye]) texts.push(line.t);
-  }
-  const { script } = pack;
-  for (const line of [...script.intro, ...script.afterName("Kim"), ...script.praise, ...script.nudges, ...script.roundDone, ...Object.values(script.stageNames)]) {
-    texts.push(line.t);
-  }
-  for (const item of pack.discoveries) texts.push(item.t);
-  for (const sign of pack.signs) texts.push(sign.line.t, sign.closedLine?.t ?? "");
-  for (const [key, value] of Object.entries(pack.ui)) {
-    if (typeof value !== "function") texts.push(value.t);
-    else if (key === "wordGrows") texts.push(pack.ui.wordGrows(script.stageNames[3]).t);
-    else texts.push((value as (name: string, place: { t: string; en: string }) => { t: string })("Kim", pack.villagers[0].place).t);
-  }
-  return texts;
-}
+const islands: IslandPack[] = [sv, de];
 
 function concepts(pack: IslandPack): Concept[] {
   return pack.course.concepts.map((seed, i) => ({
@@ -62,13 +35,17 @@ for (const pack of islands) {
   const { code, course, villagers } = pack;
 
   test(`${code}: every word the island shows has an English gloss`, () => {
-    const missing = new Set<string>();
-    for (const text of shownText(pack)) {
-      for (const [word] of text.matchAll(/\p{L}[\p{L}\p{N}]*/gu)) {
-        if (word !== "Kim" && !pack.glossary.lookup(word)) missing.add(word);
+    assert.deepEqual(missingGlosses(pack, coreText(pack)).map(([word]) => word), []);
+    assert.deepEqual(missingGlosses(pack, extraText(pack)).map(([word]) => word), []);
+  });
+
+  test(`${code}: conversations only practise phrases the course teaches`, () => {
+    const taught = new Set(course.units.flatMap((u) => u.slugs));
+    for (const scenario of pack.scenarios) {
+      for (const slug of [...scenario.requiredConceptSlugs, ...scenario.optionalConceptSlugs]) {
+        assert.ok(taught.has(slug), `${scenario.id} practises ${slug}`);
       }
     }
-    assert.deepEqual([...missing], []);
   });
 
   test(`${code}: units, lessons and the concept catalog agree`, () => {

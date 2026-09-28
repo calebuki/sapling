@@ -10,7 +10,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test scripts/*.test.ts scripts/*.test.mjs",
-    "test:learning": "node --experimental-strip-types --test tests/learning-science.test.ts"
+    "test:learning": "node --experimental-strip-types --test tests/learning-science.test.ts",
+    "content:report": "tsx scripts/content-report.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.82",

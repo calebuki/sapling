@@ -10,8 +10,9 @@ import { island } from "../island";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
-import { Clouds, FOG, Sky, SUN_DIRECTION, Terrain, Water } from "./environment";
+import { Clouds, FOG, fogColor, Sky, SUN_DIRECTION, Terrain, Water } from "./environment";
 import { LillaO } from "./lilla-o";
+import { Tannenau } from "./tannenau";
 import { GreatTree, Vegetation } from "./vegetation";
 
 // Dev-only hook so automated checks can step frames when the tab is throttled.
@@ -54,7 +55,8 @@ function Lights() {
 }
 
 export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
-  const { scenery } = island();
+  const { scenery, flora } = island();
+  const fog = fogColor();
   return (
     <Canvas
       shadows={{ type: THREE.PCFShadowMap }}
@@ -63,17 +65,17 @@ export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
       camera={{ fov: 42, near: 0.1, far: 700, position: [60, 40, 60] }}
       className="game-canvas"
     >
-      <color attach="background" args={[FOG.color]} />
-      <fog attach="fog" args={[FOG.color, FOG.near, FOG.far]} />
+      <color attach="background" args={[fog]} />
+      <fog attach="fog" args={[fog, FOG.near, FOG.far]} />
       <Suspense fallback={null}>
         <Lights />
         <Sky />
         <Clouds />
         <Water />
         <Terrain />
-        <Vegetation />
+        <Vegetation flora={flora} />
         <GreatTree stage={treeStage} />
-        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : null}
+        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : <Tannenau unlocked={unlocked} />}
         <Discoverables />
         <Villagers goal={goal} />
         <Player />

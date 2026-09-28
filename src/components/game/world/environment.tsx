@@ -79,6 +79,9 @@ const waterVertex = /* glsl */ `
 const waterFragment = (radius: string) => /* glsl */ `
   uniform float uTime;
   uniform vec3 uFogColor;
+  uniform vec3 uShallow;
+  uniform vec3 uMid;
+  uniform vec3 uDeep;
   uniform float uFogNear;
   uniform float uFogFar;
   varying vec3 vWorld;
@@ -98,11 +101,8 @@ const waterFragment = (radius: string) => /* glsl */ `
     float r = length(vWorld.xz);
     float a = atan(vWorld.z, vWorld.x);
     float d = r - islandRadius(a);
-    vec3 shallow = vec3(0.42, 0.85, 0.82);
-    vec3 mid = vec3(0.18, 0.6, 0.78);
-    vec3 deep = vec3(0.1, 0.36, 0.62);
-    vec3 col = mix(shallow, mid, smoothstep(-1.0, 7.0, d));
-    col = mix(col, deep, smoothstep(8.0, 45.0, d));
+    vec3 col = mix(uShallow, uMid, smoothstep(-1.0, 7.0, d));
+    col = mix(col, uDeep, smoothstep(8.0, 45.0, d));
 
     // Soft moving caustic ripples.
     float n = noise(vWorld.xz * 0.35 + vec2(uTime * 0.12, uTime * 0.08));
@@ -126,8 +126,17 @@ const waterFragment = (radius: string) => /* glsl */ `
   }
 `;
 
+// The sea around Lilla Ö; islands in lakes bring their own colours.
+const seaWater = { shallow: "#adedea", mid: "#76cbe5", deep: "#59a2ce" };
+
+export function fogColor() {
+  return island().theme?.fog ?? FOG.color;
+}
+
 export function Water() {
   const radius = island().world.radiusGlsl;
+  const water = island().theme?.water ?? seaWater;
+  const fog = fogColor();
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -135,12 +144,15 @@ export function Water() {
         fragmentShader: waterFragment(radius),
         uniforms: {
           uTime: { value: 0 },
-          uFogColor: { value: new THREE.Color(FOG.color) },
+          uFogColor: { value: new THREE.Color(fog) },
+          uShallow: { value: new THREE.Color(water.shallow) },
+          uMid: { value: new THREE.Color(water.mid) },
+          uDeep: { value: new THREE.Color(water.deep) },
           uFogNear: { value: FOG.near },
           uFogFar: { value: FOG.far },
         },
       }),
-    [radius],
+    [radius, water, fog],
   );
   const mesh = useRef<THREE.Mesh>(null);
   useFrame((_, delta) => {

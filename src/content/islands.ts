@@ -6,6 +6,8 @@ export async function loadIsland(code: TargetLanguageCode): Promise<IslandPack |
   switch (code) {
     case "sv":
       return (await import("./sv")).island;
+    case "de":
+      return (await import("./de")).island;
     default:
       return null;
   }

@@ -66,7 +66,7 @@ export const scenarios: PracticeScenario[] = [
     openingEnglish: "Welcome to Café Kanel! What are you in the mood for?",
     style: "roleplay",
     requiredConceptSlugs: ["jag-skulle-vilja", "kaffe", "tack"],
-    optionalConceptSlugs: ["te", "vatten", "kanelbulle", "med-mjoelk", "notan-tack"],
+    optionalConceptSlugs: ["te", "vatten", "kanelbulle", "med-mjoelk", "cafe-ask-bill"],
     minimumEncountered: 2,
     minimumTurns: 3,
     maximumTurns: 6,

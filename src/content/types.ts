@@ -53,6 +53,10 @@ export type IslandPack = {
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau";
+  // How the island looks beyond its buildings: sea or lake colours, and the
+  // mix of trees and flowers it grows.
+  theme?: { fog: string; water: { shallow: string; mid: string; deep: string } };
+  flora?: { pines: number; rounds: number; birches: number; bushes: number; rocks: number; meadows: number };
   signs: WorldSign[];
   placement: PlacementConfig;
   scenarios: PracticeScenario[];
