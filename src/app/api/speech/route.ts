@@ -61,12 +61,12 @@ export async function GET(request: Request) {
 
   const { l: language, t: text, v: voice, s } = parsed.data;
   try {
-    // Gemini returns a complete WAV file, ready for the browser.
+    // Gemini returns a complete WAV file, ready for the browser. It detects the
+    // language from the text; the instructions set the accent.
     const { audio } = await generateSpeech({
       model,
       text,
       voice,
-      language,
       instructions: s === "1" ? direction[language].slow : direction[language].everyday,
       outputFormat: "wav",
       maxRetries: 1,
