@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Line } from "@/lib/game/villagers";
+import type { Line } from "@/lib/game/line";
 import { sound } from "../audio/sfx";
-import { Sv } from "./sv";
+import { Glossed } from "./glossed";
 
 // Types a line out with the speaker's voice blips; a click finishes it early.
 export function Typewriter({ line, pitch, onDone, done, english = false }: { line: Line; pitch: number; onDone: () => void; done: boolean; english?: boolean }) {
@@ -18,22 +18,22 @@ export function Typewriter({ line, pitch, onDone, done, english = false }: { lin
     const timer = window.setInterval(() => {
       i++;
       setShown(i);
-      if (skipped.current || i >= line.sv.length) {
+      if (skipped.current || i >= line.t.length) {
         window.clearInterval(timer);
         onDone();
         return;
       }
-      if (i % 2 === 0 && /\p{L}/u.test(line.sv[i] ?? "")) sound.blip(pitch);
+      if (i % 2 === 0 && /\p{L}/u.test(line.t[i] ?? "")) sound.blip(pitch);
     }, 26);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [line]);
-  const text = done ? line.sv : line.sv.slice(0, shown);
+  const text = done ? line.t : line.t.slice(0, shown);
   return (
     <p className="typewriter">
-      <Sv text={text} en={line.en} />
+      <Glossed text={text} en={line.en} />
       <span className="typewriter-ghost" aria-hidden="true">
-        {done ? "" : line.sv.slice(shown)}
+        {done ? "" : line.t.slice(shown)}
       </span>
       {english ? <span className={`typewriter-en ${done ? "is-shown" : ""}`}>{line.en}</span> : null}
     </p>

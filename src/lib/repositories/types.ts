@@ -1,4 +1,5 @@
 import type {
+  Concept,
   LearningSnapshot,
   LearningSessionPlan,
   LearningSessionPlanInput,
@@ -18,12 +19,20 @@ import type {
   StartPracticeSessionInput,
 } from "@/types/practice";
 
+// Everything the hub needs to summarise every language at once.
+export type LearningOverview = {
+  concepts: Concept[];
+  states: LearnerConceptState[];
+  lastLanguage: TargetLanguageCode | null;
+};
+
 export interface LearningRepository {
   recordObservation(input: Observation): Promise<LearnerConceptState>;
   mode: "local" | "supabase";
   getTargetLanguage(): Promise<TargetLanguageCode>;
   setTargetLanguage(languageCode: TargetLanguageCode): Promise<void>;
   loadSnapshot(languageCode: TargetLanguageCode): Promise<LearningSnapshot>;
+  loadOverview(): Promise<LearningOverview>;
   startSession(input: LearningSessionPlanInput): Promise<LearningSessionPlan>;
   completeSession(sessionId: string | null): Promise<void>;
   recordRetrievalAttempt(

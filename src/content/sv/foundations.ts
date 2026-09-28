@@ -1,4 +1,4 @@
-import type { Lesson, ListenSpeakItem } from "./course";
+import type { Lesson, ListenSpeakItem } from "@/lib/learning/course";
 
 // Each pair changes one useful part of a construction in a familiar situation.
 export const swedishFoundations = [

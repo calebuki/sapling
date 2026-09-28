@@ -18,11 +18,11 @@ function getMetadataBase() {
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
   title: {
-    default: "Lilla Ö — Learn Swedish on a little island",
-    template: "%s | Lilla Ö",
+    default: "Sapling — Learn a language on an island",
+    template: "%s | Sapling",
   },
   description:
-    "An immersive 3D island where everyone speaks Swedish. Meet the villagers, find words, and talk for real.",
+    "Immersive 3D islands where everyone speaks the language you're learning. Meet the villagers, find words, and talk for real.",
   applicationName: "Sapling",
   robots: { index: false, follow: false },
 };
@@ -38,7 +38,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="sv" className={`${display.variable} ${body.variable} antialiased`}>
+    <html lang="en" className={`${display.variable} ${body.variable} antialiased`}>
       <body>{children}</body>
     </html>
   );

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { allRows } from "@/lib/supabase/pages";
 import { getPracticeScenarios } from "@/lib/practice/scenarios";
 import {
   isTargetLanguageCode,
@@ -35,7 +36,30 @@ export function mapConcept(row: ConceptRow): Concept {
     gloss: row.gloss,
     description: row.description,
     sortOrder: row.sort_order,
+    level: metadataText(row.metadata, "level"),
+    unit: metadataText(row.metadata, "unit"),
   };
+}
+
+async function loadConcepts(languageCode?: TargetLanguageCode) {
+  const supabase = createClient();
+  return allRows((from, to) => {
+    let query = supabase.from("concepts").select("*").eq("is_active", true);
+    if (languageCode) query = query.eq("language_code", languageCode);
+    return query.order("language_code").order("sort_order").order("id").range(from, to);
+  });
+}
+
+async function loadAllStates(userId: string) {
+  const supabase = createClient();
+  return allRows((from, to) =>
+    supabase.from("learner_concept_state").select("*").eq("user_id", userId).order("concept_id").range(from, to),
+  );
+}
+
+function metadataText(metadata: Json, key: string) {
+  const value = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata[key] : null;
+  return typeof value === "string" ? value : null;
 }
 
 export function mapState(row: StateRow): LearnerConceptState {
@@ -281,36 +305,27 @@ export function createSupabaseLearningRepository(): LearningRepository {
       }
     },
     async loadSnapshot(languageCode: TargetLanguageCode) {
-      const supabase = createClient();
       const userId = await getCurrentUserId();
-      const conceptResult = await supabase
-        .from("concepts")
-        .select("*")
-        .eq("language_code", languageCode)
-        .eq("is_active", true)
-        .order("sort_order");
-
-      if (conceptResult.error) {
-        throw conceptResult.error;
-      }
-
-      const conceptIds = conceptResult.data.map((concept) => concept.id);
-      const stateResult = conceptIds.length
-        ? await supabase
-            .from("learner_concept_state")
-            .select("*")
-            .eq("user_id", userId)
-            .in("concept_id", conceptIds)
-        : { data: [], error: null };
-
-      if (stateResult.error) {
-        throw stateResult.error;
-      }
-
+      const [concepts, states] = await Promise.all([loadConcepts(languageCode), loadAllStates(userId)]);
+      const ids = new Set(concepts.map((concept) => concept.id));
       return {
-        concepts: conceptResult.data.map(mapConcept),
-        states: stateResult.data.map(mapState),
+        concepts: concepts.map(mapConcept),
+        states: states.filter((state) => ids.has(state.concept_id)).map(mapState),
         mode: "supabase",
+      };
+    },
+    async loadOverview() {
+      const userId = await getCurrentUserId();
+      const [concepts, states, profile] = await Promise.all([
+        loadConcepts(),
+        loadAllStates(userId),
+        createClient().from("profiles").select("target_language_code").eq("id", userId).single(),
+      ]);
+      const last = profile.data?.target_language_code;
+      return {
+        concepts: concepts.map(mapConcept),
+        states: states.map(mapState),
+        lastLanguage: isTargetLanguageCode(last) ? last : null,
       };
     },
     async startSession(input) {

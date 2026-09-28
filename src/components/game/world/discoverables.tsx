@@ -3,8 +3,8 @@
 import { useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { discoveries, type Discovery, type PropKind } from "@/lib/game/discoveries";
-import { dock, groundAt } from "@/lib/game/world";
+import type { Discovery, PropKind } from "@/lib/game/discoveries";
+import { island } from "../island";
 import { runtime, useGame } from "../store";
 import { glow, palette, toon } from "./materials";
 
@@ -241,7 +241,8 @@ function Prop({ kind }: { kind: PropKind }) {
   }
 }
 
-function baseHeight(item: Discovery) {
+export function baseHeight(item: Discovery) {
+  const { groundAt, dock } = island().world;
   if (item.y !== undefined) return groundAt(item.x, item.z) + item.y;
   if (item.prop === "rowboat") return 0;
   if (item.prop === "gull" || item.prop === "bucket") return dock.height;
@@ -278,7 +279,7 @@ export function Discoverables() {
   const discovered = useGame((s) => s.save.discovered);
   return (
     <>
-      {discoveries.map((item) => (
+      {island().discoveries.map((item) => (
         <DiscoveryItem key={item.id} item={item} found={discovered.includes(item.id)} />
       ))}
     </>

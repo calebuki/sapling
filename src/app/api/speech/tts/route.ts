@@ -1,13 +1,15 @@
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
+import { getTargetLanguage, supportedLanguageCodes, type TargetLanguageCode } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/server";
 
-// Neural Swedish speech for lines that have no recording, used when the
-// learner's device has no working Swedish voice of its own. Azure matches the
+// Neural speech for lines that have no recording, used when the learner's
+// device has no working voice for the island's language. Azure matches the
 // recorded clips' voices; OpenAI covers deployments that only have that key.
 
 const inputSchema = z.object({
+  language: z.enum(supportedLanguageCodes).default("sv"),
   text: z.string().trim().min(1).max(400),
   voice: z.enum(["female", "male"]).default("female"),
   pitch: z.number().min(0.5).max(2).default(1),
@@ -17,14 +19,18 @@ type SpeechInput = z.infer<typeof inputSchema>;
 
 export const maxDuration = 20;
 
-const azureVoices = { female: "sv-SE-SofieNeural", male: "sv-SE-MattiasNeural" } as const;
+const azureVoices: Record<TargetLanguageCode, { female: string; male: string }> = {
+  sv: { female: "sv-SE-SofieNeural", male: "sv-SE-MattiasNeural" },
+  de: { female: "de-DE-KatjaNeural", male: "de-DE-ConradNeural" },
+  da: { female: "da-DK-ChristelNeural", male: "da-DK-JeppeNeural" },
+};
 const openAiVoices = { female: "coral", male: "ash" } as const;
 
 function escapeXml(value: string) {
   return value.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c]!);
 }
 
-async function synthesizeWithAzure({ text, voice, pitch }: SpeechInput) {
+async function synthesizeWithAzure({ language, text, voice, pitch }: SpeechInput) {
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   const region = process.env.AZURE_SPEECH_REGION?.trim();
   if (!key || !region) return null;
@@ -37,13 +43,13 @@ async function synthesizeWithAzure({ text, voice, pitch }: SpeechInput) {
       "User-Agent": "Sapling",
       "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
     },
-    body: `<?xml version="1.0" encoding="UTF-8"?><speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="sv-SE"><voice name="${azureVoices[voice]}"><prosody pitch="${shift >= 0 ? "+" : ""}${shift}%">${escapeXml(text)}</prosody></voice></speak>`,
+    body: `<?xml version="1.0" encoding="UTF-8"?><speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${getTargetLanguage(language).locale}"><voice name="${azureVoices[language][voice]}"><prosody pitch="${shift >= 0 ? "+" : ""}${shift}%">${escapeXml(text)}</prosody></voice></speak>`,
     signal: AbortSignal.timeout(8000),
   });
   return response.ok ? response.arrayBuffer() : null;
 }
 
-async function synthesizeWithOpenAi({ text, voice }: SpeechInput) {
+async function synthesizeWithOpenAi({ language, text, voice }: SpeechInput) {
   const key = process.env.OPENAI_TTS_KEY?.trim() || process.env.OPENAI_LIVE_VOICE_KEY?.trim();
   if (!key) return null;
   const response = await fetch("https://api.openai.com/v1/audio/speech", {
@@ -53,7 +59,7 @@ async function synthesizeWithOpenAi({ text, voice }: SpeechInput) {
       model: process.env.OPENAI_TTS_MODEL?.trim() || "gpt-4o-mini-tts",
       voice: openAiVoices[voice],
       input: text,
-      instructions: "Speak natural, clear Swedish with a native Swedish accent, at a relaxed pace for a language learner.",
+      instructions: `Speak natural, clear ${getTargetLanguage(language).name} with a native accent, at a relaxed pace for a language learner.`,
       response_format: "mp3",
     }),
     signal: AbortSignal.timeout(12000),

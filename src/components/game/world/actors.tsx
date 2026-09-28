@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import { discoveries } from "@/lib/game/discoveries";
-import { villagers, type CharacterLook, type Villager, type VillagerId } from "@/lib/game/villagers";
-import { groundAt, resolveMove, spawn, type Collider } from "@/lib/game/world";
+import type { CharacterLook, Villager, VillagerId } from "@/lib/game/villagers";
+import type { Collider } from "@/lib/game/world";
 import { interact } from "../actions";
 import { sound } from "../audio/sfx";
+import { island, villagerById } from "../island";
 import { getGame, runtime, setGame, useGame, type Interactable } from "../store";
 import { Character, type CharacterAnim } from "./character";
 import { glow } from "./materials";
@@ -19,7 +19,6 @@ export const outfits: CharacterLook[] = [
   { skin: "#f6d7c0", hair: "#c0392b", hairStyle: "beanie", shirt: "#9b59b6", pants: "#3d3d3d", accent: "#00b894", hat: "beanie" },
 ];
 
-const villagerColliders: Collider[] = villagers.map((v) => ({ x: v.position[0], z: v.position[1], r: 0.5 }));
 const lookTarget = new THREE.Vector3();
 
 function emoteFor(who: VillagerId | "player") {
@@ -33,12 +32,15 @@ export function Player() {
   const velocity = useRef(new THREE.Vector2());
   const stepDistance = useRef(0);
   const look = outfits[outfit % outfits.length];
+  const { world, villagers } = island();
+  const { spawn, groundAt, resolveMove } = world;
+  const villagerColliders = useMemo<Collider[]>(() => villagers.map((v) => ({ x: v.position[0], z: v.position[1], r: 0.5 })), [villagers]);
 
   useEffect(() => {
     runtime.player.x = spawn.x;
     runtime.player.z = spawn.z;
     runtime.player.rot = spawn.facing;
-  }, []);
+  }, [spawn]);
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -100,7 +102,7 @@ export function Player() {
     }
     // In conversation, turn to face whoever is talking.
     if (game.phase === "dialogue" && game.talkingTo) {
-      const v = villagers.find((x) => x.id === game.talkingTo)!;
+      const v = villagerById(game.talkingTo);
       const desired = Math.atan2(v.position[0] - p.x, v.position[1] - p.z);
       const diff = THREE.MathUtils.euclideanModulo(desired - p.rot + Math.PI, Math.PI * 2) - Math.PI;
       p.rot += diff * Math.min(1, delta * 6);
@@ -141,6 +143,7 @@ function scanNearby() {
     return;
   }
   const p = runtime.player;
+  const { villagers, discoveries } = island();
   let best: Interactable | null = null;
   let bestDistance = Infinity;
   for (const v of villagers) {
@@ -167,7 +170,7 @@ function scanNearby() {
 export function Villagers({ goal }: { goal: VillagerId | null }) {
   return (
     <>
-      {villagers.map((v, i) => (
+      {island().villagers.map((v, i) => (
         <VillagerActor key={v.id} villager={v} seed={i + 1} isGoal={goal === v.id} />
       ))}
     </>
@@ -178,7 +181,7 @@ function VillagerActor({ villager, seed, isGoal }: { villager: Villager; seed: n
   const group = useRef<THREE.Group>(null);
   const marker = useRef<THREE.Group>(null);
   const [x, z] = villager.position;
-  const y = groundAt(x, z);
+  const y = island().world.groundAt(x, z);
   const rot = useRef(villager.facing);
   const talkingTo = useGame((s) => s.talkingTo);
 
@@ -241,6 +244,7 @@ function VillagerActor({ villager, seed, isGoal }: { villager: Villager; seed: n
 // Third-person follow camera with drag-to-orbit and scroll-to-zoom.
 export function CameraRig() {
   const { camera, gl } = useThree();
+  const { groundAt } = island().world;
   const target = useRef(new THREE.Vector3(0, 2, 20));
   const position = useRef(new THREE.Vector3(60, 40, 60));
   const drag = useRef<{ x: number; moved: number } | null>(null);
@@ -297,7 +301,7 @@ export function CameraRig() {
       arrivalStart.current = null;
     } else if (game.phase === "dialogue" && game.talkingTo) {
       // Over the player's shoulder onto the villager's face, framed above the dialogue panel.
-      const v = villagers.find((x) => x.id === game.talkingTo)!;
+      const v = villagerById(game.talkingTo);
       const [vx, vz] = v.position;
       const vy = groundAt(vx, vz);
       const toPlayer = new THREE.Vector3(p.x - vx, 0, p.z - vz).normalize();
@@ -334,6 +338,7 @@ export function CameraRig() {
 
 // Gulls circling over the water and butterflies over the meadows.
 export function Wildlife() {
+  const { groundAt } = island().world;
   const gulls = useRef<THREE.Group>(null);
   const butterflies = useRef<THREE.Group>(null);
   useFrame((state) => {

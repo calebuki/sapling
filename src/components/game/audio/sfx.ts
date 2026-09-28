@@ -91,7 +91,7 @@ class SoundEngine {
     if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? 0.16 : 0, this.ctx.currentTime, 0.2);
   }
 
-  // Lowers music while someone is speaking Swedish so the words stay clear.
+  // Lowers music while someone is speaking so the words stay clear.
   duck(ms: number) {
     const ctx = this.ctx;
     if (!ctx || !this.musicOn) return;

@@ -1,11 +1,12 @@
 import { demoConcepts, initialDemoStates } from "@/lib/learning/demo-data";
 import { applyObservation } from "@/lib/learning/adaptive";
-import { swedishDemoConcepts } from "@/lib/learning/swedish-demo-data";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
 import {
   isTargetLanguageCode,
+  supportedLanguageCodes,
   type TargetLanguageCode,
 } from "@/lib/learning/languages";
+import type { Concept } from "@/types/learning";
 import {
   applyDemoRepair,
   applyDemoPracticeEvidence,
@@ -35,13 +36,13 @@ const targetLanguageStorageKey = "sapling.demo.target-language.v1";
 function stateStorageKey(languageCode: TargetLanguageCode) {
   return languageCode === "da"
     ? "sapling.demo.concept-states.v1"
-    : "sapling.demo.concept-states.sv.v1";
+    : `sapling.demo.concept-states.${languageCode}.v1`;
 }
 
 function eventStorageKey(languageCode: TargetLanguageCode) {
   return languageCode === "da"
     ? "sapling.demo.learning-events.v1"
-    : "sapling.demo.learning-events.sv.v1";
+    : `sapling.demo.learning-events.${languageCode}.v1`;
 }
 
 function practiceStorageKey(languageCode: TargetLanguageCode) {
@@ -52,8 +53,29 @@ function sessionStorageKey(languageCode: TargetLanguageCode) {
   return `sapling.demo.learning-sessions.${languageCode}.v2`;
 }
 
+// Demo concept ids carry their language ("demo-de-kaffee"); Danish predates that.
 function languageForConcept(conceptId: string): TargetLanguageCode {
-  return conceptId.startsWith("demo-sv-") ? "sv" : "da";
+  const code = conceptId.split("-")[1];
+  return code !== "da" && isTargetLanguageCode(code) ? code : "da";
+}
+
+// The course is the concept catalog in demo mode. It loads on demand so
+// the Supabase build never ships every course to the browser.
+async function demoConceptsFor(languageCode: TargetLanguageCode): Promise<Concept[]> {
+  if (languageCode === "da") return demoConcepts;
+  const { getCourse } = await import("@/content/courses");
+  return getCourse(languageCode).concepts.map((seed, index) => ({
+    id: `demo-${languageCode}-${seed.slug}`,
+    languageCode,
+    slug: seed.slug,
+    kind: seed.kind,
+    canonicalForm: seed.canonicalForm,
+    gloss: seed.gloss,
+    description: seed.description,
+    sortOrder: index + 1,
+    level: seed.level,
+    unit: seed.unit,
+  }));
 }
 
 type DemoEvent = {
@@ -212,13 +234,16 @@ export function createDemoLearningRepository(): LearningRepository {
     },
     async loadSnapshot(languageCode: TargetLanguageCode) {
       return {
-        concepts: (languageCode === "da"
-          ? demoConcepts
-          : swedishDemoConcepts
-        ).map((concept) => ({ ...concept })),
+        concepts: (await demoConceptsFor(languageCode)).map((concept) => ({ ...concept })),
         states: readStates(languageCode),
         mode: "local",
       };
+    },
+    async loadOverview() {
+      const concepts = (await Promise.all(supportedLanguageCodes.map(demoConceptsFor))).flat();
+      const states = supportedLanguageCodes.flatMap((code) => readStates(code));
+      const stored = window.localStorage.getItem(targetLanguageStorageKey);
+      return { concepts, states, lastLanguage: isTargetLanguageCode(stored) ? stored : null };
     },
     async startSession(input) {
       const id = crypto.randomUUID();
@@ -248,7 +273,7 @@ export function createDemoLearningRepository(): LearningRepository {
         return;
       }
 
-      for (const languageCode of ["da", "sv"] satisfies TargetLanguageCode[]) {
+      for (const languageCode of supportedLanguageCodes) {
         try {
           const key = sessionStorageKey(languageCode);
           const stored = window.localStorage.getItem(key);
@@ -380,8 +405,7 @@ export function createDemoLearningRepository(): LearningRepository {
       return crypto.randomUUID();
     },
     async recordPracticeTurn(input) {
-      const concepts =
-        input.languageCode === "da" ? demoConcepts : swedishDemoConcepts;
+      const concepts = await demoConceptsFor(input.languageCode);
       const conceptBySlug = new Map(
         concepts.map((concept) => [concept.slug, concept]),
       );

@@ -3,8 +3,8 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { heightAt, mulberry32, places, scatter } from "@/lib/game/world";
-import { discoveries } from "@/lib/game/discoveries";
+import { mulberry32 } from "@/lib/game/world";
+import { island } from "../island";
 import { getGame } from "../store";
 import { glow, palette, toon } from "./materials";
 
@@ -37,24 +37,29 @@ function Instances({ geometry, material, items, transform }: {
   return <instancedMesh ref={ref} args={[geometry, material, items.length]} castShadow receiveShadow />;
 }
 
-// Keep scattered scenery off discovery props so found objects stay visible.
-const reserved = discoveries.map((d) => ({ x: d.x, z: d.z }));
-function clear(points: ReturnType<typeof scatter>, radius: number) {
-  return points.filter((p) => reserved.every((d) => Math.hypot(p.x - d.x, p.z - d.z) > radius));
-}
+type Scattered = Array<{ x: number; z: number; s: number; r: number }>;
 
-export function Vegetation() {
+// How much of each kind of plant an island grows.
+export type Flora = { pines: number; rounds: number; birches: number; bushes: number; rocks: number; meadows: number };
+const defaultFlora: Flora = { pines: 46, rounds: 26, birches: 18, bushes: 40, rocks: 26, meadows: 160 };
+
+export function Vegetation({ flora = defaultFlora }: { flora?: Flora }) {
+  const { world, discoveries } = island();
+  const { heightAt, places, scatter } = world;
   const data = useMemo(() => {
+    // Keep scattered scenery off discovery props so found objects stay visible.
+    const clear = (points: Scattered, radius: number) =>
+      points.filter((p) => discoveries.every((d) => Math.hypot(p.x - d.x, p.z - d.z) > radius));
     const random = mulberry32(99);
-    const pines = clear(scatter(46, 11, 3.2), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 1.15 }));
-    const rounds = clear(scatter(26, 23, 3.4), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
-    const birches = clear(scatter(18, 5, 3), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
-    const bushes = clear(scatter(40, 77, 1.8), 1.6).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 0.8 }));
-    const rocks = clear(scatter(26, 31, 2.2), 1.6).map((p) => ({ ...p, y: heightAt(p.x, p.z) - 0.1, s: p.s * 0.6 }));
+    const pines = clear(scatter(flora.pines, 11, 3.2), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 1.15 }));
+    const rounds = clear(scatter(flora.rounds, 23, 3.4), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
+    const birches = clear(scatter(flora.birches, 5, 3), 2.5).map((p) => ({ ...p, y: heightAt(p.x, p.z) }));
+    const bushes = clear(scatter(flora.bushes, 77, 1.8), 1.6).map((p) => ({ ...p, y: heightAt(p.x, p.z), s: p.s * 0.8 }));
+    const rocks = clear(scatter(flora.rocks, 31, 2.2), 1.6).map((p) => ({ ...p, y: heightAt(p.x, p.z) - 0.1, s: p.s * 0.6 }));
     const flowerColors = ["#ff7aa2", "#ffd35c", "#ffffff", "#b58cff", "#6fb7ff", "#ff9a5c"].map((c) => new THREE.Color(c));
     const flowers: Placement[] = [];
     const grass: Placement[] = [];
-    const area = scatter(160, 57, 0.9);
+    const area = scatter(flora.meadows, 57, 0.9);
     area.forEach((p, i) => {
       const cluster = 3 + Math.floor(random() * 4);
       const color = flowerColors[i % flowerColors.length];
@@ -74,7 +79,7 @@ export function Vegetation() {
       flowers.push({ x, z, y: heightAt(x, z) + 0.15, s: 0.1, r: 0, color: flowerColors[i % flowerColors.length] });
     }
     return { pines, rounds, birches, bushes, rocks, flowers, grass };
-  }, []);
+  }, [flora, discoveries, heightAt, places, scatter]);
 
   const geo = useMemo(() => {
     const pine = new THREE.ConeGeometry(1.3, 2.4, 7);
@@ -129,6 +134,7 @@ export function GreatTree({ stage }: { stage: number }) {
   const displayed = useRef(0.2);
   const lastCelebration = useRef(getGame().celebration);
   const burstStart = useRef(-10);
+  const { places, heightAt } = island().world;
   const { x, z } = places.square;
   const y = heightAt(x, z);
 

@@ -34,8 +34,8 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Signed-out visitors see the island's title screen at "/", so nothing
-  // here redirects to /login; signed-in visitors skip the login page.
+  // Signed-out visitors see the hub at "/", so nothing here redirects to
+  // /login; signed-in visitors skip the login page.
   const { data } = await supabase.auth.getClaims();
   if (data?.claims && request.nextUrl.pathname === "/login") {
     const homeUrl = request.nextUrl.clone();

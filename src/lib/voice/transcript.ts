@@ -1,6 +1,6 @@
 export type VoiceFragment = {
   id: string;
-  speaker: "learner" | "elin";
+  speaker: "learner" | "character";
   text: string;
   startMs: number;
   endMs: number;

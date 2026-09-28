@@ -6,12 +6,13 @@ import { advance, Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import type { VillagerId } from "@/lib/game/villagers";
+import { island } from "../island";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
 import { Clouds, FOG, Sky, SUN_DIRECTION, Terrain, Water } from "./environment";
+import { LillaO } from "./lilla-o";
 import { GreatTree, Vegetation } from "./vegetation";
-import { Cafe, Cottages, Dock, Garden, Lookout, Square, Station } from "./village";
 
 // Dev-only hook so automated checks can step frames when the tab is throttled.
 if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
@@ -53,6 +54,7 @@ function Lights() {
 }
 
 export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
+  const { scenery } = island();
   return (
     <Canvas
       shadows={{ type: THREE.PCFShadowMap }}
@@ -70,14 +72,8 @@ export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
         <Water />
         <Terrain />
         <Vegetation />
-        <Dock />
-        <Square />
         <GreatTree stage={treeStage} />
-        <Cafe open={unlocked.bosse} />
-        <Station open={unlocked.stina} />
-        <Garden open={unlocked.astrid} />
-        <Lookout />
-        <Cottages />
+        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : null}
         <Discoverables />
         <Villagers goal={goal} />
         <Player />

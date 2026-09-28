@@ -1,17 +1,11 @@
+import type { Course, Unit } from "@/lib/learning/course";
 import type { Concept, LearnerConceptState } from "@/types/learning";
-import { villagers, type Villager, type VillagerId } from "./villagers";
+import type { Villager, VillagerId } from "./villagers";
 
 // Progress is a projection over the learning model, never a separate score the
 // game can inflate. Discoveries add a little flavour XP but no mastery.
 
 export type Stage = 0 | 1 | 2 | 3 | 4;
-export const stageNames: Record<Stage, { sv: string; en: string }> = {
-  0: { sv: "okänd", en: "unknown" },
-  1: { sv: "frö", en: "seed" },
-  2: { sv: "grodd", en: "sprout" },
-  3: { sv: "planta", en: "sapling" },
-  4: { sv: "blomma", en: "in bloom" },
-};
 
 export function conceptStrength(state: LearnerConceptState | undefined) {
   if (!state || state.exposureCount === 0) return 0;
@@ -51,17 +45,28 @@ export function levelFromXp(xp: number) {
   return { level, xp, into: xp - start, span: next - start, progress: (xp - start) / (next - start) };
 }
 
-export type VillagerProgress = {
-  villager: Villager;
+export type UnitProgress = {
+  unit: Unit;
   unlocked: boolean;
   total: number;
   met: number;
   strong: number;
-  // Enough met to open the next villager.
+  // Enough met to open the next unit.
   ready: boolean;
 };
 
+export type VillagerProgress = {
+  villager: Villager;
+  unlocked: boolean;
+  // Counted over the villager's open units only.
+  total: number;
+  met: number;
+  strong: number;
+  units: UnitProgress[];
+};
+
 export type GameProgress = ReturnType<typeof levelFromXp> & {
+  units: UnitProgress[];
   villagers: Record<VillagerId, VillagerProgress>;
   wordsMet: number;
   wordsTotal: number;
@@ -69,14 +74,26 @@ export type GameProgress = ReturnType<typeof levelFromXp> & {
   goal: VillagerId | null;
 };
 
-export function computeProgress(
-  concepts: Concept[],
-  states: LearnerConceptState[],
-  discoveredCount: number,
-  // Placement opens every villager up to this index without claiming mastery.
-  placedBand = 0,
-): GameProgress {
-  const bySlug = new Map(concepts.filter((c) => c.languageCode === "sv").map((c) => [c.slug, c]));
+export function computeProgress({
+  course,
+  villagers,
+  concepts,
+  states,
+  discoveredCount,
+  openThrough = 0,
+  startUnit = 0,
+}: {
+  course: Course;
+  villagers: readonly Villager[];
+  concepts: Concept[];
+  states: LearnerConceptState[];
+  discoveredCount: number;
+  // Placement opens every unit up to this index without claiming mastery.
+  openThrough?: number;
+  // Where placement suggested starting, for the goal marker.
+  startUnit?: number;
+}): GameProgress {
+  const bySlug = new Map(concepts.filter((c) => c.languageCode === course.languageCode).map((c) => [c.slug, c]));
   const byConcept = new Map(states.map((s) => [s.conceptId, s]));
   const stateFor = (slug: string) => {
     const concept = bySlug.get(slug);
@@ -86,10 +103,9 @@ export function computeProgress(
   let xp = discoveredCount * DISCOVERY_XP;
   let wordsMet = 0;
   let wordsTotal = 0;
-  const result = {} as Record<VillagerId, VillagerProgress>;
   let previousReady = true;
-  villagers.forEach((villager, index) => {
-    const slugs = villager.conceptSlugs.filter((slug) => bySlug.has(slug));
+  const units = course.units.map((unit, index): UnitProgress => {
+    const slugs = unit.slugs.filter((slug) => bySlug.has(slug));
     let met = 0;
     let strong = 0;
     for (const slug of slugs) {
@@ -101,20 +117,40 @@ export function computeProgress(
     wordsMet += met;
     wordsTotal += slugs.length;
     const ready = slugs.length > 0 && met >= Math.ceil(slugs.length * 0.6);
-    const unlocked = previousReady || index <= placedBand;
-    result[villager.id] = { villager, unlocked, total: slugs.length, met, strong, ready };
+    const unlocked = previousReady || index <= openThrough;
     previousReady = unlocked && ready;
+    return { unit, unlocked, total: slugs.length, met, strong, ready };
   });
 
+  const result = {} as Record<VillagerId, VillagerProgress>;
+  for (const villager of villagers) {
+    const own = units.filter((u) => u.unit.villager === villager.id);
+    const open = own.filter((u) => u.unlocked);
+    result[villager.id] = {
+      villager,
+      unlocked: open.length > 0,
+      total: open.reduce((sum, u) => sum + u.total, 0),
+      met: open.reduce((sum, u) => sum + u.met, 0),
+      strong: open.reduce((sum, u) => sum + u.strong, 0),
+      units: own,
+    };
+  }
+
   const level = levelFromXp(xp);
-  const open = (v: Villager) => result[v.id].unlocked && result[v.id].met < result[v.id].total;
-  const goal = (villagers.slice(placedBand).find(open) ?? villagers.find(open))?.id ?? null;
+  const open = (u: UnitProgress) => u.unlocked && u.met < u.total;
+  const goalUnit = units.slice(startUnit).find(open) ?? units.find(open);
   return {
     ...level,
+    units,
     villagers: result,
     wordsMet,
     wordsTotal,
     treeStage: Math.min(6, level.level - 1),
-    goal,
+    goal: goalUnit?.unit.villager ?? null,
   };
+}
+
+// The concepts a villager can teach right now: every open unit of theirs.
+export function teachableSlugs(progress: GameProgress, villagerId: VillagerId) {
+  return progress.villagers[villagerId]?.units.filter((u) => u.unlocked).flatMap((u) => u.unit.slugs) ?? [];
 }

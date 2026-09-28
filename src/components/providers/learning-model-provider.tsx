@@ -83,7 +83,13 @@ const LearningModelContext = createContext<LearningModelContextValue | null>(
 export function LearningModelProvider({
   children,
   learnerId = "demo",
-}: Readonly<{ children: React.ReactNode; learnerId?: string }>) {
+  languageCode,
+}: Readonly<{
+  children: React.ReactNode;
+  learnerId?: string;
+  // The island being played; it also becomes the learner's "continue" island.
+  languageCode?: TargetLanguageCode;
+}>) {
   const repository = useMemo(() => createLearningRepository(), []);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [states, setStates] = useState<LearnerConceptState[]>([]);
@@ -91,7 +97,7 @@ export function LearningModelProvider({
     emptyPracticeSnapshot,
   );
   const [targetLanguageCode, setTargetLanguageCode] =
-    useState<TargetLanguageCode>("sv");
+    useState<TargetLanguageCode>(languageCode ?? "sv");
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitchingLanguage, setIsSwitchingLanguage] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,8 +105,10 @@ export function LearningModelProvider({
   useEffect(() => {
     let cancelled = false;
 
-    repository
-      .getTargetLanguage()
+    (languageCode
+      ? repository.setTargetLanguage(languageCode).then(() => languageCode)
+      : repository.getTargetLanguage()
+    )
       .then(async (languageCode) => {
         const [snapshot, loadedPracticeSnapshot] = await Promise.all([
           repository.loadSnapshot(languageCode),
@@ -135,7 +143,7 @@ export function LearningModelProvider({
     return () => {
       cancelled = true;
     };
-  }, [repository]);
+  }, [repository, languageCode]);
 
   const selectTargetLanguage = useCallback(
     async (languageCode: TargetLanguageCode) => {

@@ -44,7 +44,7 @@ export class LiveVoiceTransport {
     this.update({ status: "error", error: message });
     this.cleanup();
   }
-  async start(scenarioId?: string) {
+  async start(scenarioId: string | undefined, languageCode: string, language: string, name: string) {
     this.update({ status: "connecting" });
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) throw new Error("This browser cannot use live voice. Typed practice is available.");
@@ -57,24 +57,24 @@ export class LiveVoiceTransport {
       }
       peer.ontrack = e => {
         this.audio.srcObject = new MediaStream([e.track]);
-        void this.audio.play().catch(() => this.update({ error: "Press play below to hear Elin." }));
+        void this.audio.play().catch(() => this.update({ error: `Press play below to hear ${name}.` }));
       };
       peer.onconnectionstatechange = () => {
         if (peer.connectionState === "failed" || peer.connectionState === "disconnected") this.fail("Voice connection lost. You can continue without a microphone.");
       };
       this.channel = peer.createDataChannel("oai-events");
-      let opening = "Hej! Jag heter Elin. Vad heter du?";
+      let opening = "";
       this.channel.onmessage = ({ data }) => {
         if (this.cancelled) return;
         try {
           const event = JSON.parse(data);
           if (event.type === "session.started") {
             this.update({ status: "live" });
-            this.send({ type: "session.instructions.append", delegation_id: null, content: `Greet the learner now in Swedish: ${opening} Then pause and listen patiently.` });
+            this.send({ type: "session.instructions.append", delegation_id: null, content: `Greet the learner now in ${language}: ${opening} Then pause and listen patiently.` });
             this.timers.push(setTimeout(() => this.close(), 180000));
           } else if (event.type === "session.input_transcript.delta" || event.type === "session.output_transcript.delta") {
             if (typeof event.delta !== "string" || !Number.isFinite(event.start_ms) || !Number.isFinite(event.end_ms)) return;
-            const fragment: VoiceFragment = { id: event.event_id, speaker: event.type === "session.input_transcript.delta" ? "learner" : "elin",
+            const fragment: VoiceFragment = { id: event.event_id, speaker: event.type === "session.input_transcript.delta" ? "learner" : "character",
               text: event.delta, startMs: event.start_ms, endMs: event.end_ms };
             this.update({ fragments: appendFragment(this.snapshot.fragments, fragment).slice(-600) });
           } else if (event.type === "session.usage.updated" || event.type === "session.closed") {
@@ -103,7 +103,7 @@ export class LiveVoiceTransport {
       });
       if (this.cancelled) return;
       const response = await fetch("/api/voice/session", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sdp: peer.localDescription?.sdp, scenarioId }), signal: this.abort.signal });
+        body: JSON.stringify({ sdp: peer.localDescription?.sdp, scenarioId, languageCode }), signal: this.abort.signal });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Voice could not connect.");
       opening = result.opening;

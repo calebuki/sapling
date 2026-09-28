@@ -1,5 +1,4 @@
-import { getCourse, type LessonExercise, type ListenSpeakItem } from "./course";
-import type { TargetLanguageCode } from "./languages";
+import type { Course, LessonExercise, ListenSpeakItem } from "./course";
 import type { Concept, LearnerConceptState } from "@/types/learning";
 
 export type ActivityMode = "encounter" | "recall" | "listen" | "dictation" | "transfer";
@@ -38,16 +37,15 @@ export function retrievalIntervalDays(state: LearnerConceptState) {
 }
 
 export function chooseNextActivity({
-  languageCode, concepts, states, attempts = [], now = Date.now(),
+  course, concepts, states, attempts = [], now = Date.now(),
 }: {
-  languageCode: TargetLanguageCode;
+  course: Course;
   concepts: Concept[];
   states: LearnerConceptState[];
   attempts?: SessionAttempt[];
   now?: number;
 }): AdaptiveActivity | null {
-  const course = getCourse(languageCode);
-  const bySlug = new Map(concepts.filter(c => c.languageCode === languageCode).map(c => [c.slug, c]));
+  const bySlug = new Map(concepts.filter(c => c.languageCode === course.languageCode).map(c => [c.slug, c]));
   const byId = new Map(states.map(s => [s.conceptId, s]));
   const entries = course.lessons.flatMap(lesson =>
     lesson.exercises.map(exercise => ({ lessonId: lesson.id, exercise, concept: bySlug.get(exercise.conceptSlug) })),
@@ -89,12 +87,6 @@ export function chooseNextActivity({
   });
   const selected = candidates.sort((a, b) => b.score - a.score)[0];
   return selected ?? null;
-}
-
-export function normalizeSwedish(text: string) {
-  // Swedish vowel distinctions are meaningful: never strip a/å/ä or o/ö.
-  return text.normalize("NFC").toLocaleLowerCase("sv-SE")
-    .replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
 
 export function applyObservation(current: LearnerConceptState, input: Observation, now = new Date().toISOString()): LearnerConceptState {

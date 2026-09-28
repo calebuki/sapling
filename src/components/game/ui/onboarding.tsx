@@ -5,20 +5,20 @@ import { createPortal } from "react-dom";
 import { ArrowRight, Compass, Sprout } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
-import { getCourse } from "@/lib/learning/course";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import {
   answerPlacement,
-  experienceOptions,
   placedBand,
   startPlacement,
+  unitsInBand,
   type Experience,
   type PlacementState,
 } from "@/lib/game/placement";
-import { getVillager, villagers } from "@/lib/game/villagers";
 import { sound } from "../audio/sfx";
+import { villagerById, useIsland } from "../island";
 import { updateSave, useGame } from "../store";
 import { ActivityView, type RecordFn } from "./lesson-round";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 type Chosen = Exclude<Experience, "new">;
 type Step =
@@ -26,16 +26,17 @@ type Step =
   | { kind: "placement"; experience: Chosen; state: PlacementState }
   | { kind: "result"; experience: Chosen; band: number; right: number; total: number };
 
-// First thing after stepping off the ferry: how much Swedish do you already have?
+// First thing after stepping off the ferry: how much of the language do you already have?
 export function Onboarding() {
   const experience = useGame((s) => s.save.experience);
   const phase = useGame((s) => s.phase);
   const model = useLearningModel();
+  const { code, course, placement, ui } = useIsland();
   const [step, setStep] = useState<Step>({ kind: "choose" });
   const available = useMemo(() => {
-    const course = new Set(getCourse("sv").lessons.flatMap((l) => l.exercises.map((e) => e.conceptSlug)));
-    return new Set(model.concepts.filter((c) => c.languageCode === "sv" && course.has(c.slug)).map((c) => c.slug));
-  }, [model.concepts]);
+    const taught = new Set(course.lessons.flatMap((l) => l.exercises.map((e) => e.conceptSlug)));
+    return new Set(model.concepts.filter((c) => c.languageCode === code && taught.has(c.slug)).map((c) => c.slug));
+  }, [model.concepts, code, course]);
 
   if (experience !== null || phase !== "explore" || model.isLoading) return null;
 
@@ -45,7 +46,7 @@ export function Onboarding() {
       updateSave({ experience: "new", placedBand: 0, english: "auto" });
       return;
     }
-    const state = startPlacement(id, available);
+    const state = startPlacement(placement, course.units, id, available);
     if (state.queue.length === 0) {
       updateSave({ experience: id, placedBand: 0 });
       return;
@@ -60,20 +61,20 @@ export function Onboarding() {
           <>
             <header className="grammar-head">
               <span className="grammar-badge">
-                <Compass size={16} /> <Sv text="Välkommen till Lilla Ö" en="Welcome to Little Island" />
+                <Compass size={16} /> <GlossedLine line={ui.welcomeTitle} />
               </span>
             </header>
             <h2 className="grammar-title">
-              <Sv text="Har du lärt dig svenska förut?" en="Have you learned Swedish before?" />
+              <GlossedLine line={ui.learnedBefore} />
             </h2>
             <p className="grammar-en">
               Using Duolingo? Pick the section you&apos;re on. Brand new learners start with the basics; everyone else takes a
               quick 2-minute check so we can skip what you already know.
             </p>
             <div className="experience-grid">
-              {experienceOptions.map((option) => (
+              {placement.options.map((option) => (
                 <button key={option.id} className="btn experience" onClick={() => choose(option.id)}>
-                  <SvLine line={option.title} as="strong" />
+                  <GlossedLine line={option.title} as="strong" />
                   <span className="experience-en">{option.title.en}</span>
                   <span className="experience-detail">{option.detail}</span>
                 </button>
@@ -87,7 +88,7 @@ export function Onboarding() {
             state={step.state}
             available={available}
             onDone={(state) => {
-              const band = placedBand(state);
+              const band = placedBand(placement, state);
               setStep({ kind: "result", experience: step.experience, band, right: state.answers.filter((a) => a.correct).length, total: state.answers.length });
             }}
           />
@@ -120,15 +121,16 @@ function PlacementRun({
   onDone: (state: PlacementState) => void;
 }) {
   const model = useLearningModel();
+  const { code, course, placement, ui, host } = useIsland();
   const [state, setState] = useState(initial);
   const [busy, setBusy] = useState(false);
   const started = useRef(0);
-  const course = getCourse("sv");
   const slug = state.queue[0];
-  const band = villagers[state.band];
+  const bandUnit = unitsInBand(placement, course.units, state.band)[0];
+  const teacher = villagerById(bandUnit?.villager ?? host);
 
   const activity = useMemo((): AdaptiveActivity | null => {
-    const concept = model.concepts.find((c) => c.languageCode === "sv" && c.slug === slug);
+    const concept = model.concepts.find((c) => c.languageCode === code && c.slug === slug);
     const lesson = course.lessons.find((l) => l.exercises.some((e) => e.conceptSlug === slug));
     const exercise = lesson?.exercises.find((e) => e.conceptSlug === slug);
     if (!concept || !lesson || !exercise) return null;
@@ -136,14 +138,19 @@ function PlacementRun({
     // Alternate hearing and building so the check samples both skills.
     const mode = listening && state.answers.length % 2 === 1 ? "listen" : "recall";
     return { id: `placement:${slug}`, conceptId: concept.id, lessonId: lesson.id, exercise, listening, mode, reason: "stretch" };
-  }, [slug, state.answers.length, model.concepts, course]);
+  }, [slug, state.answers.length, model.concepts, course, code]);
+
+  const pool = useMemo(
+    () => course.units.flatMap((u) => u.slugs).map((s) => model.concepts.find((c) => c.languageCode === code && c.slug === s)?.canonicalForm ?? "").filter(Boolean),
+    [course, model.concepts, code],
+  );
 
   useEffect(() => {
     started.current = performance.now();
   }, [state.answers.length]);
 
   const answer = async (correct: boolean) => {
-    const next = answerPlacement(state, correct, available);
+    const next = answerPlacement(placement, course.units, state, correct, available);
     if (next.done || next.queue.length === 0) onDone({ ...next, done: true });
     else setState(next);
   };
@@ -164,7 +171,7 @@ function PlacementRun({
           latencyMs: Math.round(performance.now() - started.current),
           response: p.response,
           expected: p.expected,
-          context: { source: "placement", mode: activity.mode, input: p.input, band: state.band, villager: band.id },
+          context: { source: "placement", mode: activity.mode, input: p.input, band: state.band, villager: teacher.id },
         });
       } catch {
         // Placement still works offline; the lesson will pick this up again.
@@ -179,31 +186,31 @@ function PlacementRun({
     <>
       <header className="grammar-head">
         <span className="grammar-badge">
-          <Compass size={16} /> <Sv text="Snabbkoll" en="Quick check" />
+          <Compass size={16} /> <GlossedLine line={ui.quickCheck} />
         </span>
         <button className="grammar-skip" onClick={() => onDone({ ...state, done: true })}>
-          <Sv text="Hoppa över" en="Skip" />
+          <GlossedLine line={ui.skip} />
         </button>
       </header>
       <p className="grammar-teacher">
-        <span className="dot" style={{ background: band.look.accent }} /> {band.name}&apos;s phrases · question {asked + 1}
+        <span className="dot" style={{ background: teacher.look.accent }} /> {bandUnit?.title.en ?? teacher.name} · question {asked + 1}
       </p>
       <div className="lesson placement">
         {activity ? (
           <ActivityView
             key={activity.id + asked}
             activity={activity}
-            villager={getVillager("elin")}
+            villager={villagerById(host)}
             name={null}
             state={undefined}
-            pool={villagers.flatMap((v) => v.conceptSlugs).map((s) => model.concepts.find((c) => c.slug === s)?.canonicalForm ?? "").filter(Boolean)}
+            pool={pool}
             busy={busy}
             onRecord={record}
           />
         ) : null}
         <div className="dialogue-actions">
           <button className="btn btn-quiet" disabled={busy} onClick={() => { sound.play("click"); void answer(false); }}>
-            <Sv text="Jag vet inte" en="I don't know" />
+            <GlossedLine line={ui.dontKnow} />
           </button>
         </div>
       </div>
@@ -214,33 +221,36 @@ function PlacementRun({
 const listNames = (names: string[]) => names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 
 function PlacementResult({ band, right, total, onDone }: { band: number; right: number; total: number; onDone: () => void }) {
-  const start = villagers[band];
+  const { code, course, placement, ui, host } = useIsland();
+  const opened = course.units.slice(0, placement.bands[band + 1] ?? course.units.length);
+  const start = villagerById(unitsInBand(placement, course.units, band)[0]?.villager ?? host);
+  const first = villagerById(host);
+  const people = [...new Set(opened.map((u) => u.villager))].map(villagerById);
   return (
     <>
       <header className="grammar-head">
         <span className="grammar-badge">
-          <Sprout size={16} /> <Sv text="Klart!" en="Done!" />
+          <Sprout size={16} /> <GlossedLine line={ui.done} />
         </span>
       </header>
       <h2 className="grammar-title">
-        {band === 0 ? (
-          <Sv text="Vi börjar från början!" en="We'll start at the beginning!" />
-        ) : (
-          <Sv text={`Du börjar hos ${start.name}!`} en={`You start with ${start.name}!`} />
-        )}
+        <GlossedLine line={band === 0 ? ui.startFromTop : ui.startWith(start.name)} />
       </h2>
       <p className="grammar-en">
         You got {right} of {total} right.{" "}
         {band === 0
-          ? "Elin on the dock will teach you the basics, with short grammar tips along the way."
-          : `${listNames(villagers.slice(0, band + 1).map((v) => v.name))} are ready to talk. Say hi to Elin on the dock first, then head to ${start.name} at ${start.place.en.toLowerCase()}.`}
+          ? `${first.name} will teach you the basics of ${getTargetLanguage(code).name}, with short grammar tips along the way.`
+          : `${listNames(people.map((v) => v.name))} are ready to talk. Say hi to ${first.name} first, then head to ${start.name} at ${start.place.en.toLowerCase()}.`}
       </p>
       <ul className="placement-open">
-        {villagers.map((v, i) => (
-          <li key={v.id} className={i <= band ? "is-open" : ""}>
-            <span className="dot" style={{ background: v.look.accent }} /> {v.name} · <Sv text={v.place.sv} en={v.place.en} />
-          </li>
-        ))}
+        {course.units.map((unit, i) => {
+          const teacher = villagerById(unit.villager);
+          return (
+            <li key={unit.id} className={i < opened.length ? "is-open" : ""}>
+              <span className="dot" style={{ background: teacher.look.accent }} /> <Glossed text={unit.title.t} en={unit.title.en} /> · {teacher.name}
+            </li>
+          );
+        })}
       </ul>
       <p className="grammar-en grammar-note">
         Anything you got right already counts as practice. Anything you missed will come up in lessons, and nothing is marked
@@ -248,7 +258,7 @@ function PlacementResult({ band, right, total, onDone }: { band: number; right: 
       </p>
       <footer className="grammar-foot">
         <button className="btn btn-primary" autoFocus onClick={onDone}>
-          <Sv text="Då kör vi!" en="Let's go!" /> <ArrowRight size={18} />
+          <GlossedLine line={ui.letsGo} /> <ArrowRight size={18} />
         </button>
       </footer>
     </>

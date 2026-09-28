@@ -1,10 +1,9 @@
 "use client";
 
-import { getDiscovery } from "@/lib/game/discoveries";
-import { ui } from "@/lib/game/ui-text";
 import type { VillagerId } from "@/lib/game/villagers";
 import { sound } from "./audio/sfx";
-import { speakSwedish } from "./audio/speech";
+import { speak } from "./audio/speech";
+import { island } from "./island";
 import { emote, getGame, runtime, setGame, toast, updateSave, type Interactable } from "./store";
 
 // The few verbs the whole game is built on: walk, look, talk.
@@ -30,16 +29,16 @@ export function endDialogue() {
 }
 
 export function discover(id: string) {
-  const item = getDiscovery(id);
+  const item = island().discoveries.find((d) => d.id === id);
   if (!item) return;
   const { save } = getGame();
   if (!save.discovered.includes(id)) {
     updateSave({ discovered: [...save.discovered, id] });
     sound.play("discover");
     emote("player", "happy", 1200);
-    toast("word", ui.newWord, { sv: item.sv, en: item.en });
+    toast("word", island().ui.newWord, { t: item.t, en: item.en });
   } else {
     sound.play("pop");
   }
-  void speakSwedish(item.sv, { who: "player" });
+  void speak(item.t, { who: "player" });
 }

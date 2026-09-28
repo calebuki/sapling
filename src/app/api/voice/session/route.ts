@@ -4,8 +4,14 @@ import { mapConcept, mapState } from "@/lib/repositories/supabase-learning-repos
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { voiceContext, voiceInstructions } from "@/lib/voice/pedagogy";
 import { hasSupabase } from "@/lib/env";
+import { supportedLanguageCodes } from "@/lib/learning/languages";
+import { allRows } from "@/lib/supabase/pages";
 
-const inputSchema = z.object({ sdp: z.string().min(1).max(60000), scenarioId: z.string().max(80).optional() });
+const inputSchema = z.object({
+  sdp: z.string().min(1).max(60000),
+  scenarioId: z.string().max(80).optional(),
+  languageCode: z.enum(supportedLanguageCodes).default("sv"),
+});
 export const maxDuration = 30;
 
 export async function GET() {
@@ -25,20 +31,26 @@ export async function POST(request: Request) {
   if (Number(request.headers.get("content-length")) > 65000) return new Response(null, { status: 413 });
   const input = inputSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return Response.json({ error: "Invalid voice request." }, { status: 400 });
-  const [catalog, progress] = await Promise.all([
-    db.from("concepts").select("*").eq("language_code", "sv").eq("is_active", true).order("sort_order"),
-    db.from("learner_concept_state").select("*").eq("user_id", auth.user.id),
-  ]);
-  if (catalog.error || progress.error) return Response.json({ error: "Your learning context could not be loaded." }, { status: 503 });
-  const concepts = catalog.data.map(mapConcept);
-  const states = progress.data.map(mapState);
+  const languageCode = input.data.languageCode;
+  let concepts, states;
+  try {
+    const [catalog, progress] = await Promise.all([
+      allRows((from, to) => db.from("concepts").select("*").eq("language_code", languageCode).eq("is_active", true).order("sort_order").order("id").range(from, to)),
+      allRows((from, to) => db.from("learner_concept_state").select("*").eq("user_id", auth.user.id).order("concept_id").range(from, to)),
+    ]);
+    concepts = catalog.map(mapConcept);
+    const ids = new Set(concepts.map((c) => c.id));
+    states = progress.filter((s) => ids.has(s.concept_id)).map(mapState);
+  } catch {
+    return Response.json({ error: "Your learning context could not be loaded." }, { status: 503 });
+  }
   const recommendation = choosePracticeScenario({
-    languageCode: "sv", concepts, states,
+    languageCode, concepts, states,
     snapshot: { memories: [], continuity: [], recentScenarioIds: [], completedScenarioIds: [] },
   });
   // The client may suggest a scene, but cannot override pedagogical eligibility.
   const requested = input.data.scenarioId ? choosePracticeScenario({
-    languageCode: "sv", concepts, states, scenarioIds: [input.data.scenarioId],
+    languageCode, concepts, states, scenarioIds: [input.data.scenarioId],
     snapshot: { memories: [], continuity: [], recentScenarioIds: [], completedScenarioIds: [] },
   }) : recommendation;
   const chosen = requested.encounteredConceptSlugs.length >= requested.scenario.minimumEncountered ? requested : recommendation;
@@ -59,7 +71,7 @@ export async function POST(request: Request) {
     const result = await upstream.json();
     if (typeof result.session?.id !== "string" || typeof result.transport?.sdp !== "string") throw new Error("Invalid voice response");
     const saved = await db.from("learning_sessions").update({
-      configuration: { language_code: "sv", scenario_id: chosen.scenario.id, live_id: result.session.id,
+      configuration: { language_code: languageCode, scenario_id: chosen.scenario.id, live_id: result.session.id,
         targets: context.targets.map(t => t.slug), audio_retained: false },
     }).eq("id", reservation.data).eq("user_id", auth.user.id);
     if (saved.error) throw new Error("Could not save session");

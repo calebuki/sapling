@@ -2,21 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { loadIsland } from "@/content/islands";
+import type { IslandPack } from "@/content/types";
+import { openThrough } from "@/lib/game/placement";
 import { computeProgress } from "@/lib/game/progression";
-import { ui } from "@/lib/game/ui-text";
-import { villagers, type VillagerId } from "@/lib/game/villagers";
+import type { VillagerId } from "@/lib/game/villagers";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "./audio/sfx";
+import { island, IslandContext, setIsland, useIsland, villagerById } from "./island";
 import { getGame, loadSave, runtime, setGame, toast, useGame } from "./store";
 import { Dialogue } from "./ui/dialogue";
+import { registerGloss, TooltipLayer } from "./ui/glossed";
 import { Hud, Toasts } from "./ui/hud";
 import { Onboarding } from "./ui/onboarding";
 import { Overlays } from "./ui/overlays";
-import { registerGloss, TooltipLayer } from "./ui/sv";
 import { TitleScreen } from "./ui/title-screen";
 import { useKeyboard } from "./world/actors";
 import { Scene } from "./world/scene";
 import { WorldLabels } from "./world-labels";
-import { spawn } from "@/lib/game/world";
 
 // Rendered client-only, so the device can be inspected up front.
 function useQuality() {
@@ -27,6 +30,7 @@ function useQuality() {
 }
 
 function beginPlay() {
+  const { spawn } = island().world;
   sound.ensure();
   sound.setMuted(getGame().muted);
   sound.setMusic(getGame().music);
@@ -40,50 +44,49 @@ function beginPlay() {
   window.setTimeout(() => setGame({ phase: "explore" }), 2600);
 }
 
-// Signed-out visitors see the living island behind the title and a sign-in door.
-export function GameTitleOnly() {
-  const quality = useQuality();
+// Loads the island for this language, then hands it to the game.
+export function Game({ code }: { code: TargetLanguageCode }) {
+  const [pack, setPack] = useState<IslandPack | null>(null);
+  useEffect(() => {
+    let active = true;
+    void loadIsland(code).then((loaded) => {
+      if (!active || !loaded) return;
+      setIsland(loaded);
+      setPack(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, [code]);
+  if (pack?.code !== code) return <div className="game-boot" role="status" />;
   return (
-    <div className="game-root">
-      <Scene treeStage={3} goal={null} unlocked={allUnlocked} quality={quality} />
-      <WorldLabels unlocked={allUnlocked} />
-      <TitleScreen ready needsSignIn onPlay={() => undefined} />
-      <TooltipLayer />
-    </div>
+    <IslandContext.Provider value={pack}>
+      <IslandGame key={code} />
+    </IslandContext.Provider>
   );
 }
 
-const allUnlocked = { elin: true, bosse: true, stina: true, astrid: true } as Record<VillagerId, boolean>;
-
-export function Game() {
+function IslandGame() {
   const model = useLearningModel();
   const quality = useQuality();
+  const { code, course, villagers, placement, ui, host } = useIsland();
   const phase = useGame((s) => s.phase);
   const talkingTo = useGame((s) => s.talkingTo);
   const discovered = useGame((s) => s.save.discovered);
   const name = useGame((s) => s.save.name);
   const introDone = useGame((s) => s.save.introDone);
   const placed = useGame((s) => s.save.placedBand);
-  const loaded = useGame((s) => s.loadedFor === model.learnerId);
+  const loaded = useGame((s) => s.loadedFor === `${model.learnerId}:${code}`);
   const [liveAvailable, setLiveAvailable] = useState(false);
   useKeyboard();
 
   useEffect(() => {
-    loadSave(model.learnerId);
-  }, [model.learnerId]);
+    loadSave(model.learnerId, code);
+  }, [model.learnerId, code]);
 
   useEffect(() => {
     if (name) registerGloss(name, "(your name)");
   }, [name]);
-
-  // The island is Swedish-only; older accounts may still have Danish selected.
-  const { isLoading, isSwitchingLanguage, selectTargetLanguage } = model;
-  const languageCode = model.targetLanguage.code;
-  useEffect(() => {
-    if (!isLoading && languageCode !== "sv" && !isSwitchingLanguage) {
-      void selectTargetLanguage("sv").catch(() => undefined);
-    }
-  }, [isLoading, isSwitchingLanguage, languageCode, selectTargetLanguage]);
 
   useEffect(() => {
     if (model.mode !== "supabase") return;
@@ -98,14 +101,25 @@ export function Game() {
   }, [model.mode]);
 
   const progress = useMemo(
-    () => computeProgress(model.concepts, model.states, discovered.length, placed),
-    [model.concepts, model.states, discovered.length, placed],
+    () =>
+      computeProgress({
+        course,
+        villagers,
+        concepts: model.concepts,
+        states: model.states,
+        discoveredCount: discovered.length,
+        openThrough: openThrough(placement, course.units, placed),
+        startUnit: placement.bands[placed] ?? 0,
+      }),
+    [course, villagers, placement, model.concepts, model.states, discovered.length, placed],
   );
+
+  const ready = loaded && !model.isLoading && model.targetLanguage.code === code;
 
   // Celebrate new levels and newly unlocked villagers, but not on first load.
   const seen = useRef<{ level: number; unlocked: Set<VillagerId> } | null>(null);
   useEffect(() => {
-    if (model.isLoading || !loaded || languageCode !== "sv") return;
+    if (!ready) return;
     const unlocked = new Set(villagers.filter((v) => progress.villagers[v.id].unlocked).map((v) => v.id));
     const previous = seen.current;
     seen.current = { level: progress.level, unlocked };
@@ -113,30 +127,29 @@ export function Game() {
     if (progress.level > previous.level) {
       sound.play("levelup");
       setGame((s) => ({ celebration: s.celebration + 1 }));
-      toast("level", { sv: `${ui.levelUp.sv} ${ui.level.sv} ${progress.level}`, en: `${ui.levelUp.en} Level ${progress.level}` }, ui.treeGrows, 5200);
+      toast("level", { t: `${ui.levelUp.t} ${ui.level.t} ${progress.level}`, en: `${ui.levelUp.en} Level ${progress.level}` }, ui.treeGrows, 5200);
     }
     for (const id of unlocked) {
       if (!previous.unlocked.has(id)) {
-        const villager = villagers.find((v) => v.id === id)!;
+        const villager = villagerById(id);
         window.setTimeout(() => {
           sound.play("sparkle");
           toast("friend", ui.newFriend(villager.name), villager.place, 5200);
         }, 1400);
       }
     }
-  }, [progress, model.isLoading, loaded, languageCode]);
+  }, [progress, ready, villagers, ui]);
 
   const unlocked = useMemo(
     () => Object.fromEntries(villagers.map((v) => [v.id, progress.villagers[v.id].unlocked])) as Record<VillagerId, boolean>,
-    [progress],
+    [progress, villagers],
   );
 
-  const ready = loaded && !model.isLoading && model.targetLanguage.code === "sv";
   return (
-    <div className={`game-root phase-${phase}`}>
+    <div className={`game-root island-${code} phase-${phase}`}>
       <Scene
         treeStage={phase === "title" ? Math.max(2, progress.treeStage) : progress.treeStage}
-        goal={phase === "title" ? null : introDone ? progress.goal : "elin"}
+        goal={phase === "title" ? null : introDone ? progress.goal : host}
         unlocked={unlocked}
         quality={quality}
       />
@@ -146,7 +159,7 @@ export function Game() {
       <Toasts />
       {ready ? <Onboarding /> : null}
       <Overlays progress={progress} />
-      <TitleScreen ready={ready} needsSignIn={false} onPlay={beginPlay} />
+      <TitleScreen ready={ready} onPlay={beginPlay} />
       {model.error ? (
         <p className="game-error" role="alert">
           {model.error}

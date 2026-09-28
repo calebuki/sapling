@@ -1,8 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { Line } from "@/lib/game/line";
 import type { Experience } from "@/lib/game/placement";
-import type { Line, VillagerId } from "@/lib/game/villagers";
+import type { VillagerId } from "@/lib/game/villagers";
+import type { TargetLanguageCode } from "@/lib/learning/languages";
 
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
 export type Phase = "title" | "arrival" | "explore" | "dialogue";
@@ -10,7 +12,7 @@ export type Overlay = null | "ordbok" | "menu";
 export type Toast = { id: number; kind: "word" | "level" | "info" | "friend"; line: Line; detail?: Line };
 
 export type SaveData = {
-  v: 2;
+  v: 3;
   name: string | null;
   introDone: boolean;
   discovered: string[];
@@ -19,7 +21,7 @@ export type SaveData = {
   experience: Experience | null;
   placedBand: number;
   grammarSeen: string[];
-  // English under Swedish lines: "auto" shows it to brand-new learners early on.
+  // English under target-language lines: "auto" shows it to brand-new learners early on.
   english: "auto" | "on" | "off";
 };
 
@@ -38,7 +40,7 @@ export type GameState = {
 };
 
 const emptySave: SaveData = {
-  v: 2,
+  v: 3,
   name: null,
   introDone: false,
   discovered: [],
@@ -64,6 +66,7 @@ let state: GameState = {
 
 const listeners = new Set<() => void>();
 let saveKey: string | null = null;
+let currentPlayerKey: string | null = null;
 
 export function getGame() {
   return state;
@@ -75,6 +78,7 @@ export function setGame(patch: Partial<GameState> | ((current: GameState) => Par
   if ("save" in next && saveKey) {
     try {
       window.localStorage.setItem(saveKey, JSON.stringify(state.save));
+      if (currentPlayerKey) window.localStorage.setItem(currentPlayerKey, JSON.stringify({ name: state.save.name, outfit: state.save.outfit }));
     } catch {
       // Storage can be unavailable (private mode); the island still works this session.
     }
@@ -104,29 +108,47 @@ export function useGame<T>(selector: (state: GameState) => T): T {
   );
 }
 
-export function loadSave(learnerId: string) {
-  saveKey = `sapling:island:v2:${learnerId}`;
-  let save = emptySave;
+// Each island keeps its own save; your name and look travel with you.
+export function saveKeyFor(learnerId: string, code: TargetLanguageCode) {
+  return `sapling:island:v3:${learnerId}:${code}`;
+}
+const playerKey = (learnerId: string) => `sapling:player:${learnerId}`;
+
+export function readSave(learnerId: string, code: TargetLanguageCode): SaveData | null {
+  try {
+    // Swedish saves from before there were other islands.
+    const raw = window.localStorage.getItem(saveKeyFor(learnerId, code)) ?? (code === "sv" ? window.localStorage.getItem(`sapling:island:v2:${learnerId}`) : null);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Omit<Partial<SaveData>, "v"> & { v?: number };
+    if (parsed.v !== 2 && parsed.v !== 3) return null;
+    return {
+      ...emptySave,
+      ...parsed,
+      v: 3,
+      discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
+      grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
+      // Saves from before onboarding existed already met the host; don't quiz them again.
+      experience: parsed.experience ?? (parsed.introDone ? "little" : null),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadSave(learnerId: string, code: TargetLanguageCode) {
+  saveKey = saveKeyFor(learnerId, code);
+  currentPlayerKey = playerKey(learnerId);
+  let save = readSave(learnerId, code);
   let audio = { muted: false, music: true };
   try {
-    const raw = window.localStorage.getItem(saveKey);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<SaveData>;
-      if (parsed.v === 2) {
-        save = {
-          ...emptySave,
-          ...parsed,
-          discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
-          grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
-          // Saves from before onboarding existed already met Elin; don't quiz them again.
-          experience: parsed.experience ?? (parsed.introDone ? "little" : null),
-        };
-      }
+    if (!save) {
+      const player = JSON.parse(window.localStorage.getItem(currentPlayerKey) ?? "{}") as { name?: string | null; outfit?: number };
+      save = { ...emptySave, name: player.name ?? null, outfit: player.outfit ?? 0 };
     }
     const audioRaw = window.localStorage.getItem("sapling:audio:v2");
     if (audioRaw) audio = { ...audio, ...JSON.parse(audioRaw) };
   } catch {}
-  state = { ...state, save, muted: Boolean(audio.muted), music: audio.music !== false, loadedFor: learnerId };
+  state = { ...state, phase: "title", overlay: null, nearby: null, talkingTo: null, save: save ?? emptySave, muted: Boolean(audio.muted), music: audio.music !== false, loadedFor: `${learnerId}:${code}` };
   listeners.forEach((listener) => listener());
 }
 

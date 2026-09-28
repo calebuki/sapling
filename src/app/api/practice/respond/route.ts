@@ -3,7 +3,7 @@ import { textModel } from "@/lib/ai-models";
 import { z } from "zod";
 
 import { hasSupabase } from "@/lib/env";
-import { getTargetLanguage } from "@/lib/learning/languages";
+import { getTargetLanguage, supportedLanguageCodes } from "@/lib/learning/languages";
 import {
   getPracticeScenario,
   getPracticeCharacter,
@@ -22,7 +22,7 @@ const memoryCategorySchema = z.enum([
 ]);
 
 const requestSchema = z.object({
-  languageCode: z.enum(["da", "sv"]),
+  languageCode: z.enum(supportedLanguageCodes),
   scenarioId: z.string().min(1).max(80),
   turnIndex: z.number().int().min(0).max(20),
   inputMode: z.enum(["speech", "text"]).default("speech"),
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
       maxOutputTokens: 1_100,
       maxRetries: 1,
       timeout: { totalMs: 15_000 },
-      system: `You conduct a short ${language.name} practice conversation for an A0–A1 learner. The reply mode is ${input.inputMode}. For typed replies, preserve the text exactly and never apply speech-recognition corrections. Mark goalProgress as 1 only when the learner has accomplished the communicative goal; reaching a turn limit is not success.
+      system: `You conduct a short ${language.name} practice conversation for an A1–A2 learner. The reply mode is ${input.inputMode}. For typed replies, preserve the text exactly and never apply speech-recognition corrections. Mark goalProgress as 1 only when the learner has accomplished the communicative goal; reaching a turn limit is not success.
 
 Stay in character as ${character.name}: ${character.description} The active situation and its communicative goal are authoritative. Respond primarily in ${language.name}, using short natural sentences and vocabulary appropriate to the learner's encountered concepts. Provide an accurate English support translation separately. Do not correct every error or interrupt when meaning is clear. If the learner intentionally changes the subject, acknowledge it in at most one short clause and steer naturally back to the situation. Never trap the learner and never shame mistakes.
 

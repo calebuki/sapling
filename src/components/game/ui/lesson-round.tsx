@@ -6,14 +6,17 @@ import { useLearningModel } from "@/components/providers/learning-model-provider
 import { chooseNextActivity, type AdaptiveActivity, type SessionAttempt } from "@/lib/learning/adaptive";
 import { gatedSlugs } from "@/lib/game/grammar";
 import { buildTiles, checkAnswer, expectedFor, meaningOf, type Check as CheckResult } from "@/lib/game/lesson";
-import { conceptStage, conceptXp, stageNames, type Stage } from "@/lib/game/progression";
-import { ui } from "@/lib/game/ui-text";
-import { nudges, pick, praise, roundDone, type Line, type Villager } from "@/lib/game/villagers";
+import { pick, type Line } from "@/lib/game/line";
+import { conceptStage, conceptXp, type Stage } from "@/lib/game/progression";
+import { aria } from "@/lib/game/ui-text";
+import type { Villager } from "@/lib/game/villagers";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import type { LearnerConceptState } from "@/types/learning";
 import { sound } from "../audio/sfx";
-import { canRecognizeSpeech, listenSwedish, speakSwedish, stopListening } from "../audio/speech";
+import { canRecognizeSpeech, listen, speak, stopListening } from "../audio/speech";
+import { island, useIsland } from "../island";
 import { emote, useGame } from "../store";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 import { StageIcon } from "./stage-icon";
 
 const ROUND_LENGTH = 8;
@@ -33,6 +36,8 @@ type RoundSummary = { correct: number; total: number; xp: number; grown: Array<{
 // evidence recording and the round summary. Villagers present it their own way.
 export function useLessonRound(
   villager: Villager,
+  // The phrases this villager can teach right now.
+  slugs: readonly string[],
   onFinish: (summary: RoundSummary) => void,
   {
     roundLength = ROUND_LENGTH,
@@ -46,24 +51,25 @@ export function useLessonRound(
   } = {},
 ) {
   const model = useLearningModel();
+  const { code, course, grammar, script } = useIsland();
   const name = useGame((s) => s.save.name);
   const grammarSeen = useGame((s) => s.save.grammarSeen);
   // Phrases behind an unread grammar tip wait, unless they were met before tips existed.
   const scoped = useMemo(() => {
-    const gated = gatedSlugs(grammarSeen);
+    const gated = gatedSlugs(grammar, grammarSeen);
     const exposed = new Set(model.states.filter((s) => s.exposureCount > 0).map((s) => s.conceptId));
     const open = model.concepts.filter(
-      (c) => c.languageCode === "sv" && villager.conceptSlugs.includes(c.slug) && (!gated.has(c.slug) || exposed.has(c.id)),
+      (c) => c.languageCode === code && slugs.includes(c.slug) && (!gated.has(c.slug) || exposed.has(c.id)),
     );
     // "later" phrases wait until the villager's own situation is familiar.
     const familiar = open.filter((c) => exposed.has(c.id) && !later.includes(c.slug)).length >= 5;
     return familiar ? open : open.filter((c) => !later.includes(c.slug) || exposed.has(c.id));
     // Fixed for the round: evidence recorded mid-round must not reshuffle the pool.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model.concepts, villager, grammarSeen]);
+  }, [model.concepts, slugs, grammarSeen]);
   const [attempts, setAttempts] = useState<SessionAttempt[]>([]);
   const [activity, setActivity] = useState<AdaptiveActivity | null>(() =>
-    adapt(chooseNextActivity({ languageCode: "sv", concepts: scoped, states: model.states }), model.states),
+    adapt(chooseNextActivity({ course, concepts: scoped, states: model.states }), model.states),
   );
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [queued, setQueued] = useState<AdaptiveActivity | null>(null);
@@ -134,7 +140,7 @@ export function useLessonRound(
     const upcoming =
       nextAttempts.length >= roundLength
         ? null
-        : adapt(chooseNextActivity({ languageCode: "sv", concepts: scoped, states: freshStates, attempts: nextAttempts }), freshStates);
+        : adapt(chooseNextActivity({ course, concepts: scoped, states: freshStates, attempts: nextAttempts }), freshStates);
     const gained = Math.max(0, conceptXp(after) - conceptXp(stateBefore));
     const from = conceptStage(stateBefore);
     const to = conceptStage(after);
@@ -162,14 +168,14 @@ export function useLessonRound(
     setOutcome({
       correct: params.successful,
       check: params.check,
-      line: params.successful ? pick(praise) : pick(nudges),
+      line: params.successful ? pick(script.praise) : pick(script.nudges),
       expected: params.expected,
       gained,
       stageUp,
     });
     // The recorded clip only fits when the answer is the course sentence itself (scenes vary it).
     const clipId = params.expected === expectedFor(activity.exercise, name) ? activity.exercise.audioId : undefined;
-    void speakSwedish(params.expected, { clipId, who: villager.id, pitch: villager.voicePitch });
+    void speak(params.expected, { clipId, who: villager.id, pitch: villager.voicePitch });
     setBusy(false);
   }
 
@@ -189,35 +195,36 @@ export function useLessonRound(
 }
 
 export function Feedback({ outcome, onNext }: { outcome: Outcome; onNext: () => void }) {
+  const { ui, script } = useIsland();
   const next = useRef<HTMLButtonElement>(null);
   useEffect(() => next.current?.focus(), []);
   return (
     <div className={`lesson-feedback ${outcome.correct ? "is-correct" : "is-wrong"}`} role="status">
       <div className="lesson-feedback-head">
         <span className="lesson-feedback-icon">{outcome.correct ? <Check size={22} /> : <X size={22} />}</span>
-        <SvLine line={outcome.line} as="strong" />
+        <GlossedLine line={outcome.line} as="strong" />
         {outcome.correct && outcome.gained > 0 ? <span className="xp-pop">+{outcome.gained}</span> : null}
       </div>
       <p className="lesson-answer">
-        <Sv text={outcome.expected} />
-        <button className="icon-button" aria-label="Lyssna igen (listen again)" onClick={() => void speakSwedish(outcome.expected)}>
+        <Glossed text={outcome.expected} />
+        <button className="icon-button" aria-label={aria(ui.listenAgain)} onClick={() => void speak(outcome.expected)}>
           <Volume2 size={18} />
         </button>
       </p>
-      {outcome.check === "accent" || outcome.check === "typo" ? (
+      {outcome.check === "accent" || outcome.check === "typo" || outcome.check === "article" ? (
         <p className="lesson-note">
-          <Sv text="Titta på stavningen!" en="Look at the spelling!" />
+          <GlossedLine line={outcome.check === "article" ? ui.article : ui.spelling} />
         </p>
       ) : null}
       {outcome.stageUp ? (
         <p className="lesson-grow">
           <StageIcon stage={outcome.stageUp.to} />
-          <Sv text={`Ditt ord växer: ${stageNames[outcome.stageUp.to].sv}!`} en={`Your word grows: ${stageNames[outcome.stageUp.to].en}!`} />
+          <GlossedLine line={ui.wordGrows(script.stageNames[outcome.stageUp.to])} />
         </p>
       ) : null}
       <div className="dialogue-actions">
         <button ref={next} className="btn btn-primary" onClick={onNext}>
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
+          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
         </button>
       </div>
     </div>
@@ -260,6 +267,7 @@ export function ActivityView({
   busy: boolean;
   onRecord: RecordFn;
 }) {
+  const { code, ui } = useIsland();
   const exercise = activity.exercise;
   const expected = expectedFor(exercise, name);
   const meaning = meaningOf(exercise, name);
@@ -270,9 +278,9 @@ export function ActivityView({
   const play = (slow = false) => {
     setReplays((r) => r + 1);
     if (activity.mode === "listen" || activity.mode === "dictation") {
-      return speakSwedish(listening!.text, { clipId: listening!.audioId, who: villager.id, pitch: villager.voicePitch, slow });
+      return speak(listening!.text, { clipId: listening!.audioId, who: villager.id, pitch: villager.voicePitch, slow });
     }
-    return speakSwedish(expected, { ...voice, slow });
+    return speak(expected, { ...voice, slow });
   };
 
   useEffect(() => {
@@ -285,10 +293,10 @@ export function ActivityView({
 
   const listenButtons = (
     <div className="listen-buttons">
-      <button className="icon-button big" aria-label="Lyssna (listen)" onClick={() => void play()}>
+      <button className="icon-button big" aria-label={aria(ui.listen)} onClick={() => void play()}>
         <Volume2 size={22} />
       </button>
-      <button className="icon-button" aria-label="Långsamt (slowly)" onClick={() => void play(true)}>
+      <button className="icon-button" aria-label={aria(ui.slowly)} onClick={() => void play(true)}>
         <Snail size={18} />
       </button>
     </div>
@@ -298,10 +306,10 @@ export function ActivityView({
     return (
       <div className="activity">
         <p className="activity-kicker">
-          <SvLine line={ui.newPhrase} />
+          <GlossedLine line={ui.newPhrase} />
         </p>
         <div className="activity-phrase">
-          <Sv text={expected} en={meaning} as="h3" />
+          <Glossed text={expected} en={meaning} as="h3" />
           {listenButtons}
         </div>
         <p className="activity-meaning">{meaning}</p>
@@ -313,7 +321,7 @@ export function ActivityView({
             autoFocus
             onClick={() => void onRecord({ successful: true, assisted: true, response: "", expected, check: "exact", replays, input: "text" })}
           >
-            <SvLine line={ui.next} /> <ArrowRight size={18} />
+            <GlossedLine line={ui.next} /> <ArrowRight size={18} />
           </button>
         </div>
       </div>
@@ -325,7 +333,7 @@ export function ActivityView({
     return (
       <div className="activity">
         <p className="activity-kicker">
-          <SvLine line={ui.whatDoesItMean} />
+          <GlossedLine line={ui.whatDoesItMean} />
         </p>
         <div className="activity-phrase is-hidden">{listenButtons}</div>
         <div className="choice-grid">
@@ -358,13 +366,13 @@ export function ActivityView({
     return (
       <div className="activity">
         <p className="activity-kicker">
-          <SvLine line={ui.whatDidYouHear} />
+          <GlossedLine line={ui.whatDidYouHear} />
         </p>
         <div className="activity-phrase is-hidden">{listenButtons}</div>
         <FreeAnswer
           busy={busy}
           onSubmit={(answer, via, hinted) => {
-            const check = checkAnswer(answer, listening.text);
+            const check = checkAnswer(answer, listening.text, code);
             return onRecord({ successful: check !== "wrong", assisted: hinted, response: answer, expected: listening.text, check, replays: Math.max(0, replays - 1), input: via });
           }}
           hint={listening.text}
@@ -373,14 +381,14 @@ export function ActivityView({
     );
   }
 
-  // Recall and transfer: produce the Swedish for an English meaning.
+  // Recall and transfer: produce the target language for an English meaning.
   const useTiles = activity.mode === "recall" && (state?.recall ?? null) === null;
   // Open prompts describe a task ("Order any drink."); others show the meaning to produce.
   const prompt = exercise.mode === "open" ? exercise.prompt : meaning;
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={useTiles ? ui.buildSentence : ui.sayInSwedish} />
+        <GlossedLine line={useTiles ? ui.buildSentence : ui.sayInTarget} />
       </p>
       <h3 className="activity-prompt">“{prompt}”</h3>
       {useTiles ? (
@@ -389,7 +397,7 @@ export function ActivityView({
           pool={pool}
           busy={busy}
           onSubmit={(answer) => {
-            const check = checkAnswer(answer, expected);
+            const check = checkAnswer(answer, expected, code);
             return onRecord({ successful: check !== "wrong", assisted: false, response: answer, expected, check, replays: 0, input: "tiles" });
           }}
         />
@@ -410,14 +418,15 @@ export function ActivityView({
 // Exact (or nearly exact) answers pass locally; open prompts also accept any
 // natural answer through the constrained evaluator.
 export async function judgeAnswer(activity: AdaptiveActivity, answer: string, expected: string) {
-  let check: Outcome["check"] = checkAnswer(answer, expected);
+  const code = island().code;
+  let check: Outcome["check"] = checkAnswer(answer, expected, code);
   let successful = check !== "wrong";
   if (!successful && activity.exercise.mode !== "repeat" && answer.trim()) {
     try {
       const response = await fetch("/api/learning/evaluate-answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ languageCode: "sv", lessonId: activity.lessonId, exerciseId: activity.exercise.audioId, transcript: answer, alternatives: [] }),
+        body: JSON.stringify({ languageCode: code, lessonId: activity.lessonId, exerciseId: activity.exercise.audioId, transcript: answer, alternatives: [] }),
       });
       if (response.ok) {
         const result = await response.json();
@@ -432,7 +441,8 @@ export async function judgeAnswer(activity: AdaptiveActivity, answer: string, ex
 }
 
 export function Tiles({ expected, pool, busy, onSubmit, onChange }: { expected: string; pool: string[]; busy: boolean; onSubmit: (answer: string) => Promise<void>; onChange?: (answer: string) => void }) {
-  const tiles = useMemo(() => buildTiles(expected, pool, expected.length * 7919), [expected, pool]);
+  const { code, ui } = useIsland();
+  const tiles = useMemo(() => buildTiles(expected, pool, expected.length * 7919, code), [expected, pool, code]);
   const [chosen, setChosen] = useState<string[]>([]);
   const byId = new Map(tiles.map((t) => [t.id, t]));
   const answer = chosen.map((id) => byId.get(id)!.word).join(" ");
@@ -464,7 +474,7 @@ export function Tiles({ expected, pool, busy, onSubmit, onChange }: { expected: 
       </div>
       <div className="dialogue-actions">
         <button className="btn btn-primary" disabled={busy || chosen.length === 0} onClick={() => void onSubmit(answer)}>
-          <Check size={18} /> <SvLine line={ui.check} />
+          <Check size={18} /> <GlossedLine line={ui.check} />
         </button>
       </div>
     </div>
@@ -482,6 +492,8 @@ export function FreeAnswer({
   onSubmit: (answer: string, via: "text" | "speech", hinted: boolean) => Promise<void>;
   onChange?: (answer: string) => void;
 }) {
+  const { code, ui } = useIsland();
+  const language = getTargetLanguage(code);
   const [answer, setAnswer] = useState("");
   const [hinted, setHinted] = useState(false);
   const [listening, setListening] = useState(false);
@@ -502,7 +514,7 @@ export function FreeAnswer({
     });
   };
 
-  async function speak() {
+  async function dictate() {
     if (listening) {
       stopListening();
       return;
@@ -510,7 +522,7 @@ export function FreeAnswer({
     setListening(true);
     sound.play("pop");
     try {
-      const result = await listenSwedish((text) => setAnswer(text));
+      const result = await listen((text) => setAnswer(text));
       if (result.transcript) {
         setAnswer(result.transcript);
         setVia("speech");
@@ -534,26 +546,26 @@ export function FreeAnswer({
       <div className="answer-row">
         <input
           ref={input}
-          lang="sv"
+          lang={language.locale}
           value={answer}
           onChange={(e) => {
             setAnswer(e.target.value);
             setVia("text");
           }}
-          placeholder={ui.writeSwedish.sv}
-          aria-label="Skriv på svenska (write in Swedish)"
+          placeholder={ui.writeTarget.t}
+          aria-label={aria(ui.writeTarget)}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
         />
         {micSupported ? (
-          <button type="button" className={`icon-button mic ${listening ? "is-live" : ""}`} aria-label="Säg det (say it)" onClick={() => void speak()}>
+          <button type="button" className={`icon-button mic ${listening ? "is-live" : ""}`} aria-label={aria(ui.sayIt)} onClick={() => void dictate()}>
             <Mic size={20} />
           </button>
         ) : null}
       </div>
-      <div className="letter-keys" aria-label="Svenska bokstäver (Swedish letters)">
-        {["å", "ä", "ö"].map((letter) => (
+      <div className="letter-keys" aria-label={aria(ui.letters)}>
+        {language.letters.map((letter) => (
           <button type="button" key={letter} onClick={() => insert(letter)}>
             {letter}
           </button>
@@ -561,20 +573,20 @@ export function FreeAnswer({
       </div>
       {hinted ? (
         <p className="hint-reveal">
-          <Sv text={hint} />
+          <Glossed text={hint} />
         </p>
       ) : null}
       <div className="dialogue-actions">
         <button type="submit" className="btn btn-primary" disabled={busy || !answer.trim()}>
-          <Check size={18} /> <SvLine line={ui.check} />
+          <Check size={18} /> <GlossedLine line={ui.check} />
         </button>
         {!hinted ? (
           <button type="button" className="btn" onClick={() => setHinted(true)}>
-            <Lightbulb size={17} /> <SvLine line={ui.hint} />
+            <Lightbulb size={17} /> <GlossedLine line={ui.hint} />
           </button>
         ) : null}
         <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => void onSubmit(answer || "…", via, true)}>
-          <SvLine line={ui.dontKnow} />
+          <GlossedLine line={ui.dontKnow} />
         </button>
       </div>
     </form>
@@ -586,8 +598,9 @@ export function SayItPractice({ expected }: { expected: string }) {
   const [heard, setHeard] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const supported = useMemo(() => canRecognizeSpeech(), []);
+  const { code, ui } = useIsland();
   if (!supported) return null;
-  const match = heard ? checkAnswer(heard, expected) !== "wrong" : false;
+  const match = heard ? checkAnswer(heard, expected, code) !== "wrong" : false;
   return (
     <div className="say-it">
       <button
@@ -597,9 +610,9 @@ export function SayItPractice({ expected }: { expected: string }) {
           setListening(true);
           sound.play("pop");
           try {
-            const result = await listenSwedish((t) => setHeard(t));
+            const result = await listen((t) => setHeard(t));
             setHeard(result.transcript || null);
-            if (result.transcript && checkAnswer(result.transcript, expected) !== "wrong") sound.play("sparkle");
+            if (result.transcript && checkAnswer(result.transcript, expected, code) !== "wrong") sound.play("sparkle");
           } catch {
             setHeard(null);
           } finally {
@@ -607,11 +620,11 @@ export function SayItPractice({ expected }: { expected: string }) {
           }
         }}
       >
-        <Mic size={17} /> <SvLine line={listening ? ui.listening : ui.repeatAfterMe} />
+        <Mic size={17} /> <GlossedLine line={listening ? ui.listening : ui.repeatAfterMe} />
       </button>
       {heard ? (
         <span className={`say-it-heard ${match ? "is-match" : ""}`}>
-          <SvLine line={ui.heardYou} />: <Sv text={heard} /> {match ? "✓" : ""}
+          <GlossedLine line={ui.heardYou} />: <Glossed text={heard} /> {match ? "✓" : ""}
         </span>
       ) : null}
     </div>
@@ -631,42 +644,43 @@ export function RoundSummaryView({
   onBye: () => void;
   extra?: React.ReactNode;
 }) {
-  const line = useMemo(() => pick(roundDone), []);
+  const { script, ui } = useIsland();
+  const line = useMemo(() => pick(script.roundDone), [script]);
   useEffect(() => {
     sound.play("sparkle");
     emote(villager.id, "happy", 1600);
   }, [villager.id]);
   return (
     <div className="round-summary">
-      <SvLine line={line} as="h3" />
+      <GlossedLine line={line} as="h3" />
       <div className="summary-stats">
         <div>
           <strong>
             {summary.correct}/{summary.total}
           </strong>
-          <Sv text="rätt" en="correct" />
+          <GlossedLine line={ui.correct} />
         </div>
         <div>
           <strong>+{summary.xp}</strong>
-          <SvLine line={ui.xpGained} />
+          <GlossedLine line={ui.xpGained} />
         </div>
       </div>
       {summary.grown.length ? (
         <ul className="summary-grown">
           {summary.grown.map((g) => (
             <li key={g.text}>
-              <StageIcon stage={g.to} /> <Sv text={g.text} />
+              <StageIcon stage={g.to} /> <Glossed text={g.text} />
             </li>
           ))}
         </ul>
       ) : null}
       <div className="dialogue-actions">
         <button className="btn btn-primary" onClick={onAgain} autoFocus>
-          <SvLine line={ui.again} />
+          <GlossedLine line={ui.again} />
         </button>
         {extra}
         <button className="btn btn-quiet" onClick={onBye}>
-          <SvLine line={ui.bye} />
+          <GlossedLine line={ui.bye} />
         </button>
       </div>
     </div>

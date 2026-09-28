@@ -6,12 +6,14 @@ import { useLearningModel } from "@/components/providers/learning-model-provider
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
 import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
-import type { GameProgress } from "@/lib/game/progression";
-import { ui } from "@/lib/game/ui-text";
-import { elinAfterName, elinIntro, getVillager, pick, type Line, type VillagerId } from "@/lib/game/villagers";
+import { pick, type Line } from "@/lib/game/line";
+import { teachableSlugs, type GameProgress } from "@/lib/game/progression";
+import { aria } from "@/lib/game/ui-text";
+import type { VillagerId } from "@/lib/game/villagers";
 import { endDialogue } from "../actions";
 import { sound } from "../audio/sfx";
-import { prefetchSwedish, speakSwedish, stopSpeaking } from "../audio/speech";
+import { prefetchSpeech, speak, stopSpeaking } from "../audio/speech";
+import { island, villagerById, useIsland } from "../island";
 import { emote, updateSave, useGame } from "../store";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
@@ -19,20 +21,21 @@ import { SceneRound } from "./scene-round";
 import { GrammarTipModal } from "./grammar-tip";
 import { RoundSummaryView, type RoundSummary } from "./lesson-round";
 import { LiveCall } from "./live-call";
-import { registerGloss, Sv, SvLine } from "./sv";
+import { registerGloss, Glossed, GlossedLine } from "./glossed";
 import { Typewriter } from "./typewriter";
 
 type Mode = "lines" | "name" | "menu" | "tip" | "lesson" | "summary" | "live" | "chat";
 
 export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; progress: GameProgress; liveAvailable: boolean }) {
-  const villager = getVillager(id);
+  const { code, host, script, ui, grammar } = useIsland();
+  const villager = villagerById(id);
   const model = useLearningModel();
   const save = useGame((s) => s.save);
   const standing = progress.villagers[id];
   // The opening script depends only on who this is and how far along we are.
   const [opening] = useState(() =>
-    id === "elin" && !save.introDone
-      ? { lines: elinIntro, then: "name" as const }
+    id === host && !save.introDone
+      ? { lines: script.intro, then: "name" as const }
       : !standing.unlocked
         ? { lines: [villager.locked], then: "end" as const }
         : { lines: [pick(villager.greetings)], then: "menu" as const },
@@ -45,7 +48,10 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   const [summary, setSummary] = useState<RoundSummary | null>(null);
   const after = useRef<() => void>(() => (opening.then === "end" ? endDialogue() : setMode(opening.then)));
   const [tip, setTip] = useState<GrammarTip | null>(null);
-  const upcomingTip = pendingTip(id, standing.met, save.grammarSeen);
+  const openUnits = standing.units.filter((u) => u.unlocked).map((u) => ({ id: u.unit.id, met: u.met }));
+  const upcomingTip = pendingTip(grammar, openUnits, save.grammarSeen);
+  // Fixed while the dialogue is open, so a round never loses phrases midway.
+  const [slugs] = useState(() => teachableSlugs(progress, id));
   const showEnglish = save.english === "on" || (save.english === "auto" && save.experience === "new" && progress.level < 5);
 
   const finishRound = (result: RoundSummary) => {
@@ -76,23 +82,23 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   }, [id]);
 
   // Fetch the voice for the line on screen so "listen" plays without a wait.
-  const shownLine = mode === "lines" ? lines[index]?.sv : undefined;
+  const shownLine = mode === "lines" ? lines[index]?.t : undefined;
   useEffect(() => {
-    if (shownLine) prefetchSwedish(shownLine, { who: id, pitch: villager.voicePitch });
+    if (shownLine) prefetchSpeech(shownLine, { who: id, pitch: villager.voicePitch });
   }, [shownLine, id, villager.voicePitch]);
 
   const canTalk = useMemo(() => {
-    const scenario = getPracticeScenario("sv", villager.scenarioId);
+    const scenario = villager.scenarioId ? getPracticeScenario(code, villager.scenarioId) : undefined;
     if (!scenario) return false;
     const recommendation = choosePracticeScenario({
-      languageCode: "sv",
+      languageCode: code,
       concepts: model.concepts,
       states: model.states,
       snapshot: model.practiceSnapshot,
       scenarioIds: [scenario.id],
     });
     return recommendation.encounteredConceptSlugs.length >= Math.max(2, scenario.minimumEncountered) && standing.met >= 3;
-  }, [model.concepts, model.states, model.practiceSnapshot, villager.scenarioId, standing.met]);
+  }, [code, model.concepts, model.states, model.practiceSnapshot, villager.scenarioId, standing.met]);
 
   const advanceLine = () => {
     if (!typed) {
@@ -127,22 +133,22 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
         <span className="dialogue-name" style={{ background: villager.look.accent }}>
           {villager.name}
         </span>
-        <Sv text={villager.role.sv} en={villager.role.en} className="dialogue-role" />
-        <button className="dialogue-close" aria-label="Hej då (bye)" onClick={endDialogue}>
+        <Glossed text={villager.role.t} en={villager.role.en} className="dialogue-role" />
+        <button className="dialogue-close" aria-label={aria(ui.bye)} onClick={endDialogue}>
           ×
         </button>
       </div>
       <div className="dialogue-body">
         {mode === "lines" && line ? (
           <div className="dialogue-lines" onClick={advanceLine}>
-            <Typewriter key={`${index}:${line.sv}`} line={line} pitch={villager.voicePitch} done={typed} onDone={() => setTyped(true)} english={showEnglish} />
+            <Typewriter key={`${index}:${line.t}`} line={line} pitch={villager.voicePitch} done={typed} onDone={() => setTyped(true)} english={showEnglish} />
             <div className="dialogue-line-tools">
               <button
                 className="icon-button"
-                aria-label="Lyssna (listen)"
+                aria-label={aria(ui.listen)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  void speakSwedish(line.sv, { who: id, pitch: villager.voicePitch });
+                  void speak(line.t, { who: id, pitch: villager.voicePitch });
                 }}
               >
                 <Volume2 size={17} />
@@ -154,12 +160,13 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
 
         {mode === "name" ? (
           <NameEntry
+            initial={save.name ?? ""}
             onSubmit={(name) => {
               registerGloss(name, "(your name)");
               updateSave({ name });
               sound.play("sparkle");
               emote(id, "happy", 1600);
-              say(elinAfterName(name), () => {
+              say(script.afterName(name), () => {
                 updateSave({ introDone: true });
                 startLesson();
               });
@@ -170,10 +177,10 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
         {mode === "menu" ? (
           <div className="dialogue-menu">
             <button className="btn btn-primary" onClick={() => { sound.play("click"); startLesson(); }} autoFocus>
-              <BookOpen size={18} /> <SvLine line={villager.teach} />
+              <BookOpen size={18} /> <GlossedLine line={villager.teach} />
               {upcomingTip ? (
                 <span className="tip-badge">
-                  <GraduationCap size={14} /> <Sv text="Ny grammatik" en="New grammar tip" />
+                  <GraduationCap size={14} /> <GlossedLine line={ui.newGrammar} />
                 </span>
               ) : null}
             </button>
@@ -186,14 +193,14 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
                 setMode(liveAvailable ? "live" : "chat");
               }}
             >
-              {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <SvLine line={villager.talk} />
+              {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <GlossedLine line={villager.talk} />
             </button>
             <button className="btn btn-quiet" onClick={() => say([pick(villager.goodbye)], endDialogue)}>
-              <SvLine line={ui.bye} />
+              <GlossedLine line={ui.bye} />
             </button>
             {!canTalk ? (
               <p className="dialogue-hint">
-                <SvLine line={ui.notReadyToTalk} />
+                <GlossedLine line={ui.notReadyToTalk} />
               </p>
             ) : null}
           </div>
@@ -202,7 +209,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
         {mode === "tip" && tip ? (
           <>
             <p className="dialogue-hint">
-              <Sv text={`${villager.name} förklarar…`} en={`${villager.name} explains…`} />
+              <GlossedLine line={ui.explains(villager.name)} />
             </p>
             <GrammarTipModal
               tip={tip}
@@ -216,11 +223,11 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
         ) : null}
 
         {mode === "lesson" ? (
-          // Every villager teaches in their own place: Bosse at his counter, the others through little exchanges.
-          villager.id === "bosse" ? (
-            <CafeRound key={round} villager={villager} onFinish={finishRound} />
+          // Every villager teaches in their own place: café hosts at their counter, the others through little exchanges.
+          villager.round === "cafe" && island().cafe ? (
+            <CafeRound key={round} villager={villager} slugs={slugs} onFinish={finishRound} />
           ) : (
-            <SceneRound key={round} villager={villager} onFinish={finishRound} />
+            <SceneRound key={round} villager={villager} slugs={slugs} onFinish={finishRound} />
           )
         ) : null}
 
@@ -233,7 +240,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
             extra={
               canTalk ? (
                 <button className="btn" onClick={() => setMode(liveAvailable ? "live" : "chat")}>
-                  {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <SvLine line={villager.talk} />
+                  {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <GlossedLine line={villager.talk} />
                 </button>
               ) : null
             }
@@ -247,8 +254,9 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   );
 }
 
-function NameEntry({ onSubmit }: { onSubmit: (name: string) => void }) {
-  const [name, setName] = useState("");
+function NameEntry({ initial, onSubmit }: { initial: string; onSubmit: (name: string) => void }) {
+  const { ui } = useIsland();
+  const [name, setName] = useState(initial);
   return (
     <form
       className="name-entry"
@@ -259,12 +267,12 @@ function NameEntry({ onSubmit }: { onSubmit: (name: string) => void }) {
       }}
     >
       <p>
-        <Sv text="Jag heter…" en="My name is…" />
+        <GlossedLine line={ui.myNameIs} />
       </p>
       <div className="answer-row">
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={ui.yourName.sv} aria-label="Ditt namn (your name)" maxLength={24} />
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={ui.yourName.t} aria-label={aria(ui.yourName)} maxLength={24} />
         <button className="btn btn-primary" disabled={!name.trim()} type="submit">
-          <SvLine line={ui.next} />
+          <GlossedLine line={ui.next} />
         </button>
       </div>
     </form>

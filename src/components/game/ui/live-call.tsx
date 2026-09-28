@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import { LiveVoiceTransport, type VoiceSnapshot } from "@/lib/voice/transport";
 import { speakerCaption } from "@/lib/voice/transcript";
-import { ui } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import { sound } from "../audio/sfx";
 import { stopSpeaking } from "../audio/speech";
+import { useIsland } from "../island";
 import { emote, runtime } from "../store";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 // A real spoken conversation with the villager through GPT-Live. Evidence is
 // only written by the server after the call is finalized and evaluated.
 export function LiveCall({ villager, onClose, onFallback }: { villager: Villager; onClose: () => void; onFallback: () => void }) {
+  const { code, ui } = useIsland();
   const audio = useRef<HTMLAudioElement>(null);
   const transport = useRef<LiveVoiceTransport | null>(null);
   const [snapshot, setSnapshot] = useState<VoiceSnapshot | null>(null);
@@ -45,7 +47,7 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
   // Animate the villager's mouth while their words are arriving.
   useEffect(() => {
     if (!snapshot) return;
-    const text = speakerCaption(snapshot.fragments, "elin");
+    const text = speakerCaption(snapshot.fragments, "character");
     if (text.length !== lastVillagerText.current.length) {
       lastVillagerText.current = { length: text.length, at: performance.now() };
       runtime.speaking = villager.id;
@@ -67,7 +69,7 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
 
   function finish(snapshot: VoiceSnapshot) {
     setSaving(true);
-    runtime.speaking = null;
+    stopSpeaking();
     void fetch("/api/voice/finish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -96,11 +98,11 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
     sound.play("ring");
     const service = new LiveVoiceTransport(audio.current, onTransportChange);
     transport.current = service;
-    await service.start(villager.scenarioId);
+    await service.start(villager.scenarioId ?? undefined, code, getTargetLanguage(code).name, villager.name);
   }
 
   const status = snapshot?.status ?? "idle";
-  const villagerText = snapshot ? speakerCaption(snapshot.fragments, "elin") : "";
+  const villagerText = snapshot ? speakerCaption(snapshot.fragments, "character") : "";
   const learnerText = snapshot ? speakerCaption(snapshot.fragments, "learner") : "";
 
   return (
@@ -108,17 +110,17 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
       <audio ref={audio} autoPlay />
       {status === "idle" ? (
         <>
-          <SvLine line={{ sv: `Ring ${villager.name} och prata på svenska!`, en: `Call ${villager.name} and talk in Swedish!` }} as="h3" />
+          <GlossedLine line={ui.callAndTalk(villager.name)} as="h3" />
           <p className="live-privacy">
             AI voice, up to 3 minutes. OpenAI processes audio live; Sapling saves the transcript and learning feedback, not
             recordings. OpenAI API content may be retained for up to 30 days for abuse monitoring.
           </p>
           <div className="dialogue-actions">
             <button className="btn btn-primary" onClick={() => void start()} autoFocus>
-              <Phone size={18} /> <SvLine line={ui.talkForReal} />
+              <Phone size={18} /> <GlossedLine line={ui.talkForReal} />
             </button>
             <button className="btn btn-quiet" onClick={onClose}>
-              <SvLine line={ui.back} />
+              <GlossedLine line={ui.back} />
             </button>
           </div>
         </>
@@ -130,21 +132,21 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
             {status === "connecting" ? <LoaderCircle className="spin" size={28} /> : muted ? <MicOff size={28} /> : <Mic size={28} />}
           </div>
           <p className="live-status" role="status">
-            <SvLine line={status === "connecting" ? ui.connecting : status === "closing" ? ui.saving : muted ? ui.mute : ui.liveNow} />
+            <GlossedLine line={status === "connecting" ? ui.connecting : status === "closing" ? ui.saving : muted ? ui.mute : ui.liveNow} />
             {status === "live" ? <span className="live-timer">{formatSeconds(elapsed)} / 3:00</span> : null}
           </p>
           <div className="live-captions" aria-live="polite">
             {villagerText ? (
               <p>
-                <strong>{villager.name}</strong> <Sv text={tail(villagerText)} />
+                <strong>{villager.name}</strong> <Glossed text={tail(villagerText)} />
               </p>
             ) : null}
             {learnerText ? (
               <p className="is-you">
                 <strong>
-                  <SvLine line={ui.youLabel} />
+                  <GlossedLine line={ui.youLabel} />
                 </strong>{" "}
-                <Sv text={tail(learnerText)} />
+                <Glossed text={tail(learnerText)} />
               </p>
             ) : null}
           </div>
@@ -158,10 +160,10 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
                   transport.current?.mute(!muted);
                 }}
               >
-                {muted ? <Mic size={18} /> : <MicOff size={18} />} <SvLine line={muted ? ui.unmute : ui.mute} />
+                {muted ? <Mic size={18} /> : <MicOff size={18} />} <GlossedLine line={muted ? ui.unmute : ui.mute} />
               </button>
               <button className="btn btn-danger" onClick={() => transport.current?.close()}>
-                <PhoneOff size={18} /> <SvLine line={ui.endCall} />
+                <PhoneOff size={18} /> <GlossedLine line={ui.endCall} />
               </button>
             </div>
           ) : null}
@@ -170,11 +172,11 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
 
       {status === "closed" || status === "error" ? (
         <>
-          <SvLine line={status === "error" && !snapshot?.learningSessionId ? ui.liveUnavailable : ui.liveOver} as="h3" />
+          <GlossedLine line={status === "error" && !snapshot?.learningSessionId ? ui.liveUnavailable : ui.liveOver} as="h3" />
           {snapshot?.error && !snapshot.learningSessionId ? <p className="live-privacy">{snapshot.error}</p> : null}
           {saving ? (
             <p role="status">
-              <LoaderCircle className="spin" size={16} /> <SvLine line={ui.saving} />
+              <LoaderCircle className="spin" size={16} /> <GlossedLine line={ui.saving} />
             </p>
           ) : null}
           {result?.summary ? <p className="live-summary">{result.summary}</p> : null}
@@ -182,7 +184,7 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
             <ul className="live-repairs">
               {result.repairs.map((r) => (
                 <li key={r}>
-                  <Sv text={r} />
+                  <Glossed text={r} />
                 </li>
               ))}
             </ul>
@@ -190,11 +192,11 @@ export function LiveCall({ villager, onClose, onFallback }: { villager: Villager
           <div className="dialogue-actions">
             {status === "error" && !snapshot?.learningSessionId ? (
               <button className="btn btn-primary" onClick={onFallback}>
-                <SvLine line={ui.chatTyping} />
+                <GlossedLine line={ui.chatTyping} />
               </button>
             ) : null}
             <button className="btn" disabled={saving} onClick={onClose} autoFocus>
-              <SvLine line={ui.back} />
+              <GlossedLine line={ui.back} />
             </button>
           </div>
         </>

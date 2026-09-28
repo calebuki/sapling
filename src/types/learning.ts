@@ -50,6 +50,9 @@ export interface Concept {
   gloss: string;
   description: string | null;
   sortOrder: number;
+  // CEFR level and course unit, from the concept's catalog metadata.
+  level?: string | null;
+  unit?: string | null;
 }
 
 export interface LearnerConceptState {

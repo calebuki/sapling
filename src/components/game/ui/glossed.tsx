@@ -2,11 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ElementType } from "react";
 import { createPortal } from "react-dom";
-import { lookupGloss, normalizeWord } from "@/lib/game/glossary";
-import type { Line } from "@/lib/game/villagers";
+import type { Line } from "@/lib/game/line";
+import { getTargetLanguage } from "@/lib/learning/languages";
+import { normalizeWord } from "@/lib/learning/text";
+import { island } from "../island";
 
-// A single tooltip layer shared by every <Sv>, including ones rendered inside
-// the 3D scene's HTML labels (which live in separate React roots).
+// A single tooltip layer shared by every <Glossed>, including ones rendered
+// inside the 3D scene's HTML labels (which live in separate React roots).
 
 type Tip = { rect: DOMRect; target: HTMLElement; word: string; gloss: string | null; phrase: string | null; loading: boolean } | null;
 let tip: Tip = null;
@@ -18,18 +20,19 @@ function setTip(next: Tip) {
 
 const extraGlosses = new Map<string, string>();
 export function registerGloss(word: string, english: string) {
-  extraGlosses.set(normalizeWord(word), english);
+  extraGlosses.set(normalizeWord(word, island().code), english);
 }
 
 const remote = new Map<string, Promise<string | null>>();
 function fetchGloss(word: string, context: string) {
-  const key = normalizeWord(word);
+  const language = island().code;
+  const key = `${language}:${normalizeWord(word, language)}`;
   let request = remote.get(key);
   if (!request) {
     request = fetch("/api/gloss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, context: context.slice(0, 300) }),
+      body: JSON.stringify({ language, word, context: context.slice(0, 300) }),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((r: { gloss?: string } | null) => r?.gloss ?? null)
@@ -40,7 +43,7 @@ function fetchGloss(word: string, context: string) {
 }
 
 export function glossFor(word: string) {
-  return extraGlosses.get(normalizeWord(word)) ?? lookupGloss(word) ?? null;
+  return extraGlosses.get(normalizeWord(word, island().code)) ?? island().glossary.lookup(word) ?? null;
 }
 
 let hideTimer: number | undefined;
@@ -65,7 +68,8 @@ function hide(event?: { pointerType?: string }) {
 
 const WORD = /(\p{L}[\p{L}\p{N}]*)/u;
 
-export function Sv({
+// Target-language text whose every word shows its English on hover.
+export function Glossed({
   text,
   en,
   as,
@@ -79,12 +83,12 @@ export function Sv({
   const parts = text.split(WORD);
   const Tag = (as ?? "span") as "span";
   return (
-    <Tag className={`sv ${className ?? ""}`} lang="sv">
+    <Tag className={`tl ${className ?? ""}`} lang={getTargetLanguage(island().code).locale}>
       {parts.map((part, index) =>
         index % 2 === 1 ? (
           <span
             key={index}
-            className="sv-w"
+            className="tl-w"
             onPointerEnter={(e) => show(e.currentTarget, part, en, text)}
             onPointerLeave={(e) => hide(e)}
           >
@@ -98,8 +102,8 @@ export function Sv({
   );
 }
 
-export function SvLine({ line, as, className }: { line: Line; as?: ElementType; className?: string }) {
-  return <Sv text={line.sv} en={line.en} as={as} className={className} />;
+export function GlossedLine({ line, as, className }: { line: Line; as?: ElementType; className?: string }) {
+  return <Glossed text={line.t} en={line.en} as={as} className={className} />;
 }
 
 export function TooltipLayer() {
@@ -148,13 +152,13 @@ export function TooltipLayer() {
     <div
       ref={ref}
       role="tooltip"
-      className={`sv-tip ${placement?.above ? "is-above" : ""}`}
+      className={`tl-tip ${placement?.above ? "is-above" : ""}`}
       style={{ left: placement?.left ?? -9999, top: placement?.top ?? -9999 }}
     >
       {current.gloss ? (
         <strong>{current.gloss}</strong>
       ) : current.loading ? (
-        <strong className="sv-tip-loading">…</strong>
+        <strong className="tl-tip-loading">…</strong>
       ) : null}
       {showPhrase ? <span>{current.phrase}</span> : null}
     </div>,

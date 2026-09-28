@@ -1,36 +1,16 @@
-import { normalizeSwedish } from "@/lib/learning/adaptive";
 import type { LessonExercise } from "@/lib/learning/course";
+import { getTargetLanguage, type TargetLanguageCode } from "@/lib/learning/languages";
+import { foldsFor, normalizeText, withoutArticle } from "@/lib/learning/text";
 import { mulberry32 } from "./world";
-
-// English meanings for course phrases whose prompt is an instruction rather
-// than a translation ("Ask their name." → "What's your name?").
-const meanings: Record<string, string> = {
-  "Hej, jag heter Caleb.": "Hi, my name is {name}.",
-  "Vad heter du?": "What's your name?",
-  "Trevligt att träffas.": "Nice to meet you.",
-  "Jag skulle vilja ha en kaffe.": "I would like a coffee.",
-  "En kaffe med mjölk.": "A coffee with milk.",
-  "Och en kanelbulle, tack.": "And a cinnamon bun, please.",
-  "Jag skulle vilja ha en kaffe med mjölk, tack.": "I would like a coffee with milk, please.",
-  "Kan jag få notan, tack?": "Can I have the bill, please?",
-  "Var ligger stationen?": "Where is the station?",
-  "Går det här tåget till Stockholm?": "Does this train go to Stockholm?",
-  "Jag ska av här.": "I need to get off here.",
-  "Jag förstår inte.": "I don't understand.",
-  "Kan du upprepa det?": "Can you repeat that?",
-  "Kan du prata lite långsammare?": "Can you speak a little more slowly?",
-  "Kanske.": "Maybe.",
-  "Ska vi ta tåget?": "Shall we take the train?",
-};
 
 export function personalize(text: string, name: string | null) {
   return text.replace(/Caleb/g, name?.trim() || "Kim").replace(/\{name\}/g, name?.trim() || "Kim");
 }
 
+// English for what the learner should say; instructions ("Ask their name.")
+// carry their own meaning.
 export function meaningOf(exercise: LessonExercise, name: string | null) {
-  const known = meanings[exercise.expected];
-  if (known) return personalize(known, name);
-  return exercise.prompt;
+  return personalize(exercise.meaning ?? exercise.prompt, name);
 }
 
 export function expectedFor(exercise: LessonExercise, name: string | null) {
@@ -42,12 +22,13 @@ export function splitWords(text: string) {
 }
 
 // Word tiles: the answer's words plus a couple of plausible distractors.
-export function buildTiles(expected: string, pool: string[], seed: number) {
+export function buildTiles(expected: string, pool: string[], seed: number, code: TargetLanguageCode) {
+  const locale = getTargetLanguage(code).locale;
   const words = splitWords(expected);
-  const answer = new Set(words.map((w) => w.toLocaleLowerCase("sv-SE")));
+  const answer = new Set(words.map((w) => w.toLocaleLowerCase(locale)));
   const random = mulberry32(seed);
   const extras = [...new Set(pool.flatMap(splitWords))]
-    .filter((w) => !answer.has(w.toLocaleLowerCase("sv-SE")))
+    .filter((w) => !answer.has(w.toLocaleLowerCase(locale)))
     .sort(() => random() - 0.5)
     .slice(0, words.length > 3 ? 3 : 2);
   const tiles = [...words, ...extras].map((word, index) => ({ id: `${index}-${word}`, word }));
@@ -72,18 +53,20 @@ function levenshtein(a: string, b: string) {
   return row[b.length];
 }
 
-export type Check = "exact" | "accent" | "typo" | "wrong";
+export type Check = "exact" | "accent" | "typo" | "article" | "wrong";
 
-const fold = (s: string) => s.replace(/[åä]/g, "a").replace(/ö/g, "o");
-
-// Recalling the phrase is what counts: missing å/ä/ö (hard on English keyboards)
-// and a one-letter slip pass, but the player is shown the exact spelling.
-export function checkAnswer(answer: string, expected: string): Check {
-  const a = normalizeSwedish(answer);
-  const e = normalizeSwedish(expected);
+// Recalling the phrase is what counts: missing special letters (hard on English
+// keyboards), a one-letter slip or a forgotten article pass, but the player is
+// shown the exact spelling.
+export function checkAnswer(answer: string, expected: string, code: TargetLanguageCode): Check {
+  const a = normalizeText(answer, code);
+  const e = normalizeText(expected, code);
   if (!a) return "wrong";
   if (a === e) return "exact";
-  if (fold(a) === fold(e)) return "accent";
-  if (e.length >= 6 && levenshtein(fold(a), fold(e)) <= (e.length > 16 ? 2 : 1)) return "typo";
+  const folds = foldsFor(code);
+  if (folds.some((fold) => fold(a) === fold(e))) return "accent";
+  if (e.length >= 6 && folds.some((fold) => levenshtein(fold(a), fold(e)) <= (e.length > 16 ? 2 : 1))) return "typo";
+  const bare = withoutArticle(e, code);
+  if (bare && folds.some((fold) => fold(a) === fold(bare))) return "article";
   return "wrong";
 }

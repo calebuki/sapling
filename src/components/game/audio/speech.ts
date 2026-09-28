@@ -1,27 +1,41 @@
 "use client";
 
 import { getSpeechAudioUrl } from "@/lib/learning/course";
+import { getTargetLanguage } from "@/lib/learning/languages";
+import { passerVoices, playerVoice } from "@/lib/game/voices";
+import type { VillagerId } from "@/lib/game/villagers";
+import { island } from "../island";
 import { runtime } from "../store";
 import { sound } from "./sfx";
-import { speechVoiceFor, type SpeechVoiceKey } from "@/lib/game/speech-voices";
-import type { VillagerId } from "@/lib/game/villagers";
 
 // Every line is spoken by a natural neural voice from /api/speech, one voice
 // per villager. If that is unavailable: the recorded course clip, the device's
-// Swedish voice, the Azure/OpenAI neural fallback, and finally the browser's
-// default voice. Each source reports whether it actually started so a silent
-// failure moves on to the next one.
+// voice for the island's language, the Azure/OpenAI neural fallback, and
+// finally the browser's default voice. Each source reports whether it actually
+// started so a silent failure moves on to the next one.
 
 type SpeakOptions = { clipId?: string; slow?: boolean; who?: VillagerId | "player"; pitch?: number };
 
 let neuralAvailable = true;
 const neuralCache = new Map<string, Promise<string | null>>();
 
-function neuralClipUrl(text: string, voice: SpeechVoiceKey, slow: boolean) {
-  const key = `${voice}|${slow ? 1 : 0}|${text}`;
+function locale() {
+  return getTargetLanguage(island().code).locale;
+}
+
+// The voice a villager always speaks with; passers-by sound like a man or a woman.
+function voiceFor(who: VillagerId | "player" | null | undefined, pitch = 1) {
+  if (who === "player") return playerVoice;
+  const villager = who ? island().villagers.find((v) => v.id === who) : undefined;
+  return villager?.voice ?? (pitch < 1 ? passerVoices.man : passerVoices.woman);
+}
+
+function neuralClipUrl(text: string, voice: string, slow: boolean) {
+  const code = island().code;
+  const key = `${code}|${voice}|${slow ? 1 : 0}|${text}`;
   const cached = neuralCache.get(key);
   if (cached) return cached;
-  const query = new URLSearchParams({ t: text, v: voice, s: slow ? "1" : "0" });
+  const query = new URLSearchParams({ l: code, t: text, v: voice, s: slow ? "1" : "0" });
   const pending = fetch(`/api/speech?${query}`)
     .then(async (response) => {
       if (response.status === 503) neuralAvailable = false;
@@ -42,9 +56,9 @@ function neuralClipUrl(text: string, voice: SpeechVoiceKey, slow: boolean) {
 }
 
 /** Warm the cache for lines that are about to be spoken. */
-export function prefetchSwedish(text: string, options: { who?: VillagerId | "player"; pitch?: number; slow?: boolean } = {}) {
+export function prefetchSpeech(text: string, options: { who?: VillagerId | "player"; pitch?: number; slow?: boolean } = {}) {
   if (!neuralAvailable || !text.trim()) return;
-  void neuralClipUrl(text.trim(), speechVoiceFor(options.who, options.pitch), Boolean(options.slow));
+  void neuralClipUrl(text.trim(), voiceFor(options.who, options.pitch), Boolean(options.slow));
 }
 
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
@@ -95,18 +109,15 @@ if (typeof window !== "undefined") {
   if (hasSynth()) window.speechSynthesis.addEventListener?.("voiceschanged", voices);
 }
 
-function swedishVoice(pitchHint: number) {
-  const sv = voices().filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith("sv"));
-  if (sv.length === 0) return null;
-  const natural = sv.filter((v) => /natural|online|neural|google/i.test(v.name));
-  const pool = natural.length ? natural : sv;
-  const male = pool.find((v) => /mattias|male|man/i.test(v.name));
-  const female = pool.find((v) => /sofie|hillevi|female|kvinna/i.test(v.name));
+function deviceVoice(pitchHint: number) {
+  const code = island().code;
+  const own = voices().filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith(code));
+  if (own.length === 0) return null;
+  const natural = own.filter((v) => /natural|online|neural|google/i.test(v.name));
+  const pool = natural.length ? natural : own;
+  const male = pool.find((v) => /mattias|conrad|stefan|killian|jeppe|male|man|mann/i.test(v.name));
+  const female = pool.find((v) => /sofie|hillevi|katja|amala|anna|christel|female|kvinna|frau/i.test(v.name));
   return (pitchHint < 1 ? male ?? pool[0] : female ?? pool[0]) ?? null;
-}
-
-export function hasSwedishVoice() {
-  return swedishVoice(1) !== null;
 }
 
 export function stopSpeaking() {
@@ -121,7 +132,7 @@ export function stopSpeaking() {
   runtime.speaking = null;
 }
 
-export function speakSwedish(text: string, options: SpeakOptions = {}): Promise<void> {
+export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
   stopSpeaking();
   sound.ensure();
   const id = generation;
@@ -132,10 +143,10 @@ export function speakSwedish(text: string, options: SpeakOptions = {}): Promise<
     async () => {
       if (!neuralAvailable || !text.trim()) return false;
       // Slow lines are generated slowly rather than played back slowed down.
-      const url = await neuralClipUrl(text.trim(), speechVoiceFor(options.who, pitch), slow);
+      const url = await neuralClipUrl(text.trim(), voiceFor(options.who, pitch), slow);
       return id === generation ? playUrl(url, false) : true;
     },
-    () => playUrl(options.clipId ? getSpeechAudioUrl(options.clipId) : null, slow),
+    () => playUrl(options.clipId ? getSpeechAudioUrl(island().code, options.clipId) : null, slow),
     () => speakOnDevice(text, { slow, pitch, anyVoice: false }),
     async () => {
       const url = await serverSpeechUrl(text, pitch);
@@ -185,13 +196,13 @@ function playUrl(url: string | null, slow: boolean): Promise<boolean> {
 
 function speakOnDevice(text: string, options: { slow: boolean; pitch: number; anyVoice: boolean }): Promise<boolean> {
   if (!hasSynth()) return Promise.resolve(false);
-  const voice = swedishVoice(options.pitch);
+  const voice = deviceVoice(options.pitch);
   if (!voice && !options.anyVoice) return Promise.resolve(false);
   const synth = window.speechSynthesis;
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(text);
     if (voice) utterance.voice = voice;
-    utterance.lang = voice?.lang ?? "sv-SE";
+    utterance.lang = voice?.lang ?? locale();
     utterance.rate = options.slow ? 0.7 : 0.92;
     utterance.pitch = Math.min(1.6, Math.max(0.6, options.pitch));
     let started = false;
@@ -220,27 +231,28 @@ function speakOnDevice(text: string, options: { slow: boolean; pitch: number; an
     // Online voices and locked Safari sessions can accept an utterance yet never start it.
     timers.push(window.setTimeout(() => finish(started), SYNTH_START_TIMEOUT_MS));
     liveUtterance = utterance;
-    const speak = () => {
+    const start = () => {
       if (settled) return;
       synth.resume();
       synth.speak(utterance);
     };
     // Chrome drops an utterance queued right after cancel().
     const sinceCancel = Date.now() - lastCancelAt;
-    if (sinceCancel < 120) timers.push(window.setTimeout(speak, 120 - sinceCancel));
-    else speak();
+    if (sinceCancel < 120) timers.push(window.setTimeout(start, 120 - sinceCancel));
+    else start();
   });
 }
 
 function serverSpeechUrl(text: string, pitch: number): Promise<string | null> {
   const voice = pitch < 1 ? "male" : "female";
-  const key = `${voice}\u0000${pitch}\u0000${text}`;
+  const language = island().code;
+  const key = `${language}\u0000${voice}\u0000${pitch}\u0000${text}`;
   const cached = serverAudio.get(key);
   if (cached) return cached;
   const request = fetch("/api/speech/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, voice, pitch }),
+    body: JSON.stringify({ language, text, voice, pitch }),
   })
     .then((response) => (response.ok ? response.blob() : null))
     .then((blob) => (blob && blob.size > 0 ? URL.createObjectURL(blob) : null))
@@ -289,7 +301,7 @@ export function stopListening() {
   active?.stop();
 }
 
-export function listenSwedish(onInterim?: (text: string) => void): Promise<{ transcript: string; alternatives: string[] }> {
+export function listen(onInterim?: (text: string) => void): Promise<{ transcript: string; alternatives: string[] }> {
   return new Promise((resolve, reject) => {
     const w = window as RecognitionWindow;
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
@@ -298,7 +310,7 @@ export function listenSwedish(onInterim?: (text: string) => void): Promise<{ tra
     active?.abort();
     const recognition = new Ctor();
     active = recognition;
-    recognition.lang = "sv-SE";
+    recognition.lang = locale();
     recognition.interimResults = true;
     recognition.maxAlternatives = 4;
     recognition.continuous = false;

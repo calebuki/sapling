@@ -5,24 +5,27 @@ import { LoaderCircle, Mic, Send } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
-import { ui } from "@/lib/game/ui-text";
+import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import type { PracticeTurnResponse } from "@/types/practice";
 import { sound } from "../audio/sfx";
-import { canRecognizeSpeech, listenSwedish, speakSwedish, stopListening } from "../audio/speech";
+import { canRecognizeSpeech, listen, speak, stopListening } from "../audio/speech";
+import { useIsland } from "../island";
 import { emote } from "../store";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 type Message = { role: "learner" | "character"; text: string; en?: string };
 
 // Typed (or browser-dictated) conversation for when live voice is unavailable.
 export function Chat({ villager, onClose }: { villager: Villager; onClose: () => void }) {
   const model = useLearningModel();
-  const scenario = getPracticeScenario("sv", villager.scenarioId)!;
+  const { code, ui } = useIsland();
+  const scenario = getPracticeScenario(code, villager.scenarioId ?? "")!;
   const recommendation = useMemo(
     () =>
       choosePracticeScenario({
-        languageCode: "sv",
+        languageCode: code,
         concepts: model.concepts,
         states: model.states,
         snapshot: model.practiceSnapshot,
@@ -43,9 +46,9 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
   const field = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    void speakSwedish(scenario.openingLine, { who: villager.id, pitch: villager.voicePitch });
+    void speak(scenario.openingLine, { who: villager.id, pitch: villager.voicePitch });
     sessionId.current = model.startPracticeSession({
-      languageCode: "sv",
+      languageCode: code,
       scenarioId: scenario.id,
       characterId: villager.id,
       readiness: recommendation.readiness,
@@ -73,7 +76,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          languageCode: "sv",
+          languageCode: code,
           scenarioId: scenario.id,
           turnIndex,
           transcript: text.trim(),
@@ -89,7 +92,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
       if (!response.ok) throw new Error();
       await model.recordPracticeTurn({
         sessionId: id,
-        languageCode: "sv",
+        languageCode: code,
         scenarioId: scenario.id,
         characterId: villager.id,
         position: turnIndex,
@@ -104,7 +107,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
         memories: body.memories,
       });
       setMessages((m) => [...m, { role: "character", text: body.reply, en: body.englishSupport }]);
-      void speakSwedish(body.reply, { who: villager.id, pitch: villager.voicePitch });
+      void speak(body.reply, { who: villager.id, pitch: villager.voicePitch });
       if (body.meaningScore >= 0.7) {
         sound.play("correct");
         emote(villager.id, "happy", 1200);
@@ -112,7 +115,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
       if (body.complete) {
         await model.completePracticeSession({
           sessionId: id,
-          languageCode: "sv",
+          languageCode: code,
           scenarioId: scenario.id,
           characterId: villager.id,
           turnCount: turnIndex + 1,
@@ -136,7 +139,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
     if (listening) return stopListening();
     setListening(true);
     try {
-      const result = await listenSwedish((t) => setInput(t));
+      const result = await listen((t) => setInput(t));
       if (result.transcript) await send(result.transcript, { alternatives: result.alternatives });
     } catch {
     } finally {
@@ -149,7 +152,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
       <div className="chat-log" ref={list}>
         {messages.map((m, i) => (
           <p key={i} className={`chat-bubble ${m.role === "learner" ? "is-you" : ""}`}>
-            <Sv text={m.text} en={m.en} />
+            <Glossed text={m.text} en={m.en} />
           </p>
         ))}
         {busy ? (
@@ -163,7 +166,7 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
           <p>{done}</p>
           <div className="dialogue-actions">
             <button className="btn btn-primary" onClick={onClose} autoFocus>
-              <SvLine line={ui.back} />
+              <GlossedLine line={ui.back} />
             </button>
           </div>
         </div>
@@ -177,12 +180,12 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
         >
           <input
             ref={field}
-            lang="sv"
+            lang={getTargetLanguage(code).locale}
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={ui.typeReply.sv}
-            aria-label="Svara på svenska (answer in Swedish)"
+            placeholder={ui.typeReply.t}
+            aria-label={aria(ui.typeReply)}
             autoComplete="off"
             spellCheck={false}
           />
@@ -192,23 +195,23 @@ export function Chat({ villager, onClose }: { villager: Villager; onClose: () =>
             </button>
           ))}
           {canRecognizeSpeech() ? (
-            <button type="button" className={`icon-button mic ${listening ? "is-live" : ""}`} aria-label="Säg det (say it)" onClick={() => void dictate()}>
+            <button type="button" className={`icon-button mic ${listening ? "is-live" : ""}`} aria-label={aria(ui.sayIt)} onClick={() => void dictate()}>
               <Mic size={18} />
             </button>
           ) : null}
-          <button type="submit" className="icon-button send" disabled={busy || !input.trim()} aria-label="Skicka (send)">
+          <button type="submit" className="icon-button send" disabled={busy || !input.trim()} aria-label={aria(ui.send)}>
             <Send size={18} />
           </button>
         </form>
       )}
       {failed ? (
         <p className="lesson-error" role="alert">
-          <SvLine line={ui.error} />
+          <GlossedLine line={ui.error} />
         </p>
       ) : null}
       {!done ? (
         <button className="btn btn-quiet chat-leave" onClick={onClose}>
-          <SvLine line={ui.bye} />
+          <GlossedLine line={ui.bye} />
         </button>
       ) : null}
     </div>

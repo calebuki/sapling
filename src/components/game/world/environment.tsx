@@ -3,7 +3,8 @@
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { heightAt, pathDistance, shoreDistance, mulberry32 } from "@/lib/game/world";
+import { mulberry32 } from "@/lib/game/world";
+import { island } from "../island";
 import { getGame, runtime } from "../store";
 import { toon } from "./materials";
 
@@ -19,6 +20,7 @@ const wetSand = new THREE.Color("#cdb582");
 const seabed = new THREE.Color("#7fb8a8");
 
 export function Terrain() {
+  const { heightAt, pathDistance, shoreDistance } = island().world;
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(112, 112, 200, 200);
     geo.rotateX(-Math.PI / 2);
@@ -45,7 +47,7 @@ export function Terrain() {
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     return geo;
-  }, []);
+  }, [heightAt, pathDistance, shoreDistance]);
 
   const onClick = (event: ThreeEvent<MouseEvent>) => {
     if (event.delta > 6 || getGame().phase !== "explore" || getGame().overlay) return;
@@ -74,7 +76,7 @@ const waterVertex = /* glsl */ `
   }
 `;
 
-const waterFragment = /* glsl */ `
+const waterFragment = (radius: string) => /* glsl */ `
   uniform float uTime;
   uniform vec3 uFogColor;
   uniform float uFogNear;
@@ -83,7 +85,7 @@ const waterFragment = /* glsl */ `
   varying float vViewDepth;
 
   float islandRadius(float a) {
-    return 33.0 + 3.6 * sin(3.0 * a + 0.5) + 2.2 * cos(5.0 * a + 1.3) + 1.2 * sin(7.0 * a + 2.1);
+    return ${radius};
   }
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
@@ -125,11 +127,12 @@ const waterFragment = /* glsl */ `
 `;
 
 export function Water() {
+  const radius = island().world.radiusGlsl;
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         vertexShader: waterVertex,
-        fragmentShader: waterFragment,
+        fragmentShader: waterFragment(radius),
         uniforms: {
           uTime: { value: 0 },
           uFogColor: { value: new THREE.Color(FOG.color) },
@@ -137,7 +140,7 @@ export function Water() {
           uFogFar: { value: FOG.far },
         },
       }),
-    [],
+    [radius],
   );
   const mesh = useRef<THREE.Mesh>(null);
   useFrame((_, delta) => {

@@ -1,33 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, BookUser, Flower2, Mic, Send, Snail, Sprout, TrainFront, Volume2 } from "lucide-react";
+import { ArrowRight, BookUser, Flower2, Mic, Send, Snail, Sprout, Stamp, Star, TrainFront, Volume2 } from "lucide-react";
 import { checkAnswer, expectedFor, meaningOf, personalize } from "@/lib/game/lesson";
-import {
-  acceptsAnswer,
-  announcements,
-  calendar,
-  departures,
-  guestNames,
-  journey,
-  nameFrom,
-  nameIn,
-  pickVariant,
-  reactionTo,
-  sceneBeats,
-  sceneLines,
-  signs,
-  whenSentences,
-  whereQuestions,
-  type SceneBeat,
-} from "@/lib/game/scenes";
-import { ui } from "@/lib/game/ui-text";
-import type { Line, Villager } from "@/lib/game/villagers";
+import type { Line } from "@/lib/game/line";
+import { acceptsAnswer, nameFrom, nameIn, pickVariant, reactionTo, trackLabel, type SceneBeat } from "@/lib/game/scenes";
+import { aria } from "@/lib/game/ui-text";
+import type { Villager } from "@/lib/game/villagers";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
-import { getCourse } from "@/lib/learning/course";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import type { LearnerConceptState } from "@/types/learning";
 import { sound } from "../audio/sfx";
-import { canRecognizeSpeech, listenSwedish, speakSwedish, stopListening } from "../audio/speech";
+import { canRecognizeSpeech, listen, speak, stopListening } from "../audio/speech";
+import { island, useIsland } from "../island";
 import {
   ActivityView,
   Feedback,
@@ -39,17 +24,20 @@ import {
   type RecordFn,
   type RoundSummary,
 } from "./lesson-round";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 const SCENE_ROUND = 6;
 
+const extras = () => island().sceneExtras;
+
 export function ListenButtons({ onPlay }: { onPlay: (slow: boolean) => void }) {
+  const { ui } = useIsland();
   return (
     <div className="listen-buttons">
-      <button className="icon-button big" aria-label="Lyssna (listen)" onClick={() => onPlay(false)}>
+      <button className="icon-button big" aria-label={aria(ui.listen)} onClick={() => onPlay(false)}>
         <Volume2 size={22} />
       </button>
-      <button className="icon-button" aria-label="Långsamt (slowly)" onClick={() => onPlay(true)}>
+      <button className="icon-button" aria-label={aria(ui.slowly)} onClick={() => onPlay(true)}>
         <Snail size={18} />
       </button>
     </div>
@@ -75,15 +63,15 @@ function listenWhenHearingLags(activity: AdaptiveActivity | null, states: Learne
   return lagging ? { ...activity, id: activity.id.replace(":recall:", ":listen:"), mode: "listen" as const } : activity;
 }
 
-const courseExercises = getCourse("sv").lessons.flatMap((lesson) => lesson.exercises);
 
 type StageProps = { beat: SceneBeat | null; wins: SceneBeat[]; answered: boolean };
 
-// Elin, Stina and Astrid teach through little exchanges: someone says the cue,
-// you answer, and they react to what you actually said. The schedule
-// underneath is the same adaptive one every lesson uses.
-export function SceneRound({ villager, onFinish }: { villager: Villager; onFinish: (summary: RoundSummary) => void }) {
-  const round = useLessonRound(villager, onFinish, { roundLength: SCENE_ROUND, adapt: listenWhenHearingLags });
+// Most villagers teach through little exchanges: someone says the cue, you
+// answer, and they react to what you actually said. The schedule underneath is
+// the same adaptive one every lesson uses.
+export function SceneRound({ villager, slugs, onFinish }: { villager: Villager; slugs: readonly string[]; onFinish: (summary: RoundSummary) => void }) {
+  const { ui } = useIsland();
+  const round = useLessonRound(villager, slugs, onFinish, { roundLength: SCENE_ROUND, adapt: listenWhenHearingLags });
   const { activity, concept, name, outcome, queued, busy, attempts, summary, stateBefore } = round;
   const [wins, setWins] = useState<SceneBeat[]>([]);
   // Varies the variants from one round to the next.
@@ -91,13 +79,13 @@ export function SceneRound({ villager, onFinish }: { villager: Villager; onFinis
   const [answer, setAnswer] = useState<string | null>(null);
   const [puzzle, setPuzzle] = useState<{ beat: SceneBeat; expected: string } | null>(null);
   const puzzleUsed = useRef(false);
-  const beats = sceneBeats[villager.id] ?? {};
+  const beats = island().scenes[villager.id] ?? {};
 
   if (!activity || !concept) {
     return (
       <div className="dialogue-actions">
         <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
+          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
         </button>
       </div>
     );
@@ -109,7 +97,7 @@ export function SceneRound({ villager, onFinish }: { villager: Villager; onFinis
   // A different variant each time the phrase comes round.
   const beat = variants.length ? pickVariant(variants, `${key}:${seed}`) : null;
   const exercise = activity.exercise;
-  const expected = beat?.expect ? personalize(beat.expect.sv, name) : expectedFor(exercise, name);
+  const expected = beat?.expect ? personalize(beat.expect.t, name) : expectedFor(exercise, name);
   const meaning = beat?.expect ? beat.expect.en : meaningOf(exercise, name);
   const listening = activity.mode === "listen" || activity.mode === "dictation";
 
@@ -167,7 +155,7 @@ export function SceneRound({ villager, onFinish }: { villager: Villager; onFinis
     );
   }
 
-  const Stage = villager.id === "elin" ? DockStage : villager.id === "stina" ? StationStage : GardenStage;
+  const Stage = { guestbook: DockStage, journey: StationStage, garden: GardenStage, stamps: StampStage }[villager.stage];
   // Listening drills keep the words hidden; the exchange shows for spoken turns only.
   const showBeat = !puzzle && beat && !listening ? beat : null;
   return (
@@ -180,7 +168,7 @@ export function SceneRound({ villager, onFinish }: { villager: Villager; onFinis
       {body}
       {round.error ? (
         <p className="lesson-error" role="alert">
-          <SvLine line={ui.error} /> <button onClick={() => round.setError(false)}><SvLine line={ui.tryAgain} /></button>
+          <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
         </p>
       ) : null}
     </div>
@@ -189,7 +177,7 @@ export function SceneRound({ villager, onFinish }: { villager: Villager; onFinis
 
 // ---------- The exchange ----------
 
-type Turn = { role: "character" | "learner"; sv: string; en?: string };
+type Turn = { role: "character" | "learner"; t: string; en?: string };
 type Reply = { reply: string; english: string; followUp: boolean };
 
 function speakerOf(beat: SceneBeat, answered: boolean) {
@@ -198,12 +186,12 @@ function speakerOf(beat: SceneBeat, answered: boolean) {
 
 function speakAs(beat: SceneBeat, villager: Villager, text: string, slow = false) {
   const self = beat.speaker === villager.name;
-  return speakSwedish(text, { who: self ? villager.id : undefined, pitch: beat.pitch ?? villager.voicePitch, slow });
+  return speak(text, { who: self ? villager.id : undefined, pitch: beat.pitch ?? villager.voicePitch, slow });
 }
 
 async function askForReply(body: object): Promise<Reply | null> {
   try {
-    const response = await fetch("/api/scene/reply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const response = await fetch("/api/scene/reply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: island().code, ...body }) });
     return response.ok ? await response.json() : null;
   } catch {
     return null;
@@ -233,13 +221,13 @@ export function Exchange({
   const accent = beat.speaker === villager.name ? villager.look.accent : undefined;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void speakAs(beat, villager, beat.cue.sv), 300);
+    const timer = window.setTimeout(() => void speakAs(beat, villager, beat.cue.t), 300);
     return () => window.clearTimeout(timer);
   }, [beat, villager]);
 
   return (
     <div className="scene-thread">
-      <Bubble speaker={speaker} accent={accent} line={beat.cue} blurred={blurred} onPlay={() => void speakAs(beat, villager, beat.cue.sv)} />
+      <Bubble speaker={speaker} accent={accent} line={beat.cue} blurred={blurred} onPlay={() => void speakAs(beat, villager, beat.cue.t)} />
       {answer ? (
         <Continuation key={answer} villager={villager} beat={beat} target={target} answer={answer} name={name} speaker={speaker} accent={accent} />
       ) : null}
@@ -265,10 +253,10 @@ function Continuation({
   speaker: string;
   accent?: string;
 }) {
-  const [turns, setTurns] = useState<Turn[]>(() => [{ role: "learner", sv: answer }]);
+  const [turns, setTurns] = useState<Turn[]>(() => [{ role: "learner", t: answer }]);
   const [thinking, setThinking] = useState(true);
   const [followUp, setFollowUp] = useState(false);
-  const learnerName = nameFrom(answer) || name || null;
+  const learnerName = nameFrom(answer, extras(), island().code) || name || null;
 
   const request = useCallback(
     (history: Turn[]) =>
@@ -278,9 +266,9 @@ function Continuation({
         situation: beat.situation,
         target,
         learnerName,
-        history: [{ role: "character", text: beat.cue.sv }, ...history.map((t) => ({ role: t.role, text: t.sv }))],
+        history: [{ role: "character", text: beat.cue.t }, ...history.map((t) => ({ role: t.role, text: t.t }))],
       }),
-    [beat.situation, beat.cue.sv, villager.id, speaker, target, learnerName],
+    [beat.situation, beat.cue.t, villager.id, speaker, target, learnerName],
   );
 
   // First reply: the model's if it arrives quickly, else the scripted one for what was said.
@@ -290,14 +278,14 @@ function Continuation({
       if (!alive) return;
       alive = false;
       window.clearTimeout(fallback);
-      const line = result ? { sv: result.reply, en: result.english } : reactionTo(beat, answer, learnerName ?? "");
+      const line = result ? { t: result.reply, en: result.english } : reactionTo(beat, answer, learnerName ?? "", extras(), island().code);
       setThinking(false);
-      setTurns([{ role: "learner", sv: answer }, { role: "character", ...line }]);
+      setTurns([{ role: "learner", t: answer }, { role: "character", ...line }]);
       setFollowUp(Boolean(result?.followUp));
-      window.setTimeout(() => void speakAs(beat, villager, line.sv), 900);
+      window.setTimeout(() => void speakAs(beat, villager, line.t), 900);
     };
     const fallback = window.setTimeout(() => settle(null), 3200);
-    void request([{ role: "learner", sv: answer }]).then(settle);
+    void request([{ role: "learner", t: answer }]).then(settle);
     return () => {
       alive = false;
       window.clearTimeout(fallback);
@@ -305,14 +293,14 @@ function Continuation({
   }, [answer, beat, villager, request, learnerName]);
 
   const send = async (text: string) => {
-    const next: Turn[] = [...turns, { role: "learner", sv: text }];
+    const next: Turn[] = [...turns, { role: "learner", t: text }];
     setTurns(next);
     setFollowUp(false);
     setThinking(true);
     const result = await request(next);
     setThinking(false);
     if (!result) return;
-    setTurns([...next, { role: "character", sv: result.reply, en: result.english }]);
+    setTurns([...next, { role: "character", t: result.reply, en: result.english }]);
     setFollowUp(result.followUp);
     void speakAs(beat, villager, result.reply);
   };
@@ -323,10 +311,10 @@ function Continuation({
         turn.role === "learner" ? (
           <div key={i} className="scene-bubble is-learner">
             <span className="scene-speaker is-you">
-              <SvLine line={sceneLines.you} />
+              <GlossedLine line={extras().lines.you} />
             </span>
             <div className="scene-line">
-              <Sv text={turn.sv} />
+              <Glossed text={turn.t} />
             </div>
           </div>
         ) : (
@@ -334,9 +322,9 @@ function Continuation({
             key={i}
             speaker={speaker}
             accent={accent}
-            line={{ sv: turn.sv, en: turn.en ?? "" }}
+            line={{ t: turn.t, en: turn.en ?? "" }}
             reaction
-            onPlay={() => void speakAs(beat, villager, turn.sv)}
+            onPlay={() => void speakAs(beat, villager, turn.t)}
           />
         ),
       )}
@@ -370,14 +358,15 @@ function Bubble({
   reaction?: boolean;
   onPlay: () => void;
 }) {
+  const { ui } = useIsland();
   return (
     <div className={`scene-bubble ${reaction ? "is-reaction" : ""}`}>
       <span className="scene-speaker" style={{ background: accent }}>{speaker}</span>
       <div className={`scene-line ${blurred ? "is-blurred" : ""}`}>
-        <Sv text={line.sv} en={line.en} />
+        <Glossed text={line.t} en={line.en} />
         {blurred || !line.en ? null : <span className="scene-line-en">{line.en}</span>}
       </div>
-      <button className="icon-button" aria-label="Lyssna (listen)" onClick={onPlay}>
+      <button className="icon-button" aria-label={aria(ui.listen)} onClick={onPlay}>
         <Volume2 size={17} />
       </button>
     </div>
@@ -386,6 +375,7 @@ function Bubble({
 
 // An optional extra turn: say anything, the character answers.
 function FollowUpInput({ onSend }: { onSend: (text: string) => void }) {
+  const { code, ui } = useIsland();
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const mic = useMemo(() => canRecognizeSpeech(), []);
@@ -404,11 +394,11 @@ function FollowUpInput({ onSend }: { onSend: (text: string) => void }) {
       }}
     >
       <input
-        lang="sv"
+        lang={getTargetLanguage(code).locale}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={sceneLines.keepTalking.sv}
-        aria-label="Svara om du vill (reply if you like)"
+        placeholder={extras().lines.keepTalking.t}
+        aria-label={aria(ui.replyIfYouLike)}
         autoComplete="off"
         spellCheck={false}
       />
@@ -416,12 +406,12 @@ function FollowUpInput({ onSend }: { onSend: (text: string) => void }) {
         <button
           type="button"
           className={`icon-button mic ${listening ? "is-live" : ""}`}
-          aria-label="Säg det (say it)"
+          aria-label={aria(ui.sayIt)}
           onClick={async () => {
             if (listening) return stopListening();
             setListening(true);
             try {
-              const result = await listenSwedish((t) => setText(t));
+              const result = await listen((t) => setText(t));
               if (result.transcript) setText(result.transcript);
             } catch {
               // Typing still works.
@@ -433,7 +423,7 @@ function FollowUpInput({ onSend }: { onSend: (text: string) => void }) {
           <Mic size={18} />
         </button>
       ) : null}
-      <button type="submit" className="icon-button" aria-label="Skicka (send)" disabled={!text.trim()}>
+      <button type="submit" className="icon-button" aria-label={aria(ui.send)} disabled={!text.trim()}>
         <Send size={17} />
       </button>
     </form>
@@ -441,15 +431,16 @@ function FollowUpInput({ onSend }: { onSend: (text: string) => void }) {
 }
 
 function MeetBeat({ beat, expected, meaning, busy, onRecord }: { beat: SceneBeat; expected: string; meaning: string; busy: boolean; onRecord: RecordFn }) {
+  const { ui } = useIsland();
   return (
     <div className="activity">
       <p className="scene-situation">{beat.situation}</p>
       <p className="activity-kicker">
-        <SvLine line={sceneLines.youCanSay} />
+        <GlossedLine line={extras().lines.youCanSay} />
       </p>
       <div className="activity-phrase">
-        <Sv text={expected} en={meaning} as="h3" />
-        <ListenButtons onPlay={(slow) => void speakSwedish(expected, { slow })} />
+        <Glossed text={expected} en={meaning} as="h3" />
+        <ListenButtons onPlay={(slow) => void speak(expected, { slow })} />
       </div>
       <p className="activity-meaning">{meaning}</p>
       <SayItPractice expected={expected} />
@@ -460,7 +451,7 @@ function MeetBeat({ beat, expected, meaning, busy, onRecord }: { beat: SceneBeat
           autoFocus
           onClick={() => void onRecord({ successful: true, assisted: true, response: "", expected, check: "exact", replays: 0, input: "text" })}
         >
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
+          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
         </button>
       </div>
     </div>
@@ -499,9 +490,10 @@ function ReplyBeat({
   // Exact (or nearly), another natural way to say it, or — for the course's own
   // sentence — whatever the evaluator accepts as fulfilling the task.
   const judge = async (answer: string) => {
-    const check = checkAnswer(answer, expected);
+    const code = island().code;
+    const check = checkAnswer(answer, expected, code);
     if (check !== "wrong") return { successful: true, check };
-    if (acceptsAnswer(beat.accept, answer)) return { successful: true, check: "exact" as const };
+    if (acceptsAnswer(beat.accept ?? activity.exercise.accept, answer, code)) return { successful: true, check: "exact" as const };
     if (!beat.expect) return judgeAnswer(activity, answer, expected);
     return { successful: false, check };
   };
@@ -511,12 +503,12 @@ function ReplyBeat({
       <p className="scene-situation">{beat.situation}</p>
       {!arrived ? (
         <p className="activity-kicker scene-riding">
-          <TrainFront size={16} /> <SvLine line={sceneLines.riding} />
+          <TrainFront size={16} /> <GlossedLine line={extras().lines.riding} />
         </p>
       ) : (
         <>
           <p className="activity-kicker">
-            <SvLine line={sceneLines.answer} /> <span className="scene-hint">“{meaning}”</span>
+            <GlossedLine line={extras().lines.answer} /> <span className="scene-hint">“{meaning}”</span>
           </p>
           {useTiles ? (
             <Tiles
@@ -558,11 +550,12 @@ type DrillProps = {
 };
 
 function ListeningDrill(props: DrillProps) {
-  const { villager, slug, activity } = props;
-  if (villager.id === "elin" && slug === "jag-heter" && activity.listening && nameIn(activity.listening.text)) return <WhoIsTalking {...props} />;
-  if (villager.id === "stina" && slug === "var-ligger-stationen") return <SignPick {...props} />;
-  if (villager.id === "stina" && (slug === "taget-till-stockholm" || slug === "kan-du-upprepa")) return <BoardHunt {...props} />;
-  if (villager.id === "astrid" && whenSentences[slug]) return <WhenPick {...props} />;
+  const { slug, activity } = props;
+  const drill = island().drills[slug];
+  if (drill === "who" && activity.listening && nameIn(activity.listening.text, extras())) return <WhoIsTalking {...props} />;
+  if (drill === "sign") return <SignPick {...props} />;
+  if (drill === "board") return <BoardHunt {...props} />;
+  if (extras().whenSentences[slug]) return <WhenPick {...props} />;
   return <ReplyPick {...props} />;
 }
 
@@ -572,7 +565,7 @@ function useHeard(text: string, villager: Villager, clipId?: string, pitch?: num
   const play = useCallback(
     (slow = false) => {
       replays.current++;
-      void speakSwedish(text, { clipId, pitch: pitch ?? villager.voicePitch, slow });
+      void speak(text, { clipId, pitch: pitch ?? villager.voicePitch, slow });
     },
     [text, clipId, pitch, villager.voicePitch],
   );
@@ -589,7 +582,7 @@ function DrillHead({ kicker, situation, onPlay }: { kicker: Line; situation: str
       <p className="scene-situation">{situation}</p>
       <div className="cafe-point-head">
         <p className="activity-kicker">
-          <SvLine line={kicker} />
+          <GlossedLine line={kicker} />
         </p>
         <ListenButtons onPlay={onPlay} />
       </div>
@@ -603,25 +596,26 @@ function stateFor(option: string, picked: string | null, answer: string) {
   return option === picked ? "is-wrong" : "is-dim";
 }
 
-function Reveal({ line }: { line: { sv: string; en?: string } }) {
+function Reveal({ line }: { line: { t: string; en?: string } }) {
   return (
     <p className="scene-reveal">
-      <Sv text={line.sv} en={line.en} /> {line.en ? <span className="scene-line-en">{line.en}</span> : null}
+      <Glossed text={line.t} en={line.en} /> {line.en ? <span className="scene-line-en">{line.en}</span> : null}
     </p>
   );
 }
 
 // Hear what someone says (no text), pick the reply that fits.
 function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRecord }: DrillProps) {
-  const cue = beat?.cue ?? { sv: activity.listening?.text ?? expected, en: activity.listening?.meaning };
-  const { play, replays } = useHeard(cue.sv, villager, beat ? undefined : activity.listening?.audioId, beat?.pitch);
+  const { course } = useIsland();
+  const cue = beat?.cue ?? { t: activity.listening?.text ?? expected, en: activity.listening?.meaning };
+  const { play, replays } = useHeard(cue.t, villager, beat ? undefined : activity.listening?.audioId, beat?.pitch);
   const [picked, setPicked] = useState<string | null>(null);
   const [options] = useState(() => {
-    const others = Object.entries(sceneBeats[villager.id] ?? {})
+    const others = Object.entries(island().scenes[villager.id] ?? {})
       .filter(([other]) => other !== slug && !beat?.notWith?.includes(other))
       .map(([other, vs]) => {
-        const exercise = courseExercises.find((e) => e.conceptSlug === other);
-        return vs[0].expect ? vs[0].expect.sv : exercise ? expectedFor(exercise, name) : "";
+        const exercise = course.lessons.flatMap((lesson) => lesson.exercises).find((e) => e.conceptSlug === other);
+        return vs[0].expect ? vs[0].expect.t : exercise ? expectedFor(exercise, name) : "";
       })
       .filter((text) => text && text !== expected);
     const distractors = others.sort(() => Math.random() - 0.5).slice(0, 2);
@@ -630,7 +624,7 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
   const who = beat ? (beat.speaker === "?" ? "Someone" : beat.speaker) : "Someone";
   return (
     <div className="activity">
-      <DrillHead kicker={sceneLines.whatDoYouSay} situation={`${who} says something to you. Listen, then pick your answer.`} onPlay={play} />
+      <DrillHead kicker={extras().lines.whatDoYouSay} situation={`${who} says something to you. Listen, then pick your answer.`} onPlay={play} />
       {picked ? <Reveal line={cue} /> : null}
       <div className="choice-grid">
         {options.map((option) => (
@@ -644,7 +638,7 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
               void onRecord({ successful: option === expected, assisted: false, response: option, expected, check: "choice", replays: replays(), input: "choice" });
             }}
           >
-            <Sv text={option} />
+            <Glossed text={option} />
           </button>
         ))}
       </div>
@@ -655,16 +649,16 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
 // Elin: a passenger introduces themselves; tap their name tag.
 function WhoIsTalking({ villager, activity, busy, onRecord }: DrillProps) {
   const listening = activity.listening!;
-  const answer = nameIn(listening.text)!;
+  const answer = nameIn(listening.text, extras())!;
   const { play, replays } = useHeard(listening.text, villager, listening.audioId);
   const [picked, setPicked] = useState<string | null>(null);
   const [options] = useState(() => {
-    const others = guestNames.filter((n) => n !== answer).sort(() => Math.random() - 0.5).slice(0, 3);
+    const others = extras().guestNames.filter((n) => n !== answer).sort(() => Math.random() - 0.5).slice(0, 3);
     return [answer, ...others].sort(() => Math.random() - 0.5);
   });
   return (
     <div className="activity">
-      <DrillHead kicker={sceneLines.whoIsTalking} situation="A new passenger steps off and introduces themselves. Who is it?" onPlay={play} />
+      <DrillHead kicker={extras().lines.whoIsTalking} situation="A new passenger steps off and introduces themselves. Who is it?" onPlay={play} />
       <div className="name-tags">
         {options.map((option) => (
           <button
@@ -676,7 +670,7 @@ function WhoIsTalking({ villager, activity, busy, onRecord }: DrillProps) {
               void onRecord({ successful: option === answer, assisted: false, response: option, expected: listening.text, check: "choice", replays: replays(), input: "choice" });
             }}
           >
-            <span className="name-tag-hello">Hej! Jag heter</span>
+            <span className="name-tag-hello">{extras().nameTag}</span>
             <strong>{option}</strong>
           </button>
         ))}
@@ -687,25 +681,25 @@ function WhoIsTalking({ villager, activity, busy, onRecord }: DrillProps) {
 
 // Stina: someone asks the way; point at the right sign.
 function SignPick({ villager, busy, onRecord }: DrillProps) {
-  const [question] = useState(() => whereQuestions[Math.floor(Math.random() * whereQuestions.length)]);
-  const { play, replays } = useHeard(question.sv, villager, undefined, 1.1);
+  const [question] = useState(() => extras().whereQuestions[Math.floor(Math.random() * extras().whereQuestions.length)]);
+  const { play, replays } = useHeard(question.t, villager, undefined, 1.1);
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
-      <DrillHead kicker={sceneLines.whichSign} situation="A traveller asks you the way. Point at the sign they need." onPlay={play} />
+      <DrillHead kicker={extras().lines.whichSign} situation="A traveller asks you the way. Point at the sign they need." onPlay={play} />
       <div className="scene-signs">
-        {signs.map((sign) => (
+        {extras().signs.map((sign) => (
           <button
             key={sign.id}
             className={`scene-sign ${stateFor(sign.id, picked, question.sign)}`}
             disabled={busy || picked !== null}
             onClick={() => {
               setPicked(sign.id);
-              void onRecord({ successful: sign.id === question.sign, assisted: false, response: sign.line.sv, expected: question.sv, check: "choice", replays: replays(), input: "choice" });
+              void onRecord({ successful: sign.id === question.sign, assisted: false, response: sign.line.t, expected: question.t, check: "choice", replays: replays(), input: "choice" });
             }}
           >
             <span className="scene-sign-arrow" aria-hidden="true">➜</span>
-            <SvLine line={sign.line} />
+            <GlossedLine line={sign.line} />
           </button>
         ))}
       </div>
@@ -716,26 +710,26 @@ function SignPick({ villager, busy, onRecord }: DrillProps) {
 
 // Stina: a platform announcement; find the train on the board.
 function BoardHunt({ villager, busy, onRecord }: DrillProps) {
-  const [announcement] = useState(() => announcements[Math.floor(Math.random() * announcements.length)]);
-  const { play, replays } = useHeard(announcement.sv, villager, undefined, 0.95);
+  const [announcement] = useState(() => extras().announcements[Math.floor(Math.random() * extras().announcements.length)]);
+  const { play, replays } = useHeard(announcement.t, villager, undefined, 0.95);
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
-      <DrillHead kicker={sceneLines.whichTrain} situation="The loudspeaker crackles. Which train is it about?" onPlay={play} />
+      <DrillHead kicker={extras().lines.whichTrain} situation="The loudspeaker crackles. Which train is it about?" onPlay={play} />
       <div className="scene-board scene-board-pick">
-        {departures.map((d) => (
+        {extras().departures.map((d) => (
           <button
             key={d.to}
             className={`scene-board-row ${stateFor(d.to, picked, announcement.to)}`}
             disabled={busy || picked !== null}
             onClick={() => {
               setPicked(d.to);
-              void onRecord({ successful: d.to === announcement.to, assisted: false, response: d.to, expected: announcement.sv, check: "choice", replays: replays(), input: "choice" });
+              void onRecord({ successful: d.to === announcement.to, assisted: false, response: d.to, expected: announcement.t, check: "choice", replays: replays(), input: "choice" });
             }}
           >
             <span>{d.time}</span>
             <span>{d.to}</span>
-            <Sv text={`spår ${d.track}`} en={`platform ${d.track}`} />
+            <GlossedLine line={trackLabel(extras(), d.track)} />
           </button>
         ))}
       </div>
@@ -744,29 +738,29 @@ function BoardHunt({ villager, busy, onRecord }: DrillProps) {
   );
 }
 
-// Astrid: hear a sentence, decide whether it's about yesterday, today or tomorrow.
+// Hear a sentence, decide whether it's about yesterday, today or tomorrow.
 function WhenPick({ villager, slug, busy, onRecord }: DrillProps) {
   const [sentence] = useState(() => {
-    const pool = whenSentences[slug];
+    const pool = extras().whenSentences[slug];
     return pool[Math.floor(Math.random() * pool.length)];
   });
-  const { play, replays } = useHeard(sentence.sv, villager);
+  const { play, replays } = useHeard(sentence.t, villager);
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
-      <DrillHead kicker={sceneLines.when} situation="Astrid tells you about her week. When is she talking about?" onPlay={play} />
+      <DrillHead kicker={extras().lines.when} situation={`${villager.name} tells you about their week. When are they talking about?`} onPlay={play} />
       <div className="scene-when">
-        {calendar.map((day) => (
+        {extras().calendar.map((day) => (
           <button
             key={day.id}
             className={`btn choice scene-when-day ${stateFor(day.id, picked, sentence.time)}`}
             disabled={busy || picked !== null}
             onClick={() => {
               setPicked(day.id);
-              void onRecord({ successful: day.id === sentence.time, assisted: false, response: day.line.sv, expected: sentence.sv, check: "choice", replays: replays(), input: "choice" });
+              void onRecord({ successful: day.id === sentence.time, assisted: false, response: day.line.t, expected: sentence.t, check: "choice", replays: replays(), input: "choice" });
             }}
           >
-            <SvLine line={day.line} />
+            <GlossedLine line={day.line} />
           </button>
         ))}
       </div>
@@ -778,12 +772,13 @@ function WhenPick({ villager, slug, busy, onRecord }: DrillProps) {
 // ---------- Bonus: put an exchange back in order ----------
 
 function DialogPuzzle({ beat, expected, villager, name, onDone }: { beat: SceneBeat; expected: string; villager: Villager; name: string | null; onDone: () => void }) {
+  const { ui } = useIsland();
   const who = speakerOf(beat, true);
-  const reaction = reactionTo(beat, expected, name ?? "");
+  const reaction = reactionTo(beat, expected, name ?? "", extras(), island().code);
   const lines = [
-    { id: 0, who, sv: beat.cue.sv },
-    { id: 1, who: sceneLines.you.sv, sv: expected },
-    { id: 2, who, sv: reaction.sv },
+    { id: 0, who, t: beat.cue.t },
+    { id: 1, who: extras().lines.you.t, t: expected },
+    { id: 2, who, t: reaction.t },
   ];
   const [order] = useState(() => [0, 1, 2].sort(() => Math.random() - 0.5));
   const [placed, setPlaced] = useState<number[]>([]);
@@ -792,12 +787,12 @@ function DialogPuzzle({ beat, expected, villager, name, onDone }: { beat: SceneB
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={sceneLines.puzzle} /> <span className="scene-hint">{sceneLines.puzzleHelp.en}</span>
+        <GlossedLine line={extras().lines.puzzle} /> <span className="scene-hint">{extras().lines.puzzleHelp.en}</span>
       </p>
       <ol className="scene-puzzle-placed">
         {placed.map((id) => (
           <li key={id}>
-            <strong>{lines[id].who}:</strong> <Sv text={lines[id].sv} />
+            <strong>{lines[id].who}:</strong> <Glossed text={lines[id].t} />
           </li>
         ))}
       </ol>
@@ -812,7 +807,7 @@ function DialogPuzzle({ beat, expected, villager, name, onDone }: { beat: SceneB
                 onClick={() => {
                   if (id === placed.length) {
                     sound.play(id === lines.length - 1 ? "sparkle" : "tile");
-                    void speakSwedish(lines[id].sv, { pitch: id === 1 ? 1 : beat.pitch ?? villager.voicePitch });
+                    void speak(lines[id].t, { pitch: id === 1 ? 1 : beat.pitch ?? villager.voicePitch });
                     setPlaced([...placed, id]);
                   } else {
                     sound.play("wrong");
@@ -821,14 +816,14 @@ function DialogPuzzle({ beat, expected, villager, name, onDone }: { beat: SceneB
                   }
                 }}
               >
-                <strong>{lines[id].who}:</strong>&nbsp;<Sv text={lines[id].sv} />
+                <strong>{lines[id].who}:</strong>&nbsp;<Glossed text={lines[id].t} />
               </button>
             ))}
         </div>
       ) : (
         <div className="dialogue-actions">
           <button className="btn btn-primary" autoFocus onClick={onDone}>
-            <SvLine line={ui.next} /> <ArrowRight size={18} />
+            <GlossedLine line={ui.next} /> <ArrowRight size={18} />
           </button>
         </div>
       )}
@@ -848,12 +843,12 @@ function Avatar({ name }: { name: string }) {
 }
 
 function DockStage({ wins }: StageProps) {
-  const guests = [...new Set(wins.map((w) => w.guest ?? w.speaker).filter((n) => guestNames.includes(n)))];
+  const guests = [...new Set(wins.map((w) => w.guest ?? w.speaker).filter((n) => extras().guestNames.includes(n)))];
   return (
     <div className="scene-stage">
       <div className="scene-panel scene-guestbook">
         <span className="scene-panel-title">
-          <BookUser size={14} /> <SvLine line={sceneLines.guestBook} />
+          <BookUser size={14} /> <GlossedLine line={extras().lines.guestBook} />
         </span>
         <div className="scene-guests">
           {guests.length === 0 ? <span className="scene-empty">…</span> : null}
@@ -870,22 +865,22 @@ function DockStage({ wins }: StageProps) {
 
 function StationStage({ beat, wins, answered }: StageProps) {
   // The train moves one stop along per good answer; a ride beat pulls into its stop.
-  const riding = beat?.ride ? journey.indexOf(beat.ride) : -1;
-  const position = riding >= 0 && !answered ? riding : Math.min(journey.length - 1, wins.length);
+  const riding = beat?.ride ? extras().journey.indexOf(beat.ride) : -1;
+  const position = riding >= 0 && !answered ? riding : Math.min(extras().journey.length - 1, wins.length);
   return (
     <div className="scene-stage">
       <div className="scene-panel scene-board">
         <span className="scene-panel-title">
-          <SvLine line={sceneLines.departures} />
+          <GlossedLine line={extras().lines.departures} />
         </span>
         <table>
           <tbody>
-            {departures.map((d) => (
+            {extras().departures.map((d) => (
               <tr key={d.to} className={beat?.departure === d.to ? "is-highlight" : ""}>
                 <td>{d.time}</td>
                 <td>{d.to}</td>
                 <td>
-                  <Sv text={`spår ${d.track}`} en={`platform ${d.track}`} />
+                  <GlossedLine line={trackLabel(extras(), d.track)} />
                 </td>
               </tr>
             ))}
@@ -894,10 +889,10 @@ function StationStage({ beat, wins, answered }: StageProps) {
       </div>
       <div className="scene-panel scene-journey">
         <span className="scene-panel-title">
-          <SvLine line={sceneLines.journey} />
+          <GlossedLine line={extras().lines.journey} />
         </span>
-        <ol style={{ "--stops": journey.length, "--at": position } as React.CSSProperties}>
-          {journey.map((stop, i) => (
+        <ol style={{ "--stops": extras().journey.length, "--at": position } as React.CSSProperties}>
+          {extras().journey.map((stop, i) => (
             <li key={stop} className={`${i <= position ? "is-passed" : ""} ${beat?.ride === stop ? "is-target" : ""}`}>
               <span className="scene-stop-dot" />
               <span className="scene-stop-name">{stop}</span>
@@ -917,18 +912,38 @@ function GardenStage({ beat, wins }: StageProps) {
   return (
     <div className="scene-stage">
       <div className="scene-panel scene-calendar">
-        {calendar.map((day) => (
+        {extras().calendar.map((day) => (
           <span key={day.id} className={`scene-day ${beat?.time === day.id ? "is-now" : ""}`}>
-            <SvLine line={day.line} />
+            <GlossedLine line={day.line} />
           </span>
         ))}
       </div>
-      <div className="scene-panel scene-pots" aria-label={`${wins.length} blommor (flowers)`}>
+      <div className="scene-panel scene-pots" aria-label={`${wins.length} ${island().ui.flowers.t} (${island().ui.flowers.en})`}>
         {Array.from({ length: pots }, (_, i) => (
           <span key={i} className={`scene-pot ${i < wins.length ? "is-bloom" : ""}`}>
             {i < wins.length ? <Flower2 size={22} /> : <Sprout size={16} />}
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function StampStage({ wins }: StageProps) {
+  const slots = 6;
+  return (
+    <div className="scene-stage">
+      <div className="scene-panel scene-stamps">
+        <span className="scene-panel-title">
+          <Stamp size={14} /> <GlossedLine line={extras().lines.stamps} />
+        </span>
+        <div className="scene-stamp-row">
+          {Array.from({ length: slots }, (_, i) => (
+            <span key={i} className={`scene-stamp ${i < wins.length ? "is-stamped" : ""}`}>
+              {i < wins.length ? <Star size={18} /> : null}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

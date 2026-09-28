@@ -1,5 +1,5 @@
-import type { Lesson, ListenSpeakItem } from "./course.ts";
-import { foundationLessons, foundationListening } from "./swedish-foundations";
+import type { Lesson, ListenSpeakItem } from "@/lib/learning/course";
+import { foundationLessons, foundationListening } from "./foundations";
 
 const sofie = "sv-SE-SofieNeural" as const;
 const mattias = "sv-SE-MattiasNeural" as const;

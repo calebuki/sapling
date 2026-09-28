@@ -6,12 +6,12 @@ import { ArrowLeft, ArrowRight, Check, GraduationCap, Volume2, X } from "lucide-
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import type { GrammarTip } from "@/lib/game/grammar";
 import { expectedFor, meaningOf } from "@/lib/game/lesson";
-import { getCourse } from "@/lib/learning/course";
-import { getVillager } from "@/lib/game/villagers";
+import { aria } from "@/lib/game/ui-text";
 import { sound } from "../audio/sfx";
-import { speakSwedish } from "../audio/speech";
+import { speak } from "../audio/speech";
+import { island, villagerById, useIsland } from "../island";
 import { emote, useGame } from "../store";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 // A grammar tip takes the centre of the screen: it's a pause to understand,
 // not another turn of conversation, so it sits above the dialogue box.
@@ -24,7 +24,9 @@ export function GrammarTipModal({
   onDone: () => void;
   review?: boolean;
 }) {
-  const villager = getVillager(tip.villager);
+  const { code, course, ui } = useIsland();
+  const teacher = course.units.find((u) => u.id === tip.unit)?.villager ?? island().host;
+  const villager = villagerById(teacher);
   const model = useLearningModel();
   const name = useGame((s) => s.save.name);
   const [step, setStep] = useState(0);
@@ -32,14 +34,14 @@ export function GrammarTipModal({
   const [options] = useState(() => [...tip.check.options].sort(() => Math.random() - 0.5));
   // Show the phrases as the lessons will teach them, with the player's own name.
   const unlocked = useMemo(() => {
-    const exercises = getCourse("sv").lessons.flatMap((l) => l.exercises);
+    const exercises = course.lessons.flatMap((l) => l.exercises);
     return tip.gates.flatMap((slug) => {
       const exercise = exercises.find((e) => e.conceptSlug === slug);
-      const concept = model.concepts.find((c) => c.languageCode === "sv" && c.slug === slug);
-      if (exercise) return [{ slug, sv: expectedFor(exercise, name), en: meaningOf(exercise, name) }];
-      return concept ? [{ slug, sv: concept.canonicalForm, en: concept.gloss }] : [];
+      const concept = model.concepts.find((c) => c.languageCode === code && c.slug === slug);
+      if (exercise) return [{ slug, t: expectedFor(exercise, name), en: meaningOf(exercise, name) }];
+      return concept ? [{ slug, t: concept.canonicalForm, en: concept.gloss }] : [];
     });
-  }, [tip, model.concepts, name]);
+  }, [tip, model.concepts, name, code, course]);
   const cards = tip.cards.length;
   const onCheck = step === cards;
   const onUnlock = step === cards + 1;
@@ -47,8 +49,8 @@ export function GrammarTipModal({
 
   useEffect(() => {
     sound.play("open");
-    emote(tip.villager, "think", 1800);
-  }, [tip.villager]);
+    emote(villager.id, "think", 1800);
+  }, [villager.id]);
   useEffect(() => primary.current?.focus({ preventScroll: true }), [step]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -72,13 +74,13 @@ export function GrammarTipModal({
       <div className="grammar-card" style={{ "--accent": villager.look.accent } as React.CSSProperties}>
         <header className="grammar-head">
           <span className="grammar-badge">
-            <GraduationCap size={16} /> <Sv text="Lilla grammatik" en="Little grammar" />
+            <GraduationCap size={16} /> <GlossedLine line={ui.littleGrammar} />
           </span>
-          <button className="grammar-skip" onClick={onDone} aria-label="Hoppa över (skip)">
-            {review ? <X size={18} /> : <Sv text="Hoppa över" en="Skip" />}
+          <button className="grammar-skip" onClick={onDone} aria-label={aria(ui.skip)}>
+            {review ? <X size={18} /> : <GlossedLine line={ui.skip} />}
           </button>
         </header>
-        <SvLine line={tip.title} as="h2" className="grammar-title" />
+        <GlossedLine line={tip.title} as="h2" className="grammar-title" />
         <p className="grammar-teacher">
           <span className="dot" style={{ background: villager.look.accent }} /> {villager.name} · {tip.title.en}
         </p>
@@ -86,20 +88,20 @@ export function GrammarTipModal({
         {card ? (
           <section className="grammar-body" key={step}>
             <h3>
-              <SvLine line={card.title} /> <span className="grammar-en">{card.title.en}</span>
+              <GlossedLine line={card.title} /> <span className="grammar-en">{card.title.en}</span>
             </h3>
             <p>{card.body}</p>
             <ul className="grammar-examples">
               {card.examples.map((example) => (
-                <li key={example.sv}>
+                <li key={example.t}>
                   <button
                     className="icon-button"
-                    aria-label="Lyssna (listen)"
-                    onClick={() => void speakSwedish(example.sv.replace("→", ","), { who: tip.villager, pitch: villager.voicePitch })}
+                    aria-label={aria(ui.listen)}
+                    onClick={() => void speak(example.t.replace("→", ","), { who: villager.id, pitch: villager.voicePitch })}
                   >
                     <Volume2 size={16} />
                   </button>
-                  <Sv text={example.sv} en={example.en} className="grammar-sv" />
+                  <Glossed text={example.t} en={example.en} className="grammar-tl" />
                   <span className="grammar-example-en">{example.en}</span>
                 </li>
               ))}
@@ -110,7 +112,7 @@ export function GrammarTipModal({
         {onCheck ? (
           <section className="grammar-body" key="check">
             <h3>
-              <Sv text="Testa!" en="Try it!" /> <span className="grammar-en">{tip.check.question}</span>
+              <GlossedLine line={ui.tryIt} /> <span className="grammar-en">{tip.check.question}</span>
             </h3>
             <div className="choice-grid">
               {options.map((option) => {
@@ -124,11 +126,11 @@ export function GrammarTipModal({
                       setPicked(option);
                       const right = option === tip.check.answer;
                       sound.play(right ? "correct" : "wrong");
-                      emote(tip.villager, right ? "happy" : "think", 1500);
-                      void speakSwedish(tip.check.answer, { who: tip.villager, pitch: villager.voicePitch });
+                      emote(villager.id, right ? "happy" : "think", 1500);
+                      void speak(tip.check.answer, { who: villager.id, pitch: villager.voicePitch });
                     }}
                   >
-                    <Sv text={option} />
+                    <Glossed text={option} />
                   </button>
                 );
               })}
@@ -144,15 +146,15 @@ export function GrammarTipModal({
         {onUnlock ? (
           <section className="grammar-body grammar-unlock" key="unlock">
             <h3>
-              <Sv text="Nu kan du säga…" en="Now you can say…" />
+              <GlossedLine line={ui.nowYouCanSay} />
             </h3>
             <ul>
               {unlocked.map((phrase) => (
                 <li key={phrase.slug}>
-                  <button className="icon-button" aria-label="Lyssna (listen)" onClick={() => void speakSwedish(phrase.sv, { who: tip.villager, pitch: villager.voicePitch })}>
+                  <button className="icon-button" aria-label={aria(ui.listen)} onClick={() => void speak(phrase.t, { who: villager.id, pitch: villager.voicePitch })}>
                     <Volume2 size={16} />
                   </button>
-                  <Sv text={phrase.sv} en={phrase.en} className="grammar-sv" /> <span className="grammar-example-en">{phrase.en}</span>
+                  <Glossed text={phrase.t} en={phrase.en} className="grammar-tl" /> <span className="grammar-example-en">{phrase.en}</span>
                 </li>
               ))}
             </ul>
@@ -173,9 +175,9 @@ export function GrammarTipModal({
           ) : null}
           <button ref={primary} className="btn btn-primary" disabled={onCheck && picked === null} onClick={next}>
             {onUnlock || (onCheck && (review || unlocked.length === 0)) ? (
-              <Sv text="Då kör vi!" en="Let's go!" />
+              <GlossedLine line={ui.letsGo} />
             ) : (
-              <Sv text="Nästa" en="Next" />
+              <GlossedLine line={ui.next} />
             )}
             <ArrowRight size={18} />
           </button>

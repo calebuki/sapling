@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Receipt } from "lucide-react";
-import { cafeItem, cafeLines, cafeMenu, introduceLine, itemsIn, mixUp, orderSlugs, orderVariants, priceLine, trayOrders, withArticle, type CafeIcon, type CafeItem } from "@/lib/game/cafe";
-import { acceptsAnswer, pickVariant, type SceneBeat } from "@/lib/game/scenes";
+import { cafeItem, itemsIn, mixUp, type CafeIcon, type CafeItem } from "@/lib/game/cafe";
 import { checkAnswer, expectedFor, meaningOf } from "@/lib/game/lesson";
+import type { Line } from "@/lib/game/line";
+import { acceptsAnswer, pickVariant } from "@/lib/game/scenes";
+import { aria } from "@/lib/game/ui-text";
+import type { Villager } from "@/lib/game/villagers";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
+import { getTargetLanguage } from "@/lib/learning/languages";
 import type { LearnerConceptState } from "@/types/learning";
-import { ui } from "@/lib/game/ui-text";
-import type { Line, Villager } from "@/lib/game/villagers";
 import { sound } from "../audio/sfx";
-import { speakSwedish } from "../audio/speech";
+import { speak } from "../audio/speech";
+import { island, useIsland } from "../island";
 import { emote } from "../store";
 import {
   ActivityView,
@@ -24,11 +27,11 @@ import {
   type RoundSummary,
 } from "./lesson-round";
 import { Exchange, ListenButtons } from "./scene-round";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 const CAFE_ROUND = 6;
-// Everyday constructions Bosse also owns; they join once the menu is familiar.
-const GENERAL_PHRASES = ["har", "gillar", "vill-ha"];
+
+const cafe = () => island().cafe!;
 
 // Menu words and orders have few listening drills in the course, so the
 // counter supplies them: point at the item you hear, or fill a customer's tray
@@ -36,34 +39,21 @@ const GENERAL_PHRASES = ["har", "gillar", "vill-ha"];
 function pointWhenListeningLags(activity: AdaptiveActivity | null, states: LearnerConceptState[]) {
   if (!activity || activity.mode !== "recall") return activity;
   const isItem = Boolean(cafeItemByConcept(activity));
-  if (!isItem && !orderSlugs.has(activity.exercise.conceptSlug)) return activity;
+  if (!isItem && !cafe().orderSlugs.includes(activity.exercise.conceptSlug)) return activity;
   const state = states.find((s) => s.conceptId === activity.conceptId);
   const floor = isItem ? 0.45 : 0;
   const lagging = (state?.recognitionAudio ?? 0) < Math.max(floor, (state?.recall ?? 0) - 0.15);
   return lagging ? { ...activity, id: activity.id.replace(":recall:", ":listen:"), mode: "listen" as const } : activity;
 }
 
-// Bosse's side of an order, so he can answer what you actually asked for.
-const orderExchange: SceneBeat = {
-  situation: "You're ordering at the counter of Café Kanel.",
-  speaker: "Bosse",
-  cue: { sv: "Hej! Vad vill du ha?", en: "Hi! What would you like?" },
-  reaction: { sv: "Varsågod! Det blir gott.", en: "Here you go! It'll taste good." },
-};
-const billExchange: SceneBeat = {
-  situation: "You've finished your fika at Café Kanel.",
-  speaker: "Bosse",
-  cue: { sv: "Var det gott?", en: "Did you enjoy it?" },
-  reaction: { sv: "Det blir femtiofem kronor, tack.", en: "That'll be fifty-five kronor, thanks." },
-};
+const cafeItemByConcept = (activity: AdaptiveActivity) => cafeItem(cafe(), activity.exercise.conceptSlug);
 
-const cafeItemByConcept = (activity: AdaptiveActivity) => cafeItem(activity.exercise.conceptSlug);
-
-// Bosse teaches at his counter: the same adaptive schedule as every lesson,
-// played out with the menu board, a tray that fills with what you order, and
-// the occasional mix-up for you to sort out.
-export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish: (summary: RoundSummary) => void }) {
-  const round = useLessonRound(villager, onFinish, { roundLength: CAFE_ROUND, later: GENERAL_PHRASES, adapt: pointWhenListeningLags });
+// A café host teaches at their counter: the same adaptive schedule as every
+// lesson, played out with the menu board, a tray that fills with what you
+// order, and the occasional mix-up for you to sort out.
+export function CafeRound({ villager, slugs, onFinish }: { villager: Villager; slugs: readonly string[]; onFinish: (summary: RoundSummary) => void }) {
+  const { code, ui } = useIsland();
+  const round = useLessonRound(villager, slugs, onFinish, { roundLength: CAFE_ROUND, later: cafe().later, adapt: pointWhenListeningLags });
   const { activity, concept, name, outcome, queued, busy, attempts, summary } = round;
   const [tray, setTray] = useState<CafeItem[]>([]);
   const [preview, setPreview] = useState<CafeItem[]>([]);
@@ -79,7 +69,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
     return (
       <div className="dialogue-actions">
         <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
+          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
         </button>
       </div>
     );
@@ -88,15 +78,15 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
   const exercise = activity.exercise;
   // Stable for one activity, from its prompt through its feedback.
   const key = `${activity.id}:${attempts.length - (outcome ? 1 : 0)}`;
-  const item = cafeItem(concept.slug);
-  const isOrder = orderSlugs.has(concept.slug);
+  const item = cafeItem(cafe(), concept.slug);
+  const isOrder = cafe().orderSlugs.includes(concept.slug);
   // Orders come in several variants (other drinks, other buns) so tickets rarely repeat.
-  const variants = isOrder ? orderVariants[concept.slug] ?? [] : [];
+  const variants = isOrder ? cafe().orderVariants[concept.slug] ?? [] : [];
   const variant = variants.length ? pickVariant(variants, `${key}:${seed}`) : null;
   const courseExpected = expectedFor(exercise, name);
-  const expected = variant?.sv ?? courseExpected;
+  const expected = variant?.t ?? courseExpected;
   const meaning = variant?.en ?? meaningOf(exercise, name);
-  const orderItems = isOrder ? itemsIn(expected) : [];
+  const orderItems = isOrder ? itemsIn(cafe(), expected, code) : [];
   const listening = activity.mode === "listen" || activity.mode === "dictation";
 
   // Served items land on the tray once an answer is right.
@@ -112,15 +102,15 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
   const next = () => {
     setPointed(null);
     setAnswer(null);
-    // Once per round, after a correct order, Bosse fumbles it and you fix it.
+    // Once per round, after a correct order, the host fumbles it and you fix it.
     if (!fixUsed.current && lastOrder.current.length && attempts.length >= 2) {
       fixUsed.current = true;
       const want = lastOrder.current[0];
-      const mix = mixUp(want, attempts.length);
+      const mix = mixUp(cafe(), want, attempts.length);
       setTray((t) => [...t.slice(0, -lastOrder.current.length), mix.got]);
       setFix({ ...mix, want, picked: null });
       emote(villager.id, "happy", 1200);
-      void speakSwedish(mix.serve.sv, { who: villager.id, pitch: villager.voicePitch });
+      void speak(mix.serve.t, { who: villager.id, pitch: villager.voicePitch });
       return;
     }
     round.advance(queued);
@@ -138,8 +128,8 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
           sound.play(right ? "correct" : "wrong");
           emote(villager.id, right ? "happy" : "think", 1500);
           if (right) setTray((t) => [...t.slice(0, -1), fix.want]);
-          const reply = right ? cafeLines.sorry : cafeLines.checkOrder(fix.want);
-          void speakSwedish(reply.sv, { who: villager.id, pitch: villager.voicePitch });
+          const reply = right ? cafe().lines.sorry : cafe().checkOrder(fix.want);
+          void speak(reply.t, { who: villager.id, pitch: villager.voicePitch });
         }}
         onNext={() => {
           setFix(null);
@@ -154,7 +144,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
   } else if (item && (activity.mode === "listen" || activity.mode === "dictation")) {
     body = null; // the counter itself is the exercise
   } else if (item) {
-    body = <NameItem key={activity.id + attempts.length} item={item} expected={expected} busy={busy} onRecord={record} />;
+    body = <NameItem key={activity.id + attempts.length} item={item} expected={expected} villager={villager} busy={busy} onRecord={record} />;
   } else if (isOrder && activity.mode === "listen") {
     body = <TrayCheck key={key} villager={villager} busy={busy} onRecord={record} />;
   } else if (isOrder && !listening) {
@@ -204,13 +194,13 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
           villager={villager}
           busy={busy}
           onRecord={(p) => {
-            setPointed({ picked: cafeMenu.find((i) => i.sv === p.response)?.slug ?? "", answer: item.slug });
+            setPointed({ picked: cafe().menu.find((i) => i.name === p.response)?.slug ?? "", answer: item.slug });
             return record(p);
           }}
           tray={tray}
         />
       ) : outcome && pointed ? (
-        // Keep the board up so the learner sees what they tapped against what Bosse said.
+        // Keep the board up so the learner sees what they tapped against what the host said.
         <Counter tray={tray} pick={{ hidden: false, picked: pointed.picked, answer: pointed.answer, busy: true, onPick: () => undefined }} />
       ) : (
         <Counter
@@ -225,7 +215,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
         <Exchange
           key={`exchange:${key}`}
           villager={villager}
-          beat={concept.slug === "cafe-ask-bill" ? billExchange : orderExchange}
+          beat={concept.slug === cafe().billSlug ? cafe().billExchange : cafe().orderExchange}
           target={expected}
           answer={outcome?.correct ? answer : null}
           name={name}
@@ -234,7 +224,7 @@ export function CafeRound({ villager, onFinish }: { villager: Villager; onFinish
       {body}
       {round.error ? (
         <p className="lesson-error" role="alert">
-          <SvLine line={ui.error} /> <button onClick={() => round.setError(false)}><SvLine line={ui.tryAgain} /></button>
+          <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
         </p>
       ) : null}
     </div>
@@ -256,13 +246,14 @@ function Counter({
   hideNames?: boolean;
   pick?: { hidden: boolean; picked: string | null; answer: string; onPick: (item: CafeItem) => void; busy: boolean };
 }) {
+  const { ui } = useIsland();
   const ghosts = preview.filter((p, i) => preview.findIndex((q) => q.slug === p.slug) === i);
   return (
     <div className="cafe-counter">
-      <div className="cafe-board" role={pick ? "group" : undefined} aria-label="Meny (menu)">
-        <SvLine line={cafeLines.menu} className="cafe-board-title" />
+      <div className="cafe-board" role={pick ? "group" : undefined} aria-label={aria(cafe().lines.menu)}>
+        <GlossedLine line={cafe().lines.menu} className="cafe-board-title" />
         <div className="cafe-board-items">
-          {cafeMenu.map((entry) => {
+          {cafe().menu.map((entry) => {
             const state = pick?.picked
               ? entry.slug === pick.answer
                 ? "is-right"
@@ -273,8 +264,8 @@ function Counter({
             const content = (
               <>
                 <CafeIconArt icon={entry.icon} />
-                <span className="cafe-item-name">{hideNames || (pick?.hidden && !pick.picked) ? "?" : <Sv text={entry.sv} en={entry.en} />}</span>
-                <SvLine line={priceLine(entry)} className="cafe-item-price" />
+                <span className="cafe-item-name">{hideNames || (pick?.hidden && !pick.picked) ? "?" : <Glossed text={entry.name} en={entry.en} />}</span>
+                <GlossedLine line={cafe().price(entry)} className="cafe-item-price" />
               </>
             );
             return pick ? (
@@ -283,7 +274,7 @@ function Counter({
                 className={`cafe-item is-pickable ${state}`}
                 disabled={pick.busy || pick.picked !== null}
                 onClick={() => pick.onPick(entry)}
-                aria-label={pick.hidden ? `Alternativ (option): ${entry.en}` : entry.sv}
+                aria-label={pick.hidden ? `${aria(ui.option)}: ${entry.en}` : entry.name}
               >
                 {content}
               </button>
@@ -295,17 +286,17 @@ function Counter({
           })}
         </div>
       </div>
-      <div className="cafe-tray" aria-label="Din bricka (your tray)">
-        <SvLine line={cafeLines.yourTray} className="cafe-board-title" />
+      <div className="cafe-tray" aria-label={aria(ui.yourTray)}>
+        <GlossedLine line={island().ui.yourTray} className="cafe-board-title" />
         <div className="cafe-tray-items">
           {tray.length === 0 && ghosts.length === 0 ? <span className="cafe-tray-empty">…</span> : null}
           {tray.map((entry, i) => (
-            <span key={`${entry.slug}-${i}`} className="cafe-served" title={entry.sv}>
+            <span key={`${entry.slug}-${i}`} className="cafe-served" title={entry.name}>
               <CafeIconArt icon={entry.icon} />
             </span>
           ))}
           {ghosts.map((entry) => (
-            <span key={`ghost-${entry.slug}`} className="cafe-served is-ghost" title={entry.sv}>
+            <span key={`ghost-${entry.slug}`} className="cafe-served is-ghost" title={entry.name}>
               <CafeIconArt icon={entry.icon} />
             </span>
           ))}
@@ -330,10 +321,11 @@ function MeetItem({
   busy: boolean;
   onRecord: RecordFn;
 }) {
-  const line = introduceLine(item);
+  const { ui } = useIsland();
+  const line = cafe().introduce(item);
   const play = useCallback(
-    (slow = false) => void speakSwedish(line.sv, { who: villager.id, pitch: villager.voicePitch, slow }),
-    [line.sv, villager],
+    (slow = false) => void speak(line.t, { who: villager.id, pitch: villager.voicePitch, slow }),
+    [line.t, villager],
   );
   useEffect(() => {
     const timer = window.setTimeout(() => play(), 350);
@@ -343,14 +335,14 @@ function MeetItem({
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={ui.newPhrase} />
+        <GlossedLine line={ui.newPhrase} />
       </p>
       <div className="cafe-hero">
         <CafeIconArt icon={item.icon} />
         <div>
-          <Sv text={line.sv} en={line.en} as="h3" />
+          <Glossed text={line.t} en={line.en} as="h3" />
           <p className="activity-meaning">
-            {line.en} · <Sv text={withArticle(item)} en={item.en} />
+            {line.en} · <Glossed text={cafe().withArticle(item)} en={item.en} />
           </p>
         </div>
         <ListenButtons onPlay={play} />
@@ -363,7 +355,7 @@ function MeetItem({
           autoFocus
           onClick={() => void onRecord({ successful: true, assisted: true, response: "", expected, check: "exact", replays: 0, input: "text" })}
         >
-          <SvLine line={ui.next} /> <ArrowRight size={18} />
+          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
         </button>
       </div>
     </div>
@@ -392,7 +384,7 @@ function PointAt({
   const play = useCallback(
     (slow = false) => {
       replays.current++;
-      void speakSwedish(expected, { clipId, who: villager.id, pitch: villager.voicePitch, slow });
+      void speak(expected, { clipId, who: villager.id, pitch: villager.voicePitch, slow });
     },
     [expected, clipId, villager],
   );
@@ -404,7 +396,7 @@ function PointAt({
     <>
       <div className="activity cafe-point-head">
         <p className="activity-kicker">
-          <SvLine line={cafeLines.tapWhatYouHear} />
+          <GlossedLine line={cafe().lines.tapWhatYouHear} />
         </p>
         <ListenButtons onPlay={play} />
       </div>
@@ -420,7 +412,7 @@ function PointAt({
             void onRecord({
               successful: choice.slug === item.slug,
               assisted: false,
-              response: choice.sv,
+              response: choice.name,
               expected,
               check: "choice",
               replays: Math.max(0, replays.current - 1),
@@ -433,22 +425,23 @@ function PointAt({
   );
 }
 
-function NameItem({ item, expected, busy, onRecord }: { item: CafeItem; expected: string; busy: boolean; onRecord: RecordFn }) {
+function NameItem({ item, expected, villager, busy, onRecord }: { item: CafeItem; expected: string; villager: Villager; busy: boolean; onRecord: RecordFn }) {
+  const code = island().code;
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={cafeLines.whatIsThis} />
+        <GlossedLine line={cafe().lines.whatIsThis} />
       </p>
       <div className="cafe-hero">
         <CafeIconArt icon={item.icon} />
-        <p className="activity-meaning">Bosse holds something up. Say it in Swedish!</p>
+        <p className="activity-meaning">{villager.name} holds something up. Say it in {getTargetLanguage(code).name}!</p>
       </div>
       <FreeAnswer
         busy={busy}
-        hint={withArticle(item)}
+        hint={cafe().withArticle(item)}
         onSubmit={(answer, via, hinted) => {
           // "kaffe", "en kaffe" and "Kaffe!" are all fine.
-          const checks = [checkAnswer(answer, expected), checkAnswer(answer, withArticle(item))];
+          const checks = [checkAnswer(answer, expected, code), checkAnswer(answer, cafe().withArticle(item), code)];
           const check = checks.find((c) => c !== "wrong") ?? "wrong";
           return onRecord({ successful: check !== "wrong", assisted: hinted, response: answer, expected, check, replays: 0, input: via });
         }}
@@ -479,8 +472,9 @@ function OrderTicket({
   onRecord: RecordFn;
 }) {
   const { activity, busy, stateBefore, scoped } = round;
+  const { code, ui } = useIsland();
   const pool = useMemo(() => scoped.map((c) => c.canonicalForm), [scoped]);
-  const preview = useCallback((answer: string) => onPreview(itemsIn(answer)), [onPreview]);
+  const preview = useCallback((answer: string) => onPreview(itemsIn(cafe(), answer, code)), [onPreview, code]);
   useEffect(() => {
     if (encounter) onPreview(items);
   }, [encounter, items, onPreview]);
@@ -498,12 +492,12 @@ function OrderTicket({
     return (
       <div className="activity">
         <p className="activity-kicker">
-          <SvLine line={cafeLines.howToOrder} />
+          <GlossedLine line={cafe().lines.howToOrder} />
         </p>
         {ticket}
         <div className="activity-phrase">
-          <Sv text={expected} en={meaning} as="h3" />
-          <ListenButtons onPlay={(slow) => void speakSwedish(expected, { clipId: course ? activity.exercise.audioId : undefined, slow })} />
+          <Glossed text={expected} en={meaning} as="h3" />
+          <ListenButtons onPlay={(slow) => void speak(expected, { clipId: course ? activity.exercise.audioId : undefined, slow })} />
         </div>
         <SayItPractice expected={expected} />
         <div className="dialogue-actions">
@@ -513,7 +507,7 @@ function OrderTicket({
             autoFocus
             onClick={() => void onRecord({ successful: true, assisted: true, response: "", expected, check: "exact", replays: 0, input: "text" })}
           >
-            <SvLine line={ui.next} /> <ArrowRight size={18} />
+            <GlossedLine line={ui.next} /> <ArrowRight size={18} />
           </button>
         </div>
       </div>
@@ -524,16 +518,16 @@ function OrderTicket({
   // The exact order, another natural way to order it, or (for the course's own
   // sentence) whatever the evaluator accepts as doing the job.
   const judge = async (answer: string) => {
-    const check = checkAnswer(answer, expected);
+    const check = checkAnswer(answer, expected, code);
     if (check !== "wrong") return { successful: true, check };
-    if (acceptsAnswer(accept, answer)) return { successful: true, check: "exact" as const };
+    if (acceptsAnswer(accept, answer, code)) return { successful: true, check: "exact" as const };
     if (course) return judgeAnswer(activity, answer, expected);
     return { successful: false, check };
   };
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={bill ? { sv: "Be om notan!", en: "Ask for the bill!" } : cafeLines.orderThis} />
+        <GlossedLine line={bill ? ui.askForBill : cafe().lines.orderThis} />
       </p>
       {ticket}
       {useTiles ? (
@@ -564,16 +558,17 @@ function OrderTicket({
 
 // Listen to a customer's order and fill their tray: tap everything they asked for.
 function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boolean; onRecord: RecordFn }) {
-  const [order] = useState(() => trayOrders[Math.floor(Math.random() * trayOrders.length)]);
+  const { ui } = useIsland();
+  const [order] = useState(() => cafe().trayOrders[Math.floor(Math.random() * cafe().trayOrders.length)]);
   const [chosen, setChosen] = useState<string[]>([]);
   const [done, setDone] = useState(false);
   const replays = useRef(0);
   const play = useCallback(
     (slow = false) => {
       replays.current++;
-      void speakSwedish(order.sv, { pitch: 1.15, slow });
+      void speak(order.t, { pitch: 1.15, slow });
     },
-    [order.sv],
+    [order.t],
   );
   useEffect(() => {
     const timer = window.setTimeout(() => play(), 350);
@@ -585,12 +580,12 @@ function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boo
       <p className="scene-situation">A customer orders while {villager.name} is busy. Fill their tray!</p>
       <div className="cafe-point-head">
         <p className="activity-kicker">
-          <Sv text="Fyll brickan!" en="Fill the tray!" />
+          <GlossedLine line={ui.fillTray} />
         </p>
         <ListenButtons onPlay={play} />
       </div>
       <div className="cafe-tray-pick">
-        {cafeMenu.map((entry) => {
+        {cafe().menu.map((entry) => {
           const on = chosen.includes(entry.slug);
           const state = done ? (want.has(entry.slug) ? "is-right" : on ? "is-wrong" : "") : on ? "is-on" : "";
           return (
@@ -606,7 +601,7 @@ function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boo
             >
               <CafeIconArt icon={entry.icon} />
               <span className="cafe-item-name">
-                <Sv text={entry.sv} en={entry.en} />
+                <Glossed text={entry.name} en={entry.en} />
               </span>
             </button>
           );
@@ -614,7 +609,7 @@ function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boo
       </div>
       {done ? (
         <p className="scene-reveal">
-          <Sv text={order.sv} en={order.en} /> <span className="scene-line-en">{order.en}</span>
+          <Glossed text={order.t} en={order.en} /> <span className="scene-line-en">{order.en}</span>
         </p>
       ) : (
         <div className="dialogue-actions">
@@ -627,15 +622,15 @@ function TrayCheck({ villager, busy, onRecord }: { villager: Villager; busy: boo
               void onRecord({
                 successful: right,
                 assisted: false,
-                response: chosen.map((s) => cafeItem(s)!.sv).join(", "),
-                expected: order.sv,
+                response: chosen.map((s) => cafeItem(cafe(), s)!.name).join(", "),
+                expected: order.t,
                 check: "choice",
                 replays: Math.max(0, replays.current - 1),
                 input: "choice",
               });
             }}
           >
-            <Sv text="Klar!" en="Done!" />
+            <GlossedLine line={ui.ready} />
           </button>
         </div>
       )}
@@ -654,20 +649,21 @@ function MixUp({
   onPick: (index: number) => void;
   onNext: () => void;
 }) {
+  const { ui } = useIsland();
   const [order] = useState(() => [0, 1, 2].sort(() => Math.random() - 0.5));
   const picked = fix.picked;
-  const reply: Line | null = picked === null ? null : fix.options[picked].right ? cafeLines.sorry : cafeLines.checkOrder(fix.want);
+  const reply: Line | null = picked === null ? null : fix.options[picked].right ? cafe().lines.sorry : cafe().checkOrder(fix.want);
   return (
     <div className="activity">
       <p className="activity-kicker">
-        <SvLine line={cafeLines.oops} />
+        <GlossedLine line={cafe().lines.oops} />
       </p>
       <div className="cafe-hero">
         <CafeIconArt icon={fix.got.icon} />
         <div>
-          <Sv text={fix.serve.sv} en={fix.serve.en} as="h3" />
+          <Glossed text={fix.serve.t} en={fix.serve.en} as="h3" />
           <p className="activity-meaning">
-            {villager.name} brought the wrong thing. You wanted <Sv text={withArticle(fix.want)} en={fix.want.en} />. What do you say?
+            {villager.name} brought the wrong thing. You wanted <Glossed text={cafe().withArticle(fix.want)} en={fix.want.en} />. What do you say?
           </p>
         </div>
       </div>
@@ -677,7 +673,7 @@ function MixUp({
           const state = picked === null ? "" : option.right ? "is-right" : index === picked ? "is-wrong" : "is-dim";
           return (
             <button key={index} className={`btn choice ${state}`} disabled={picked !== null} onClick={() => onPick(index)}>
-              <Sv text={option.sv} en={option.en} />
+              <Glossed text={option.t} en={option.en} />
             </button>
           );
         })}
@@ -685,11 +681,11 @@ function MixUp({
       {reply ? (
         <>
           <p className={`grammar-why ${picked !== null && fix.options[picked].right ? "is-right" : ""}`} role="status">
-            <Sv text={reply.sv} en={reply.en} />
+            <Glossed text={reply.t} en={reply.en} />
           </p>
           <div className="dialogue-actions">
             <button className="btn btn-primary" autoFocus onClick={onNext}>
-              <SvLine line={ui.next} /> <ArrowRight size={18} />
+              <GlossedLine line={ui.next} /> <ArrowRight size={18} />
             </button>
           </div>
         </>
@@ -730,6 +726,41 @@ export function CafeIconArt({ icon }: { icon: CafeIcon }) {
           <path d="M16 14l4-6h8l4 6v26H16z" fill="#fff" stroke="#3f7fd1" strokeWidth="2.5" strokeLinejoin="round" />
           <path d="M16 24h16v8H16z" fill="#3f7fd1" />
           <path d="M20 8h8" stroke="#3f7fd1" strokeWidth="2.5" />
+        </>
+      ) : icon === "pretzel" ? (
+        <>
+          <path
+            d="M24 38c-8-6-15-12-15-20 0-6 5-9 9-6s6 10 6 14c0-4 2-11 6-14s9 0 9 6c0 8-7 14-15 20z"
+            fill="none"
+            stroke="#8a4b22"
+            strokeWidth="6"
+            strokeLinejoin="round"
+          />
+          <path d="M14 36l20-14M34 36L14 22" stroke="#8a4b22" strokeWidth="5.5" strokeLinecap="round" />
+          {[
+            [13, 17],
+            [33, 15],
+            [22, 30],
+            [30, 31],
+          ].map(([cx, cy]) => (
+            <circle key={`${cx}${cy}`} cx={cx} cy={cy} r="0.9" fill="#fff" />
+          ))}
+        </>
+      ) : icon === "cake" ? (
+        <>
+          <path d="M8 22l32 0-4 18H12z" fill="#5a2e1c" stroke="#3b1d10" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M8 22h32v5H8z" fill="#fff4ea" />
+          <path d="M9 32h30" stroke="#fff4ea" strokeWidth="3" />
+          <path d="M8 22c4-5 28-5 32 0" fill="#fff" stroke="#e4d6c8" strokeWidth="1.5" />
+          <circle cx="24" cy="15" r="4" fill="#c0392b" />
+          <path d="M24 11c1-3 3-4 5-4" stroke="#3f7d4f" strokeWidth="1.6" fill="none" />
+        </>
+      ) : icon === "juice" ? (
+        <>
+          <path d="M14 10h20l-3 30H17z" fill="#fff4d6" stroke="#e08a1e" strokeWidth="2.5" strokeLinejoin="round" />
+          <path d="M15.5 18h17l-2 20h-13z" fill="#f7a531" />
+          <path d="M28 10l5-6" stroke="#3f7fd1" strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="36" cy="12" r="5" fill="#f7a531" stroke="#e08a1e" strokeWidth="1.5" />
         </>
       ) : (
         <>

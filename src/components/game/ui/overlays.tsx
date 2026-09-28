@@ -4,21 +4,19 @@ import { useState } from "react";
 import { GraduationCap, Languages, Lock, LogOut, Music, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { getCourse } from "@/lib/learning/course";
-import { discoveries } from "@/lib/game/discoveries";
-import { grammarTips, type GrammarTip } from "@/lib/game/grammar";
-import { conceptStage, stageNames, type GameProgress } from "@/lib/game/progression";
-import { ui } from "@/lib/game/ui-text";
-import { villagers } from "@/lib/game/villagers";
+import type { GrammarTip } from "@/lib/game/grammar";
+import { conceptStage, type GameProgress } from "@/lib/game/progression";
+import { aria } from "@/lib/game/ui-text";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
 import { sound } from "../audio/sfx";
-import { speakSwedish } from "../audio/speech";
+import { speak } from "../audio/speech";
+import { island, villagerById, useIsland } from "../island";
 import { setGame, updateSave, useGame } from "../store";
 import { outfits } from "../world/actors";
 import { GrammarTipModal } from "./grammar-tip";
 import { StageIcon } from "./stage-icon";
-import { Sv, SvLine } from "./sv";
+import { Glossed, GlossedLine } from "./glossed";
 
 function close() {
   sound.play("close");
@@ -27,11 +25,12 @@ function close() {
 
 export function Overlays({ progress }: { progress: GameProgress }) {
   const overlay = useGame((s) => s.overlay);
+  const { ui } = useIsland();
   if (!overlay) return null;
   return (
     <div className="overlay" onClick={close}>
       <div className={`overlay-card overlay-${overlay}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <button className="overlay-close" onClick={close} aria-label="Stäng (close)">
+        <button className="overlay-close" onClick={close} aria-label={aria(ui.close)}>
           <X size={20} />
         </button>
         {overlay === "ordbok" ? <Ordbok progress={progress} /> : <GameMenu />}
@@ -46,35 +45,37 @@ function Ordbok({ progress }: { progress: GameProgress }) {
   const grammarSeen = useGame((s) => s.save.grammarSeen);
   const [tab, setTab] = useState<"phrases" | "grammar" | "things">("phrases");
   const [reading, setReading] = useState<GrammarTip | null>(null);
-  const exercises = new Map(getCourse("sv").lessons.flatMap((l) => l.exercises.map((e) => [e.conceptSlug, e] as const)));
+  const { code, course, discoveries, grammar, script, ui } = useIsland();
+  const exercises = new Map(course.lessons.flatMap((l) => l.exercises.map((e) => [e.conceptSlug, e] as const)));
+  const teacherOf = (unitId: string) => villagerById(course.units.find((u) => u.id === unitId)?.villager ?? island().host);
   const byConcept = new Map(model.states.map((s) => [s.conceptId, s]));
 
   return (
     <div className="ordbok">
       <h2>
-        <SvLine line={ui.dictionary} />
+        <GlossedLine line={ui.dictionary} />
       </h2>
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "phrases"} onClick={() => setTab("phrases")}>
-          <SvLine line={ui.phrases} /> <span className="count">{progress.wordsMet}/{progress.wordsTotal}</span>
+          <GlossedLine line={ui.phrases} /> <span className="count">{progress.wordsMet}/{progress.wordsTotal}</span>
         </button>
         <button role="tab" aria-selected={tab === "grammar"} onClick={() => setTab("grammar")}>
-          <Sv text="Grammatik" en="Grammar" /> <span className="count">{grammarSeen.length}/{grammarTips.length}</span>
+          <GlossedLine line={ui.grammar} /> <span className="count">{grammarSeen.length}/{grammar.length}</span>
         </button>
         <button role="tab" aria-selected={tab === "things"} onClick={() => setTab("things")}>
-          <SvLine line={ui.things} /> <span className="count">{discovered.length}/{discoveries.length}</span>
+          <GlossedLine line={ui.things} /> <span className="count">{discovered.length}/{discoveries.length}</span>
         </button>
       </div>
       {reading ? <GrammarTipModal tip={reading} review onDone={() => setReading(null)} /> : null}
       {tab === "grammar" ? (
         <div className="ordbok-scroll grammar-list">
-          {grammarTips.map((tip) => {
-            const villager = villagers.find((v) => v.id === tip.villager)!;
+          {grammar.map((tip) => {
+            const villager = teacherOf(tip.unit);
             const seen = grammarSeen.includes(tip.id);
             return seen ? (
               <button key={tip.id} className="thing is-found" onClick={() => { sound.play("click"); setReading(tip); }}>
                 <GraduationCap size={18} />
-                <SvLine line={tip.title} />
+                <GlossedLine line={tip.title} />
                 <span className="thing-en">
                   {tip.title.en} · {villager.name}
                 </span>
@@ -89,18 +90,20 @@ function Ordbok({ progress }: { progress: GameProgress }) {
         </div>
       ) : tab === "phrases" ? (
         <div className="ordbok-scroll">
-          {villagers.map((v) => {
-            const standing = progress.villagers[v.id];
+          {progress.units.map((standing) => {
+            const v = villagerById(standing.unit.villager);
             return (
-              <section key={v.id} className={standing.unlocked ? "" : "is-locked"}>
+              <section key={standing.unit.id} className={standing.unlocked ? "" : "is-locked"}>
                 <h3>
-                  <span className="dot" style={{ background: v.look.accent }} /> {v.name} ·{" "}
-                  <Sv text={v.place.sv} en={v.place.en} />
+                  <span className="dot" style={{ background: v.look.accent }} /> <GlossedLine line={standing.unit.title} /> · {v.name}
+                  <span className="count">
+                    {standing.met}/{standing.total}
+                  </span>
                   {!standing.unlocked ? <Lock size={14} /> : null}
                 </h3>
-                <ul>
-                  {v.conceptSlugs.map((slug) => {
-                    const concept = model.concepts.find((c) => c.slug === slug && c.languageCode === "sv");
+                {!standing.unlocked ? null : <ul>
+                  {standing.unit.slugs.map((slug) => {
+                    const concept = model.concepts.find((c) => c.slug === slug && c.languageCode === code);
                     if (!concept) return null;
                     const state = byConcept.get(concept.id);
                     const stage = conceptStage(state);
@@ -110,17 +113,17 @@ function Ordbok({ progress }: { progress: GameProgress }) {
                         <StageIcon stage={stage} />
                         {stage === 0 ? (
                           <span className="unknown">
-                            <SvLine line={ui.notMet} />
+                            <GlossedLine line={ui.notMet} />
                           </span>
                         ) : (
                           <>
-                            <Sv text={concept.canonicalForm} en={concept.gloss} className="ordbok-word" />
+                            <Glossed text={concept.canonicalForm} en={concept.gloss} className="ordbok-word" />
                             <span className="ordbok-gloss">{concept.gloss}</span>
-                            <Sv text={stageNames[stage].sv} en={stageNames[stage].en} className="ordbok-stage" />
+                            <GlossedLine line={script.stageNames[stage]} className="ordbok-stage" />
                             <button
                               className="icon-button"
-                              aria-label="Lyssna (listen)"
-                              onClick={() => void speakSwedish(exercise?.expected ?? concept.canonicalForm, { clipId: exercise?.audioId })}
+                              aria-label={aria(ui.listen)}
+                              onClick={() => void speak(exercise?.expected ?? concept.canonicalForm, { clipId: exercise?.audioId })}
                             >
                               <Volume2 size={16} />
                             </button>
@@ -129,7 +132,7 @@ function Ordbok({ progress }: { progress: GameProgress }) {
                       </li>
                     );
                   })}
-                </ul>
+                </ul>}
               </section>
             );
           })}
@@ -138,14 +141,14 @@ function Ordbok({ progress }: { progress: GameProgress }) {
         <div className="ordbok-scroll things-grid">
           {discoveries.map((item) =>
             discovered.includes(item.id) ? (
-              <button key={item.id} className="thing is-found" onClick={() => void speakSwedish(item.sv)}>
-                <Sv text={item.sv} en={item.en} />
+              <button key={item.id} className="thing is-found" onClick={() => void speak(item.t)}>
+                <Glossed text={item.t} en={item.en} />
                 <span className="thing-en">{item.en}</span>
               </button>
             ) : (
               <div key={item.id} className="thing">
                 <span className="thing-unknown">?</span>
-                <SvLine line={ui.notFound} />
+                <GlossedLine line={ui.notFound} />
               </div>
             ),
           )}
@@ -159,12 +162,13 @@ function GameMenu() {
   const music = useGame((s) => s.music);
   const outfit = useGame((s) => s.save.outfit);
   const english = useGame((s) => s.save.english);
-  const englishLabel = { auto: { sv: "Engelska: auto", en: "English subtitles: automatic" }, on: { sv: "Engelska: på", en: "English subtitles: on" }, off: { sv: "Engelska: av", en: "English subtitles: off" } }[english];
+  const { ui } = useIsland();
+  const englishLabel = { auto: ui.englishAuto, on: ui.englishOn, off: ui.englishOff }[english];
   const router = useRouter();
   return (
     <div className="game-menu">
       <h2>
-        <SvLine line={ui.menu} />
+        <GlossedLine line={ui.menu} />
       </h2>
       <button
         className="btn"
@@ -174,7 +178,7 @@ function GameMenu() {
           setGame({ music: !music });
         }}
       >
-        <Music size={18} /> <SvLine line={music ? ui.musicOff : ui.musicOn} />
+        <Music size={18} /> <GlossedLine line={music ? ui.musicOff : ui.musicOn} />
       </button>
       <button
         className="btn"
@@ -183,15 +187,15 @@ function GameMenu() {
           updateSave({ english: english === "auto" ? "on" : english === "on" ? "off" : "auto" });
         }}
       >
-        <Languages size={18} /> <SvLine line={englishLabel} />
+        <Languages size={18} /> <GlossedLine line={englishLabel} />
       </button>
       <div className="outfit-picker">
-        <Sv text="Din stil" en="Your style" />
+        <GlossedLine line={ui.yourStyle} />
         <div>
           {outfits.map((o, i) => (
             <button
               key={i}
-              aria-label={`Stil ${i + 1} (style ${i + 1})`}
+              aria-label={`${ui.style.t} ${i + 1} (style ${i + 1})`}
               aria-pressed={outfit === i}
               style={{ background: o.shirt }}
               onClick={() => {
@@ -203,12 +207,12 @@ function GameMenu() {
         </div>
       </div>
       <div className="controls-help">
-        <SvLine line={ui.controls} as="strong" />
-        <SvLine line={ui.controlsMove} as="p" />
-        <SvLine line={ui.controlsRun} as="p" />
-        <SvLine line={ui.controlsTalk} as="p" />
-        <SvLine line={ui.controlsCamera} as="p" />
-        <SvLine line={ui.hoverHint} as="p" />
+        <GlossedLine line={ui.controls} as="strong" />
+        <GlossedLine line={ui.controlsMove} as="p" />
+        <GlossedLine line={ui.controlsRun} as="p" />
+        <GlossedLine line={ui.controlsTalk} as="p" />
+        <GlossedLine line={ui.controlsCamera} as="p" />
+        <GlossedLine line={ui.hoverHint} as="p" />
       </div>
       {hasSupabase ? (
         <button
@@ -219,7 +223,7 @@ function GameMenu() {
             router.refresh();
           }}
         >
-          <LogOut size={18} /> <SvLine line={ui.signOut} />
+          <LogOut size={18} /> <GlossedLine line={ui.signOut} />
         </button>
       ) : null}
     </div>

@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Every earlier screen now lives inside the island game at "/".
+// Every earlier screen now lives inside the islands, reached from the hub at "/".
 const retiredRoutes = ["/learn", "/practice", "/ear", "/my-danish", "/progress", "/world"];
 
 const nextConfig: NextConfig = {

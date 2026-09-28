@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { discoveries } from "@/lib/game/discoveries";
-import { villagers, type Line, type VillagerId } from "@/lib/game/villagers";
-import { dock, groundAt, heightAt, places } from "@/lib/game/world";
+import type { WorldSign } from "@/content/types";
+import type { VillagerId } from "@/lib/game/villagers";
+import { island, villagerById, useIsland } from "./island";
 import { getGame, runtime, useGame } from "./store";
-import { Sv } from "./ui/sv";
+import { baseHeight } from "./world/discoverables";
+import { Glossed } from "./ui/glossed";
 
 // World-space labels (signs, names, found words) are ordinary DOM elements in
 // the main React tree, positioned every frame from their 3D anchor.
@@ -66,47 +67,24 @@ export function LabelProjector() {
   return null;
 }
 
-type SignSpec = { id: string; line: Line; x: number; y: number; z: number; far?: number };
-
-export function signs(cafeOpen: boolean): SignSpec[] {
-  const cafeY = heightAt(places.cafe.x, places.cafe.z);
-  const stationY = heightAt(places.station.x, places.station.z);
-  const gardenY = heightAt(places.garden.x, places.garden.z);
-  return [
-    { id: "dock", line: { sv: "Lilla Ö", en: "Little Island" }, x: -2.2, y: 2.9, z: 25.5 },
-    { id: "ferry", line: { sv: "Färjan", en: "The ferry" }, x: 5.7, y: 2.6, z: 37.6, far: 16 },
-    { id: "cafe", line: { sv: "Café Kanel", en: "Café Cinnamon" }, x: -13.7, y: cafeY + 4.2, z: 1 },
-    {
-      id: "cafe-open",
-      line: cafeOpen ? { sv: "Öppet", en: "Open" } : { sv: "Stängt", en: "Closed" },
-      x: -13.6,
-      y: cafeY + 1.8,
-      z: 2.4,
-      far: 12,
-    },
-    { id: "station", line: { sv: "Stationen", en: "The station" }, x: 15.6, y: stationY + 3.9, z: -6.5 },
-    { id: "garden", line: { sv: "Astrids trädgård", en: "Astrid's garden" }, x: -0.5, y: gardenY + 2.7, z: -14 },
-  ];
-}
-
-function Sign({ spec }: { spec: SignSpec }) {
+function Sign({ spec }: { spec: WorldSign }) {
   const ref = useAnchor(`sign:${spec.id}`, spec.x, spec.y, spec.z, spec.far ?? 26);
   return (
     <div ref={ref} className="world-anchor">
       <div className="world-sign">
-        <Sv text={spec.line.sv} en={spec.line.en} />
+        <Glossed text={spec.line.t} en={spec.line.en} />
       </div>
     </div>
   );
 }
 
 function VillagerTag({ id, unlocked }: { id: VillagerId; unlocked: boolean }) {
-  const villager = villagers.find((v) => v.id === id)!;
+  const villager = villagerById(id);
   const [x, z] = villager.position;
   const [hidden] = useState(() => () => getGame().talkingTo === id);
-  const ref = useAnchor(`villager:${id}`, x, groundAt(x, z) + 2.35 * (villager.look.scale ?? 1), z, 11, hidden);
+  const ref = useAnchor(`villager:${id}`, x, island().world.groundAt(x, z) + 2.35 * (villager.look.scale ?? 1), z, 11, hidden);
   const [chatter, setChatter] = useState(0);
-  const index = villagers.indexOf(villager);
+  const index = island().villagers.indexOf(villager);
   useEffect(() => {
     const timer = window.setInterval(() => setChatter((c) => c + 1), 6500 + index * 900);
     return () => window.clearInterval(timer);
@@ -117,7 +95,7 @@ function VillagerTag({ id, unlocked }: { id: VillagerId; unlocked: boolean }) {
       <div className="villager-tag">
         {line ? (
           <div key={chatter} className="villager-bubble">
-            <Sv text={line.sv} en={line.en} />
+            <Glossed text={line.t} en={line.en} />
           </div>
         ) : null}
         <span className="villager-name">{villager.name}</span>
@@ -127,13 +105,13 @@ function VillagerTag({ id, unlocked }: { id: VillagerId; unlocked: boolean }) {
 }
 
 function FoundLabel({ id }: { id: string }) {
-  const item = discoveries.find((d) => d.id === id)!;
-  const base = item.y !== undefined ? groundAt(item.x, item.z) + item.y : item.prop === "gull" || item.prop === "bucket" ? dock.height : groundAt(item.x, item.z);
+  const item = island().discoveries.find((d) => d.id === id)!;
+  const base = item.prop === "rowboat" ? island().world.groundAt(item.x, item.z) : baseHeight(item);
   const ref = useAnchor(`found:${id}`, item.x, Math.max(0, base) + item.lift, item.z, 9);
   return (
     <div ref={ref} className="world-anchor">
       <div className="world-label">
-        <Sv text={item.sv} en={item.en} />
+        <Glossed text={item.t} en={item.en} />
       </div>
     </div>
   );
@@ -141,17 +119,21 @@ function FoundLabel({ id }: { id: string }) {
 
 export function WorldLabels({ unlocked }: { unlocked: Record<VillagerId, boolean> }) {
   const discovered = useGame((s) => s.save.discovered);
+  const { signs, villagers, discoveries } = useIsland();
   return (
     <div className="world-labels" aria-hidden={false}>
-      {signs(unlocked.bosse).map((spec) => (
-        <Sign key={spec.id + spec.line.sv} spec={spec} />
-      ))}
+      {signs.map((spec) => {
+        const line = spec.openWith && !unlocked[spec.openWith] && spec.closedLine ? spec.closedLine : spec.line;
+        return <Sign key={spec.id + line.t} spec={{ ...spec, line }} />;
+      })}
       {villagers.map((v) => (
         <VillagerTag key={v.id} id={v.id} unlocked={unlocked[v.id]} />
       ))}
-      {discovered.map((id) => (
-        <FoundLabel key={id} id={id} />
-      ))}
+      {discovered
+        .filter((id) => discoveries.some((d) => d.id === id))
+        .map((id) => (
+          <FoundLabel key={id} id={id} />
+        ))}
     </div>
   );
 }
