@@ -58,6 +58,11 @@ for (const pack of islands) {
       assert.ok(seeded.has(slug), `${slug} is in the catalog`);
     }
     for (const slug of taught) assert.ok(owned.includes(slug), `${slug} belongs to a unit`);
+    // The concepts table's own checks (see scripts/concepts-sql.ts).
+    for (const c of course.concepts) {
+      assert.match(c.slug, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, c.slug);
+      assert.ok(c.canonicalForm.trim() && c.gloss.trim(), c.slug);
+    }
     for (const item of course.listenSpeakItems) {
       assert.ok(taught.has(item.conceptSlug), item.id);
       assert.ok(item.options.includes(item.meaning), `${item.id} offers its own meaning`);

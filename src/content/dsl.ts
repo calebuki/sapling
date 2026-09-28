@@ -206,7 +206,8 @@ export function buildUnits(
       concepts.push({
         slug: item.slug,
         kind: item.kind,
-        canonicalForm: asAnswer(item.target).replace(/[.!]$/, ""),
+        // Frames keep their "…" so the word book reads "Ich komme aus …".
+        canonicalForm: item.target.replace(/[.!]$/, ""),
         gloss: item.english,
         description: item.note ?? item.english,
         level: source.level,
