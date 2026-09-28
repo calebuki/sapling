@@ -1,6 +1,6 @@
 # Sapling architecture
 
-Status: accepted for the personal Danish MVP  
+Status: accepted; islands and language packs added 2026-09-28  
 Date: 2026-08-07
 
 ## Product boundary
@@ -19,9 +19,12 @@ The learner-facing product has two primary areas:
   scenario to language the learner has encountered and selects the best next
   stretch automatically.
 
-The first implementation stays intentionally small: one learner and Danish in
-the UI, with `user_id` and `language_code` boundaries that prevent a future
-multi-user or multi-language rewrite.
+Learning happens on islands: one small explorable village per language, whose
+villagers teach the course and hold the conversations. The hub at `/` lists
+every island with the learner's progress; each island lives at its language
+code (`/sv` Lilla Ö, `/de` Tannenau). Every table and route keeps the
+`user_id` and `language_code` boundaries, so a new language is new content,
+not new code.
 
 ## What Crumbs established
 
@@ -84,6 +87,51 @@ treated as a learner vocabulary or grammar error. High-confidence resolutions
 remain invisible during the conversation; uncertain meaning produces a natural
 in-character clarification. Only recurring or useful details may appear in the
 post-conversation debrief.
+
+## Islands and language packs
+
+The game engine (`src/components/game`, `src/lib/game`) knows no language.
+Everything an island says or shows comes from its pack in
+`src/content/<code>/`, typed as `IslandPack` (`src/content/types.ts`):
+
+- **course**: units, lessons, listening items and the concept catalog
+- **villagers** and the host's script, **scenes** (short exchanges that play
+  out key phrases), **grammar** tips, **scenarios** for live conversations
+- **glossary** for hover glosses, **ui** strings, the **café** counter if the
+  island has one, **discoveries**, **placement** bands, **world** geometry and
+  **signs**
+
+The browser loads only the pack being played (`src/content/islands.ts`
+imports it on demand). Server routes, scripts and the demo repository reach
+every course through `src/content/courses.ts`. Game saves are per island
+(`sapling:island:v3:<learner>:<code>`); the player's name and look are shared.
+
+A course is a list of **units** (A1 or A2), each taught by one villager. A unit
+opens when 60% of the previous one has been met, when placement opens it, or
+once the learner has started it, so inserting units never locks away progress.
+Grammar tips gate a few phrases of their unit until they have been read.
+
+New units are written in a compact format (`src/content/dsl.ts`): one line
+per phrase with its English, examples and options. `buildUnits` turns them
+into lessons, listening items and concept seeds. Lilla Ö's first four chapters
+keep their original hand-written lessons alongside the newer units.
+
+The `concepts` table mirrors every course. After changing a course, run
+`npm run content:sql -- <codes>` into a new migration; the upsert refreshes
+forms, glosses, unit, level and order without touching learner state.
+`npm run content:report -- <code>` lists course sizes and any shown word
+without a gloss, and the island tests run the same checks for every pack.
+
+German and the Swedish A2 units have not yet been reviewed by a native speaker.
+
+### Speech
+
+Villagers speak with Gemini neural voices through `/api/speech`. The
+response depends only on the query string, so the CDN keeps each line after
+its first request. Recorded clips exist only for the original Swedish and
+Danish lessons, listed in `public/audio/*/manifest.json`. If the provider
+refuses (bad key or no credits), the route answers 503 and the game switches to
+device voices for the rest of the visit.
 
 ## Data model
 
