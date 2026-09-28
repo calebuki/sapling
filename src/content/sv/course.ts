@@ -1,5 +1,12 @@
 import type { ConceptSeed, Course, Lesson, Unit } from "@/lib/learning/course";
+import { buildUnits, itemGlosses } from "../dsl";
 import { swedishLessons, swedishListenSpeakItems } from "./legacy-course";
+import { a1 } from "./units-a1";
+import { a2 } from "./units-a2";
+
+// The Swedish course, A1 to A2. The island's first four chapters (hej, fika,
+// resan, planer) keep their hand-written lessons and recorded audio; every
+// other unit is written in the compact unit format (../dsl).
 
 // English meanings for course phrases whose prompt is an instruction rather
 // than a translation ("Ask their name." → "What's your name?").
@@ -28,7 +35,7 @@ const legacyLessons: Lesson[] = swedishLessons.map((lesson) => ({
 }));
 
 // The first island chapters: one per villager, as the game first shipped.
-const units: Unit[] = [
+const legacyUnits: Unit[] = [
   {
     id: "hej",
     level: "A1",
@@ -104,6 +111,27 @@ const legacyConcepts: Array<[string, ConceptSeed["kind"], string, string]> = [
   ["perfect-har", "construction", "Jag har varit", "I have been"],
 ];
 
+export const articles = ["en", "ett"] as const;
+
+const built = buildUnits("sv", [...a1, ...a2], {
+  voices: ["sv-SE-SofieNeural", "sv-SE-MattiasNeural"],
+  articles,
+});
+
+// Course order: the legacy chapters sit where their level puts them.
+const order = [
+  "hej", "hejsan", "vem", "fika", "siffror", "familj", "mat",
+  "resan", "klockan", "handla", "hemma", "vaegen", "klaeder",
+  "planer", "vaedret", "fritid", "haelsa", "jobb", "igaar", "naturen", "traeffas", "resa", "kaenslor", "framtid", "aasikter",
+];
+
+const units: Unit[] = order.map((id) => {
+  const unit = legacyUnits.find((u) => u.id === id) ?? built.units.find((u) => u.id === id);
+  if (!unit) throw new Error(`No Swedish unit ${id}`);
+  return unit;
+});
+if (units.length !== legacyUnits.length + built.units.length) throw new Error("Every Swedish unit needs a place in the course order");
+
 function seedsFor(unitList: Unit[]): ConceptSeed[] {
   return legacyConcepts.map(([slug, kind, canonicalForm, gloss]) => {
     const unit = unitList.find((u) => u.slugs.includes(slug))!;
@@ -118,10 +146,15 @@ function inUnitOrder(lessons: Lesson[], unitList: Unit[]) {
   return [...lessons].sort((a, b) => first(a) - first(b));
 }
 
+const rank = (slug: string) => units.findIndex((u) => u.slugs.includes(slug));
+
 export const course: Course = {
   languageCode: "sv",
   units,
-  lessons: inUnitOrder(legacyLessons, units),
-  listenSpeakItems: swedishListenSpeakItems,
-  concepts: seedsFor(units),
+  lessons: inUnitOrder([...legacyLessons, ...built.lessons], units),
+  listenSpeakItems: [...swedishListenSpeakItems, ...built.listenSpeakItems],
+  concepts: [...seedsFor(legacyUnits), ...built.concepts].sort((a, b) => rank(a.slug) - rank(b.slug)),
 };
+
+// Hover glosses the course gives for free: every single-word item.
+export const courseGlosses = itemGlosses(built, articles);

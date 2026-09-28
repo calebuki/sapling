@@ -134,6 +134,17 @@ for (const pack of islands) {
     assert.equal(grown.villagers[second.villager].unlocked, true);
   });
 
+  test(`${code}: a unit the learner has started stays open when new units come before it`, () => {
+    const all = concepts(pack);
+    const later = course.units[3];
+    const started = all.find((c) => c.slug === later.slugs[0])!;
+    const states = [{ ...createEmptyState(started.id), recall: 0.4, exposureCount: 2 }];
+    const progress = computeProgress({ course, villagers, concepts: all, states, discoveredCount: 0 });
+    assert.equal(progress.units[1].unlocked, false);
+    assert.equal(progress.units[3].unlocked, true);
+    assert.equal(progress.villagers[later.villager].unlocked, true);
+  });
+
   test(`${code}: placement opens units without claiming any mastery`, () => {
     const band = Math.min(2, pack.placement.bands.length - 1);
     const through = openThrough(pack.placement, course.units, band);

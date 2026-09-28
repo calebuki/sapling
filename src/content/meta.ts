@@ -17,7 +17,7 @@ export const islandMeta: IslandMeta[] = [
     code: "sv",
     island: "Lilla Ö",
     islandEn: "Little Island",
-    blurb: "A skerry of falu-red cottages. Order fika from Bosse, catch the train with Stina and plan the weekend in Astrid's garden.",
+    blurb: "A skerry of falu-red cottages. Order fika from Bosse, count the catch with Nils, shop at Maja's and hear old stories at the lighthouse.",
     art: "lilla-o",
     accent: "#3f7fd1",
     accentEdge: "#2b5a9a",

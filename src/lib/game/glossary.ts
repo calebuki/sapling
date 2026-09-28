@@ -8,14 +8,16 @@ export type Glossary = {
   lookup(word: string): string | undefined;
 };
 
-// Endings to try stripping when a form is not listed, longest first. German
-// also tries adding them back ("trinkt" → "trink" + "en").
+// Endings to try stripping when a form is not listed. German and Swedish
+// also try adding the infinitive ending back ("trinkt" → "trink" + "en",
+// "pratade" → "prat" + "a"). Swedish verb and adjective endings come last so
+// they never shadow a noun form.
 const suffixes: Record<TargetLanguageCode, string[]> = {
-  sv: ["en", "et", "na", "arna", "erna", "orna", "ar", "er", "or", "n", "t"],
+  sv: ["en", "et", "na", "arna", "erna", "orna", "ar", "er", "or", "n", "t", "ade", "de", "te", "r", "s", "a"],
   de: ["sten", "ster", "stes", "est", "en", "em", "er", "es", "st", "e", "n", "s", "t"],
   da: ["erne", "ene", "en", "et", "er", "e", "r", "t"],
 };
-const infinitiveEndings: Partial<Record<TargetLanguageCode, string[]>> = { de: ["en", "n"] };
+const infinitiveEndings: Partial<Record<TargetLanguageCode, string[]>> = { de: ["en", "n"], sv: ["a"] };
 
 // Entries are "word=gloss" pairs separated by "|" or new lines.
 export function createGlossary(code: TargetLanguageCode, ...sources: Array<string | Iterable<readonly [string, string]>>): Glossary {

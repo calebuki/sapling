@@ -27,4 +27,7 @@ export const discoveries: Discovery[] = [
   { id: "jordgubbe", t: "en jordgubbe", en: "a strawberry", x: 0.8, z: -18.2, prop: "strawberry", lift: 1.2 },
   { id: "appeltrad", t: "ett äppelträd", en: "an apple tree", x: -9.5, z: -17.5, prop: "appletree", lift: 4.4 },
   { id: "flagga", t: "en flagga", en: "a flag", x: 7.3, z: -23.4, prop: "none", lift: 7.4 },
+  { id: "fyr", t: "en fyr", en: "a lighthouse", x: 0.5, z: -32, prop: "none", lift: 10.2 },
+  { id: "boj", t: "en boj", en: "a buoy", x: 12.4, z: 26.4, prop: "none", lift: 1.3 },
+  { id: "bok", t: "en bok", en: "a book", x: -11, z: -11.8, prop: "none", lift: 1.9 },
 ];

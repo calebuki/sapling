@@ -117,7 +117,9 @@ export function computeProgress({
     wordsMet += met;
     wordsTotal += slugs.length;
     const ready = slugs.length > 0 && met >= Math.ceil(slugs.length * 0.6);
-    const unlocked = previousReady || index <= openThrough;
+    // A unit the learner has already started never locks again, even when a
+    // course update puts new units in front of it.
+    const unlocked = previousReady || index <= openThrough || met > 0;
     previousReady = unlocked && ready;
     return { unit, unlocked, total: slugs.length, met, strong, ready };
   });

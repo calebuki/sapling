@@ -9,7 +9,8 @@ import { glow, palette, toon } from "./materials";
 import { Bench, box, Box, cone, cyl, FlowerBox, Lantern, prism, sphere, torus, type V3 } from "./parts";
 
 // Lilla Ö's buildings: falu-red cottages, Café Kanel, the station with its
-// bridge to the mainland, Astrid's garden and the lookout flag.
+// bridge to the mainland, Astrid's garden, the lookout flag, Nils's boathouse,
+// Maja's shop, the health centre, the library and the lighthouse.
 
 const { cottages, dock, heightAt, places } = world;
 
@@ -446,6 +447,184 @@ export function Lookout() {
   );
 }
 
+// Nils's red boathouse at the water's edge, with a jetty, a rowboat and nets
+// drying on a rack.
+export function Boathouse() {
+  const { x, z } = places.boathouse;
+  const y = heightAt(x + 0.4, z + 0.5);
+  const jetty = useMemo(() => Array.from({ length: 10 }, (_, i) => i * 0.55), []);
+  return (
+    <group>
+      <group position={[x + 0.4, y - 0.05, z + 0.5]}>
+        <Gable width={3.8} depth={5} height={2.4} wall={palette.falu} roof={palette.roof} doorSide={-1} />
+        {/* net rack */}
+        <group position={[1, 0, -3.8]}>
+          {[-0.9, 0.9].map((nx) => (
+            <Box key={nx} p={[nx, 0.8, 0]} s={[0.1, 1.6, 0.1]} c={palette.woodDark} />
+          ))}
+          <Box p={[0, 1.55, 0]} s={[2, 0.08, 0.08]} c={palette.woodDark} />
+          <Box p={[0, 1.05, 0.02]} s={[1.7, 0.95, 0.03]} c="#5b6f7a" shadow={false} />
+        </group>
+        {/* fish crates and a buoy */}
+        {[
+          [-2.3, -1.2, 0],
+          [-2.3, -1.9, 0],
+          [-2.3, -1.55, 1],
+        ].map(([cx, cz, level], i) => (
+          <Box key={i} p={[cx, 0.22 + level * 0.44, cz]} s={[0.6, 0.44, 0.65]} c="#3f6fa0" />
+        ))}
+        <mesh geometry={sphere} material={toon("#ff7a3d")} position={[-2.4, 0.3, 0.4]} scale={0.28} castShadow />
+      </group>
+      {/* jetty out over the water */}
+      <group position={[15.4, 0, 27.4]} rotation-y={0.52}>
+        {jetty.map((jz, i) => (
+          <Box key={jz} p={[0, 0.62, jz]} s={[1.3, 0.12, 0.48]} c={i % 3 ? palette.plank : "#a87c52"} />
+        ))}
+        {[0.4, 2.6, 4.8].flatMap((jz) =>
+          [-1, 1].map((side) => <Box key={`${jz}${side}`} p={[side * 0.7, 0.2, jz]} s={[0.14, 1.4, 0.14]} c={palette.woodDark} />),
+        )}
+        <Rowboat position={[1.5, 0.08, 3.6]} />
+      </group>
+    </group>
+  );
+}
+
+function Rowboat({ position }: { position: V3 }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.elapsedTime;
+    ref.current.position.y = position[1] + Math.sin(t * 1.3) * 0.05;
+    ref.current.rotation.z = Math.sin(t * 1.1) * 0.04;
+  });
+  return (
+    <group ref={ref} position={position}>
+      <Box p={[0, 0.15, 0]} s={[1, 0.35, 2.6]} c="#f4f1ea" />
+      <Box p={[0, 0.02, 0]} s={[1.02, 0.12, 2.62]} c={palette.blue} shadow={false} />
+      <Box p={[0, 0.3, 0.2]} s={[0.95, 0.06, 0.35]} c={palette.wood} shadow={false} />
+    </group>
+  );
+}
+
+// Lanthandeln: the island's ochre-yellow village shop. Crates of apples and
+// potatoes come out front while Maja is open.
+export function Shop({ open }: { open: boolean }) {
+  const { x, z } = places.shop;
+  const y = heightAt(x - 0.3, z + 0.4);
+  return (
+    <group position={[x - 0.3, y - 0.05, z + 0.4]}>
+      <Gable width={5} depth={6.4} height={3} wall="#d9a441" roof={palette.roof} doorSide={1} />
+      {/* shop window with goods */}
+      <mesh geometry={box} material={glow("#ffe2a8", 1)} position={[2.56, 1.3, 1.9]} scale={[0.05, 1.1, 1.4]} />
+      <Box p={[2.6, 0.2, 0]} s={[0.9, 0.12, 2.6]} c={palette.plank} />
+      {open &&
+        [
+          [3.4, -1.9, "#d8412f"],
+          [3.4, 1.3, "#c79a52"],
+          [3.9, 0.1, "#7fb65a"],
+        ].map(([cx, cz, fruit]) => (
+          <group key={`${cx}${cz}`} position={[cx as number, 0, cz as number]}>
+            <Box p={[0, 0.3, 0]} s={[0.8, 0.6, 0.6]} c={palette.wood} />
+            {[-0.2, 0, 0.2].map((fx) => (
+              <mesh key={fx} geometry={sphere} material={toon(fruit as string)} position={[fx, 0.66, 0]} scale={0.13} />
+            ))}
+          </group>
+        ))}
+    </group>
+  );
+}
+
+// Vårdcentralen: a small white health centre with a sign by the door.
+export function HealthCentre() {
+  const { x, z } = places.health;
+  const y = heightAt(x - 0.3, z + 0.3);
+  return (
+    <group position={[x - 0.3, y - 0.05, z + 0.3]}>
+      <Gable width={4.6} depth={5.6} height={2.8} wall="#eef1f2" roof="#566270" doorSide={1} />
+      {/* sign post with a heart */}
+      <group position={[3.4, 0, 1.8]}>
+        <Box p={[0, 0.8, 0]} s={[0.1, 1.6, 0.1]} c={palette.woodDark} />
+        <Box p={[0, 1.65, 0]} s={[0.08, 0.6, 0.9]} c="#ffffff" />
+        <mesh geometry={sphere} material={toon("#2e86c1")} position={[0.06, 1.68, 0]} scale={[0.02, 0.16, 0.2]} />
+      </group>
+      {[-1, 1].map((pz) => (
+        <group key={pz} position={[2.8, 0, pz]}>
+          <mesh geometry={cyl} material={toon(palette.roofTile)} position={[0, 0.25, 0]} scale={[0.28, 0.5, 0.28]} castShadow />
+          <mesh geometry={sphere} material={toon(palette.leaf)} position={[0, 0.7, 0]} scale={0.38} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Biblioteket: a red library with a book cart outside while Leo reads.
+export function Library({ open }: { open: boolean }) {
+  const { x, z } = places.library;
+  const y = heightAt(x - 0.4, z - 0.4);
+  const books = ["#c0392b", "#2f6fb5", "#f7c948", "#3f8f5a", "#8e44ad", "#e67e22"];
+  return (
+    <group position={[x - 0.4, y - 0.05, z - 0.4]}>
+      <Gable width={5.2} depth={6.8} height={3.1} wall={palette.faluDark} roof={palette.roof} doorSide={1} />
+      <mesh geometry={box} material={glow("#ffe7b8", 1)} position={[2.64, 1.5, -2]} scale={[0.05, 1.3, 1.6]} />
+      {open ? (
+        <group position={[3.4, 0, -2.4]} rotation-y={0.3}>
+          <Box p={[0, 0.5, 0]} s={[0.6, 1, 1.6]} c={palette.wood} />
+          {books.map((c, i) => (
+            <Box key={c} p={[0, 1.15, -0.65 + i * 0.26]} s={[0.4, 0.34 + (i % 3) * 0.05, 0.18]} c={c} shadow={false} />
+          ))}
+        </group>
+      ) : null}
+      <Bench position={[3.3, 0, 0.6]} rotation={Math.PI / 2} />
+    </group>
+  );
+}
+
+// Fyren: the white-and-red lighthouse on the northern point. Once Olle is
+// home its lamp turns and sweeps the sea.
+const towerRadius = (h: number) => 1.3 - (0.5 * h) / 7;
+const towerBands = ([
+  [0, 3, "#ffffff"],
+  [3, 5, "#c0392b"],
+  [5, 7, "#ffffff"],
+] as const).map(([from, to, color]) => ({
+  geometry: new THREE.CylinderGeometry(towerRadius(to), towerRadius(from), to - from, 20),
+  y: 0.4 + (from + to) / 2,
+  color,
+}));
+
+export function Lighthouse({ lit }: { lit: boolean }) {
+  const { x, z } = places.lighthouse;
+  const y = heightAt(x, z);
+  const beam = useRef<THREE.Group>(null);
+  useFrame((_, delta) => {
+    if (beam.current) beam.current.rotation.y += delta * 0.8;
+  });
+  return (
+    <group position={[x, y - 0.1, z]}>
+      <mesh geometry={cyl} material={toon(palette.stone)} position={[0, 0.2, 0]} scale={[1.9, 0.4, 1.9]} receiveShadow />
+      {towerBands.map((band) => (
+        <mesh key={band.y} geometry={band.geometry} material={toon(band.color)} position={[0, band.y, 0]} castShadow />
+      ))}
+      {/* gallery, lamp room and cap */}
+      <mesh geometry={cyl} material={toon("#2b2b2b")} position={[0, 7.5, 0]} scale={[1.05, 0.12, 1.05]} castShadow />
+      <mesh geometry={cyl} material={lit ? glow("#fff1b0", 2.4) : toon(palette.glass, { transparent: true, opacity: 0.6 })} position={[0, 8.05, 0]} scale={[0.6, 1, 0.6]} />
+      <mesh geometry={cone} material={toon("#c0392b")} position={[0, 8.85, 0]} scale={[0.75, 0.6, 0.75]} castShadow />
+      <mesh geometry={sphere} material={toon("#2b2b2b")} position={[0, 9.2, 0]} scale={0.1} />
+      <Box p={[0, 1.1, 1.26]} s={[0.7, 1.3, 0.1]} c={palette.woodDark} shadow={false} />
+      {lit ? (
+        <group ref={beam} position={[0, 8.05, 0]}>
+          <mesh geometry={box} material={toon("#fff6c8", { transparent: true, opacity: 0.18, emissive: "#fff1b0", emissiveIntensity: 1 })} position={[0, 0, 6]} scale={[0.5, 0.35, 12]} />
+        </group>
+      ) : null}
+      {/* keeper's cottage */}
+      <group position={[-3.7, 0, 1]} scale={0.75}>
+        <Gable width={3.4} depth={4} height={2.2} wall="#f4f1ea" roof={palette.roofTile} doorSide={1} />
+      </group>
+      <Bench position={[-1.2, 0, 2.8]} rotation={-2.8} />
+    </group>
+  );
+}
+
 export function LillaO({ unlocked }: { unlocked: Record<string, boolean> }) {
   return (
     <>
@@ -455,6 +634,11 @@ export function LillaO({ unlocked }: { unlocked: Record<string, boolean> }) {
       <Station open={unlocked.stina} />
       <Garden open={unlocked.astrid} />
       <Lookout />
+      <Boathouse />
+      <Shop open={unlocked.maja} />
+      <HealthCentre />
+      <Library open={unlocked.leo} />
+      <Lighthouse lit={unlocked.olle} />
       <Cottages />
     </>
   );

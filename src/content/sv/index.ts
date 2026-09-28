@@ -1,7 +1,7 @@
 import { createGlossary } from "@/lib/game/glossary";
 import type { IslandPack } from "../types";
 import { cafe } from "./cafe";
-import { course } from "./course";
+import { course, courseGlosses } from "./course";
 import { discoveries } from "./discoveries";
 import { entries } from "./glossary";
 import { grammarTips } from "./grammar";
@@ -38,7 +38,7 @@ export const island: IslandPack = {
   sceneExtras,
   drills,
   grammar: grammarTips,
-  glossary: createGlossary("sv", entries),
+  glossary: createGlossary("sv", entries, courseGlosses),
   cafe,
   discoveries,
   world,
@@ -59,6 +59,21 @@ export const island: IslandPack = {
     },
     { id: "station", line: { t: "Stationen", en: "The station" }, x: 15.6, y: heightAt(places.station.x, places.station.z) + 3.9, z: -6.5 },
     { id: "garden", line: { t: "Astrids trädgård", en: "Astrid's garden" }, x: -0.5, y: heightAt(places.garden.x, places.garden.z) + 2.7, z: -14 },
+    { id: "boathouse", line: { t: "Sjöboden", en: "The boathouse" }, x: 12.3, y: heightAt(places.boathouse.x, places.boathouse.z) + 3.4, z: 26 },
+    { id: "shop", line: { t: "Lanthandeln", en: "The village shop" }, x: -8.6, y: heightAt(places.shop.x, places.shop.z) + 4, z: 15.9 },
+    {
+      id: "shop-open",
+      line: { t: "Öppet", en: "Open" },
+      closedLine: { t: "Stängt", en: "Closed" },
+      openWith: "maja",
+      x: -8.6,
+      y: heightAt(places.shop.x, places.shop.z) + 1.9,
+      z: 17.2,
+      far: 12,
+    },
+    { id: "health", line: { t: "Vårdcentralen", en: "The health centre" }, x: -17.4, y: heightAt(places.health.x, places.health.z) + 3.8, z: 12.8 },
+    { id: "library", line: { t: "Biblioteket", en: "The library" }, x: -11.6, y: heightAt(places.library.x, places.library.z) + 4, z: -9.4 },
+    { id: "lighthouse", line: { t: "Fyren", en: "The lighthouse" }, x: 1.6, y: heightAt(places.lighthouse.x, places.lighthouse.z) + 2.9, z: -30.4 },
   ],
   placement,
   scenarios,

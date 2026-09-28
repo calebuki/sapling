@@ -1,4 +1,5 @@
 import type { DrillKind, SceneBeat, SceneExtras } from "@/lib/game/scenes";
+import * as more from "./more-scenes";
 
 // Every phrase Elin, Stina and Astrid teach, played out as small exchanges on
 // Lilla Ö. Bosse teaches at his café counter instead (see ./cafe).
@@ -743,7 +744,16 @@ const astrid: Record<string, SceneBeat[]> = {
   ],
 };
 
-export const scenes: Record<string, Record<string, SceneBeat[]>> = { elin, stina, astrid };
+export const scenes: Record<string, Record<string, SceneBeat[]>> = {
+  elin: { ...elin, ...more.elin },
+  stina: { ...stina, ...more.stina },
+  astrid: { ...astrid, ...more.astrid },
+  nils: more.nils,
+  karin: more.karin,
+  maja: more.maja,
+  leo: more.leo,
+  olle: more.olle,
+};
 
 // Elin checks introductions by name, Stina points at signs and boards.
 export const drills: Record<string, DrillKind> = {

@@ -68,6 +68,12 @@ function LillaO() {
       <path d="M40 132c20-34 70-52 130-50 60 2 104 22 118 50 6 12-30 26-126 26S28 150 40 132z" fill="#79b457" />
       <path d="M40 132c-4 10 20 22 124 22s130-10 126-22c-4 8-40 16-126 16S46 142 40 132z" fill="#efdcaa" />
       <path d="M104 96c14-18 48-24 70-12" fill="none" stroke="#9cc766" strokeWidth="10" strokeLinecap="round" />
+      <g transform="translate(62 128)">
+        <path d="M-5 0l2-30h6l2 30z" fill="#ffffff" />
+        <path d="M-3.9 -16l0.7-8h6.4l0.7 8z" fill="#c0392b" />
+        <rect x="-3.5" y="-35" width="7" height="5" fill="#fff4c2" />
+        <path d="M-4.5 -35l4.5-5 4.5 5z" fill="#c0392b" />
+      </g>
       <Cottage x={96} y={126} wall="#a8322d" />
       <Cottage x={132} y={118} wall="#e3b448" s={0.85} />
       <Cottage x={214} y={124} wall="#a8322d" s={0.95} />
