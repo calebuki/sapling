@@ -18,7 +18,7 @@ function Gable({ width, depth, height, wall, roof, doorSide = 1 }: { width: numb
   const roofHeight = width * 0.42;
   return (
     <group>
-      <Box p={[0, height / 2, 0]} s={[width, height, depth]} c={wall} />
+      <Box p={[0, height / 2, 0]} s={[width, height, depth]} c={wall} t="siding" />
       {/* White corner trims make the falu-red read as Swedish */}
       {[
         [-1, -1],
@@ -29,7 +29,7 @@ function Gable({ width, depth, height, wall, roof, doorSide = 1 }: { width: numb
         <Box key={`${x}${z}`} p={[(x * width) / 2, height / 2, (z * depth) / 2]} s={[0.18, height, 0.18]} c={palette.trim} shadow={false} />
       ))}
       {/* gable ends */}
-      <mesh geometry={prism} material={toon(wall)} position={[0, height + roofHeight / 3, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[width / Math.sqrt(3), depth, roofHeight / 1.5]} castShadow />
+      <mesh geometry={prism} material={toon(wall, { surface: "siding" })} position={[0, height + roofHeight / 3, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[width / Math.sqrt(3), depth, roofHeight / 1.5]} castShadow />
       {/* roof slabs */}
       {[-1, 1].map((side) => {
         const slope = Math.atan2(roofHeight, width / 2);
@@ -41,18 +41,19 @@ function Gable({ width, depth, height, wall, roof, doorSide = 1 }: { width: numb
             s={[length, 0.16, depth + 0.5]}
             r={[0, 0, -side * slope]}
             c={roof}
+            t="roof"
           />
         );
       })}
       {/* door + windows on the front (+x or -x) */}
-      <Box p={[(doorSide * width) / 2 + doorSide * 0.03, 0.75, 0]} s={[0.08, 1.5, 0.8]} c={palette.woodDark} shadow={false} />
+      <Box p={[(doorSide * width) / 2 + doorSide * 0.03, 0.75, 0]} s={[0.08, 1.5, 0.8]} c={palette.woodDark} t="siding" shadow={false} />
       {[-1, 1].map((z) => (
         <group key={z}>
           <Box p={[(doorSide * width) / 2 + doorSide * 0.03, height * 0.6, z * depth * 0.3]} s={[0.1, 0.8, 0.8]} c={palette.trim} shadow={false} />
           <mesh geometry={box} material={glow("#ffd89a", 1.1)} position={[(doorSide * width) / 2 + doorSide * 0.07, height * 0.6, z * depth * 0.3]} scale={[0.05, 0.6, 0.6]} />
         </group>
       ))}
-      <Box p={[width * 0.2, height + roofHeight * 0.7, depth * 0.25]} s={[0.4, 1.2, 0.4]} c={palette.stoneDark} />
+      <Box p={[width * 0.2, height + roofHeight * 0.7, depth * 0.25]} s={[0.4, 1.2, 0.4]} c={palette.stoneDark} t="stone" />
     </group>
   );
 }
@@ -79,11 +80,11 @@ export function Dock() {
   return (
     <group>
       {planks.map((z, i) => (
-        <Box key={z} p={[dock.x, dock.height - 0.08, z]} s={[dock.halfWidth * 2, 0.14, 0.5]} c={i % 3 ? palette.plank : "#a87c52"} />
+        <Box key={z} p={[dock.x, dock.height - 0.08, z]} s={[dock.halfWidth * 2, 0.14, 0.5]} c={i % 3 ? palette.plank : "#a87c52"} t="planks" />
       ))}
       {[27, 31, 35, 38].flatMap((z) =>
         [-1, 1].map((side) => (
-          <mesh key={`${z}${side}`} geometry={cyl} material={toon(palette.woodDark)} position={[side * (dock.halfWidth + 0.1), 0.3, z]} scale={[0.14, 2, 0.14]} castShadow />
+          <mesh key={`${z}${side}`} geometry={cyl} material={toon(palette.woodDark, { surface: "bark" })} position={[side * (dock.halfWidth + 0.1), 0.3, z]} scale={[0.14, 2, 0.14]} castShadow />
         )),
       )}
       <Ferry />
@@ -120,7 +121,7 @@ export function Cafe({ open }: { open: boolean }) {
       <Gable width={6} depth={7} height={3.2} wall={palette.falu} roof={palette.roof} doorSide={1} />
       {/* striped awning */}
       {Array.from({ length: 7 }, (_, i) => (
-        <Box key={i} p={[3.6, 2.7, -3 + i]} s={[1.4, 0.1, 1]} r={[0, 0, -0.35]} c={i % 2 ? "#ffffff" : "#d64545"} />
+        <Box key={i} p={[3.6, 2.7, -3 + i]} s={[1.4, 0.1, 1]} r={[0, 0, -0.35]} c={i % 2 ? "#ffffff" : "#d64545"} t="fabric" />
       ))}
       {/* outdoor tables come out once the café opens */}
       {open && [
@@ -184,7 +185,7 @@ function Sleepers() {
     });
     mesh.current.instanceMatrix.needsUpdate = true;
   }, [zs]);
-  return <instancedMesh ref={mesh} args={[box, toon(palette.woodDark), zs.length]} receiveShadow />;
+  return <instancedMesh ref={mesh} args={[box, toon(palette.woodDark, { surface: "planks" }), zs.length]} receiveShadow />;
 }
 
 function Bridge() {
@@ -198,14 +199,14 @@ function Bridge() {
   return (
     <group>
       {/* stone abutment where the line leaves the island */}
-      <Box p={[track.x, deckY - 1, track.shore - 1]} s={[3.4, 2.2, 5]} c={palette.stoneDark} />
-      <Box p={[track.x, deckY - 0.15, mid]} s={[3, 0.3, length]} c={palette.stone} shadow={false} />
+      <Box p={[track.x, deckY - 1, track.shore - 1]} s={[3.4, 2.2, 5]} c={palette.stoneDark} t="stone" />
+      <Box p={[track.x, deckY - 0.15, mid]} s={[3, 0.3, length]} c={palette.stone} t="stone" shadow={false} />
       {[-1, 1].map((side) => (
         <Box key={side} p={[track.x + side * 1.45, deckY + 0.12, mid]} s={[0.18, 0.28, length]} c={palette.stoneDark} shadow={false} />
       ))}
       {piers.map((z) => (
         <group key={z}>
-          <Box p={[track.x, deckY - 1.2, z]} s={[2.4, 2.2, 1.1]} c={palette.stoneDark} shadow={false} />
+          <Box p={[track.x, deckY - 1.2, z]} s={[2.4, 2.2, 1.1]} c={palette.stoneDark} t="stone" shadow={false} />
           <mesh geometry={cyl} material={toon("#d9f1f0")} position={[track.x, 0.04, z]} scale={[1.6, 0.04, 0.9]} />
         </group>
       ))}
@@ -239,17 +240,17 @@ function Mainland() {
         <mesh key={hx} geometry={sphere} material={toon(c)} position={[hx, hy, hz]} scale={[sx, sy, sz]} />
       ))}
       {mainlandTrees.map((t) => (
-        <mesh key={t.x} geometry={cone} material={toon(palette.pine)} position={[t.x, t.s * 1.2, t.z]} scale={[t.s, t.s * 2.6, t.s]} />
+        <mesh key={t.x} geometry={cone} material={toon(palette.pine, { surface: "needles" })} position={[t.x, t.s * 1.2, t.z]} scale={[t.s, t.s * 2.6, t.s]} />
       ))}
       {[-44, -36, 48, 55].map((hx, i) => (
         <group key={hx} position={[hx, 0.2, -171 - (i % 2) * 3]}>
-          <Box p={[0, 1, 0]} s={[3, 2, 2.4]} c={i % 2 ? palette.trim : palette.falu} shadow={false} />
-          <Box p={[0, 2.3, 0]} s={[3.3, 0.6, 2.6]} c={palette.roof} shadow={false} />
+          <Box p={[0, 1, 0]} s={[3, 2, 2.4]} c={i % 2 ? palette.trim : palette.falu} t="siding" shadow={false} />
+          <Box p={[0, 2.3, 0]} s={[3.3, 0.6, 2.6]} c={palette.roof} t="roof" shadow={false} />
         </group>
       ))}
       {/* tunnel portal the train disappears into */}
       <group position={[track.x, deckY, track.portal - 3]}>
-        <Box p={[0, 2.3, 0]} s={[6, 4.6, 6]} c={palette.stoneDark} shadow={false} />
+        <Box p={[0, 2.3, 0]} s={[6, 4.6, 6]} c={palette.stoneDark} t="stone" shadow={false} />
         <mesh geometry={box} material={toon("#141419")} position={[0, 1.7, 3.01]} scale={[2.8, 3.4, 0.05]} />
         <Box p={[0, 4.4, 3.1]} s={[6.4, 0.4, 0.3]} c={palette.stone} shadow={false} />
       </group>
@@ -280,7 +281,7 @@ export function Station({ open }: { open: boolean }) {
         <Gable width={5} depth={7} height={3} wall="#e8c35a" roof={palette.roofTile} doorSide={-1} />
       </group>
       {/* platform and tracks */}
-      <Box p={[22.6, heightAt(22.6, -4) + 0.1, -4]} s={[2.2, 0.35, 20]} c="#b9b4aa" />
+      <Box p={[22.6, heightAt(22.6, -4) + 0.1, -4]} s={[2.2, 0.35, 20]} c="#b9b4aa" t="cobble" />
       <Sleepers />
       {[-0.55, 0.55].map((dx) => (
         <Box key={dx} p={[track.x + dx, railY, railMid]} s={[0.1, 0.1, railLength]} c="#6d6f75" shadow={false} />
@@ -321,8 +322,8 @@ export function Square() {
   return (
     <group>
       {/* stone circle */}
-      <mesh geometry={cyl} material={toon("#c9c2b4")} position={[x, y - 0.02, z]} scale={[5.2, 0.08, 5.2]} receiveShadow />
-      <mesh geometry={torus} material={toon(palette.stone)} position={[x, y + 0.06, z]} rotation-x={Math.PI / 2} scale={[1.6, 1.6, 1.4]} />
+      <mesh geometry={cyl} material={toon("#c9c2b4", { surface: "cobble" })} position={[x, y - 0.02, z]} scale={[5.2, 0.08, 5.2]} receiveShadow />
+      <mesh geometry={torus} material={toon(palette.stone, { surface: "stone" })} position={[x, y + 0.06, z]} rotation-x={Math.PI / 2} scale={[1.6, 1.6, 1.4]} />
       <Maypole position={[4.2, heightAt(4.2, 2.2), 2.2]} />
       {[
         [-3.8, 8.4, 0.3],
@@ -372,11 +373,11 @@ export function Garden({ open }: { open: boolean }) {
     <group position={[x, y, z]}>
       {/* greenhouse */}
       <group position={[-3.2, 0, -2.5]} rotation-y={0.3}>
-        <mesh geometry={box} material={toon(palette.glass, { transparent: true, opacity: 0.45 })} position={[0, 1.1, 0]} scale={[3, 2.2, 3.6]} />
+        <mesh geometry={box} material={toon(palette.glass, { transparent: true, opacity: 0.45, surface: null })} position={[0, 1.1, 0]} scale={[3, 2.2, 3.6]} />
         {[-1.5, 1.5].flatMap((bx) =>
           [-1.8, 1.8].map((bz) => <Box key={`${bx}${bz}`} p={[bx, 1.3, bz]} s={[0.08, 2.6, 0.08]} c="#ffffff" />),
         )}
-        <mesh geometry={prism} material={toon(palette.glass, { transparent: true, opacity: 0.45 })} position={[0, 2.6, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.75, 3.6, 0.8]} />
+        <mesh geometry={prism} material={toon(palette.glass, { transparent: true, opacity: 0.45, surface: null })} position={[0, 2.6, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.75, 3.6, 0.8]} />
         {[0.6, -0.4, -1.2].map((pz, i) => (
           <mesh key={pz} geometry={sphere} material={toon(["#7fb65a", "#e05a47", "#6aa04d"][i])} position={[0.3, 0.6, pz]} scale={0.35} />
         ))}
@@ -388,7 +389,7 @@ export function Garden({ open }: { open: boolean }) {
         [-0.5, 3.5],
       ].map(([bx, bz], i) => (
         <group key={i} position={[bx, 0, bz]}>
-          <Box p={[0, 0.15, 0]} s={[2.4, 0.3, 1.2]} c={palette.wood} />
+          <Box p={[0, 0.15, 0]} s={[2.4, 0.3, 1.2]} c={palette.wood} t="planks" />
           <Box p={[0, 0.3, 0]} s={[2.2, 0.06, 1]} c="#5a3d2b" shadow={false} />
           {Array.from({ length: 5 }, (_, j) => (
             <group key={j} position={[-0.9 + j * 0.45, 0.45, 0]}>
@@ -463,7 +464,7 @@ export function Boathouse() {
             <Box key={nx} p={[nx, 0.8, 0]} s={[0.1, 1.6, 0.1]} c={palette.woodDark} />
           ))}
           <Box p={[0, 1.55, 0]} s={[2, 0.08, 0.08]} c={palette.woodDark} />
-          <Box p={[0, 1.05, 0.02]} s={[1.7, 0.95, 0.03]} c="#5b6f7a" shadow={false} />
+          <Box p={[0, 1.05, 0.02]} s={[1.7, 0.95, 0.03]} c="#5b6f7a" t="fabric" shadow={false} />
         </group>
         {/* fish crates and a buoy */}
         {[
@@ -471,14 +472,14 @@ export function Boathouse() {
           [-2.3, -1.9, 0],
           [-2.3, -1.55, 1],
         ].map(([cx, cz, level], i) => (
-          <Box key={i} p={[cx, 0.22 + level * 0.44, cz]} s={[0.6, 0.44, 0.65]} c="#3f6fa0" />
+          <Box key={i} p={[cx, 0.22 + level * 0.44, cz]} s={[0.6, 0.44, 0.65]} c="#3f6fa0" t="planks" />
         ))}
         <mesh geometry={sphere} material={toon("#ff7a3d")} position={[-2.4, 0.3, 0.4]} scale={0.28} castShadow />
       </group>
       {/* jetty out over the water */}
       <group position={[15.4, 0, 27.4]} rotation-y={0.52}>
         {jetty.map((jz, i) => (
-          <Box key={jz} p={[0, 0.62, jz]} s={[1.3, 0.12, 0.48]} c={i % 3 ? palette.plank : "#a87c52"} />
+          <Box key={jz} p={[0, 0.62, jz]} s={[1.3, 0.12, 0.48]} c={i % 3 ? palette.plank : "#a87c52"} t="planks" />
         ))}
         {[0.4, 2.6, 4.8].flatMap((jz) =>
           [-1, 1].map((side) => <Box key={`${jz}${side}`} p={[side * 0.7, 0.2, jz]} s={[0.14, 1.4, 0.14]} c={palette.woodDark} />),
@@ -516,7 +517,7 @@ export function Shop({ open }: { open: boolean }) {
       <Gable width={5} depth={6.4} height={3} wall="#d9a441" roof={palette.roof} doorSide={1} />
       {/* shop window with goods */}
       <mesh geometry={box} material={glow("#ffe2a8", 1)} position={[2.56, 1.3, 1.9]} scale={[0.05, 1.1, 1.4]} />
-      <Box p={[2.6, 0.2, 0]} s={[0.9, 0.12, 2.6]} c={palette.plank} />
+      <Box p={[2.6, 0.2, 0]} s={[0.9, 0.12, 2.6]} c={palette.plank} t="planks" />
       {open &&
         [
           [3.4, -1.9, "#d8412f"],
@@ -524,7 +525,7 @@ export function Shop({ open }: { open: boolean }) {
           [3.9, 0.1, "#7fb65a"],
         ].map(([cx, cz, fruit]) => (
           <group key={`${cx}${cz}`} position={[cx as number, 0, cz as number]}>
-            <Box p={[0, 0.3, 0]} s={[0.8, 0.6, 0.6]} c={palette.wood} />
+            <Box p={[0, 0.3, 0]} s={[0.8, 0.6, 0.6]} c={palette.wood} t="planks" />
             {[-0.2, 0, 0.2].map((fx) => (
               <mesh key={fx} geometry={sphere} material={toon(fruit as string)} position={[fx, 0.66, 0]} scale={0.13} />
             ))}
@@ -568,7 +569,7 @@ export function Library({ open }: { open: boolean }) {
       <mesh geometry={box} material={glow("#ffe7b8", 1)} position={[2.64, 1.5, -2]} scale={[0.05, 1.3, 1.6]} />
       {open ? (
         <group position={[3.4, 0, -2.4]} rotation-y={0.3}>
-          <Box p={[0, 0.5, 0]} s={[0.6, 1, 1.6]} c={palette.wood} />
+          <Box p={[0, 0.5, 0]} s={[0.6, 1, 1.6]} c={palette.wood} t="planks" />
           {books.map((c, i) => (
             <Box key={c} p={[0, 1.15, -0.65 + i * 0.26]} s={[0.4, 0.34 + (i % 3) * 0.05, 0.18]} c={c} shadow={false} />
           ))}
@@ -587,7 +588,7 @@ const towerBands = ([
   [3, 5, "#c0392b"],
   [5, 7, "#ffffff"],
 ] as const).map(([from, to, color]) => ({
-  geometry: new THREE.CylinderGeometry(towerRadius(to), towerRadius(from), to - from, 20),
+  geometry: new THREE.CylinderGeometry(towerRadius(to), towerRadius(from), to - from, 10),
   y: 0.4 + (from + to) / 2,
   color,
 }));
@@ -601,19 +602,19 @@ export function Lighthouse({ lit }: { lit: boolean }) {
   });
   return (
     <group position={[x, y - 0.1, z]}>
-      <mesh geometry={cyl} material={toon(palette.stone)} position={[0, 0.2, 0]} scale={[1.9, 0.4, 1.9]} receiveShadow />
+      <mesh geometry={cyl} material={toon(palette.stone, { surface: "stone" })} position={[0, 0.2, 0]} scale={[1.9, 0.4, 1.9]} receiveShadow />
       {towerBands.map((band) => (
-        <mesh key={band.y} geometry={band.geometry} material={toon(band.color)} position={[0, band.y, 0]} castShadow />
+        <mesh key={band.y} geometry={band.geometry} material={toon(band.color, { surface: "plaster" })} position={[0, band.y, 0]} castShadow />
       ))}
       {/* gallery, lamp room and cap */}
       <mesh geometry={cyl} material={toon("#2b2b2b")} position={[0, 7.5, 0]} scale={[1.05, 0.12, 1.05]} castShadow />
-      <mesh geometry={cyl} material={lit ? glow("#fff1b0", 2.4) : toon(palette.glass, { transparent: true, opacity: 0.6 })} position={[0, 8.05, 0]} scale={[0.6, 1, 0.6]} />
+      <mesh geometry={cyl} material={lit ? glow("#fff1b0", 2.4) : toon(palette.glass, { transparent: true, opacity: 0.6, surface: null })} position={[0, 8.05, 0]} scale={[0.6, 1, 0.6]} />
       <mesh geometry={cone} material={toon("#c0392b")} position={[0, 8.85, 0]} scale={[0.75, 0.6, 0.75]} castShadow />
       <mesh geometry={sphere} material={toon("#2b2b2b")} position={[0, 9.2, 0]} scale={0.1} />
       <Box p={[0, 1.1, 1.26]} s={[0.7, 1.3, 0.1]} c={palette.woodDark} shadow={false} />
       {lit ? (
         <group ref={beam} position={[0, 8.05, 0]}>
-          <mesh geometry={box} material={toon("#fff6c8", { transparent: true, opacity: 0.18, emissive: "#fff1b0", emissiveIntensity: 1 })} position={[0, 0, 6]} scale={[0.5, 0.35, 12]} />
+          <mesh geometry={box} material={toon("#fff6c8", { transparent: true, opacity: 0.18, emissive: "#fff1b0", emissiveIntensity: 1, surface: null })} position={[0, 0, 6]} scale={[0.5, 0.35, 12]} />
         </group>
       ) : null}
       {/* keeper's cottage */}

@@ -33,7 +33,6 @@ export type GameState = {
   toasts: Toast[];
   save: SaveData;
   muted: boolean;
-  music: boolean;
   // Bumps whenever a celebration (level up) should play in the world.
   celebration: number;
   loadedFor: string | null;
@@ -59,7 +58,6 @@ let state: GameState = {
   toasts: [],
   save: emptySave,
   muted: false,
-  music: true,
   celebration: 0,
   loadedFor: null,
 };
@@ -83,9 +81,9 @@ export function setGame(patch: Partial<GameState> | ((current: GameState) => Par
       // Storage can be unavailable (private mode); the island still works this session.
     }
   }
-  if ("muted" in next || "music" in next) {
+  if ("muted" in next) {
     try {
-      window.localStorage.setItem("sapling:audio:v2", JSON.stringify({ muted: state.muted, music: state.music }));
+      window.localStorage.setItem("sapling:audio:v2", JSON.stringify({ muted: state.muted }));
     } catch {}
   }
   listeners.forEach((listener) => listener());
@@ -139,7 +137,7 @@ export function loadSave(learnerId: string, code: TargetLanguageCode) {
   saveKey = saveKeyFor(learnerId, code);
   currentPlayerKey = playerKey(learnerId);
   let save = readSave(learnerId, code);
-  let audio = { muted: false, music: true };
+  let audio = { muted: false };
   try {
     if (!save) {
       const player = JSON.parse(window.localStorage.getItem(currentPlayerKey) ?? "{}") as { name?: string | null; outfit?: number };
@@ -148,7 +146,7 @@ export function loadSave(learnerId: string, code: TargetLanguageCode) {
     const audioRaw = window.localStorage.getItem("sapling:audio:v2");
     if (audioRaw) audio = { ...audio, ...JSON.parse(audioRaw) };
   } catch {}
-  state = { ...state, phase: "title", overlay: null, nearby: null, talkingTo: null, save: save ?? emptySave, muted: Boolean(audio.muted), music: audio.music !== false, loadedFor: `${learnerId}:${code}` };
+  state = { ...state, phase: "title", overlay: null, nearby: null, talkingTo: null, save: save ?? emptySave, muted: Boolean(audio.muted), loadedFor: `${learnerId}:${code}` };
   listeners.forEach((listener) => listener());
 }
 
@@ -160,12 +158,33 @@ export function toast(kind: Toast["kind"], line: Line, detail?: Line, ms = 3800)
 }
 
 // Per-frame values live outside React so the render loop never re-renders the UI.
+function readCameraSnap() {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem("sapling:camera") === "snap";
+  } catch {
+    return false;
+  }
+}
+
+export function setCameraSnap(on: boolean) {
+  runtime.cameraSnap = on;
+  runtime.cameraYawTarget = Math.round(runtime.cameraYaw / (Math.PI / 2)) * (Math.PI / 2);
+  try {
+    window.localStorage.setItem("sapling:camera", on ? "snap" : "free");
+  } catch {
+    // Private windows can refuse storage; the toggle still works for this visit.
+  }
+}
+
 export const runtime = {
   player: { x: 0, y: 1, z: 0, rot: Math.PI, speed: 0 },
   walkTarget: null as null | { x: number; z: number; then?: Interactable },
   keys: new Set<string>(),
   cameraYaw: 0,
   cameraDistance: 15,
+  // Snap mode: a fixed diorama angle that turns in 90° steps (toggle with V).
+  cameraSnap: readCameraSnap(),
+  cameraYawTarget: 0,
   speaking: null as null | VillagerId | "player",
   emote: {} as Partial<Record<VillagerId | "player", { kind: "happy" | "think" | "wave"; until: number }>>,
   lastInteraction: 0,

@@ -82,7 +82,7 @@ function VillagerTag({ id, unlocked }: { id: VillagerId; unlocked: boolean }) {
   const villager = villagerById(id);
   const [x, z] = villager.position;
   const [hidden] = useState(() => () => getGame().talkingTo === id);
-  const ref = useAnchor(`villager:${id}`, x, island().world.groundAt(x, z) + 2.35 * (villager.look.scale ?? 1), z, 11, hidden);
+  const ref = useAnchor(`villager:${id}`, x, island().world.groundAt(x, z) + 2.2 * (villager.look.scale ?? 1), z, 11, hidden);
   const [chatter, setChatter] = useState(0);
   const index = island().villagers.indexOf(villager);
   useEffect(() => {

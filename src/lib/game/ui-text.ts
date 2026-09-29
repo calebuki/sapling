@@ -5,7 +5,7 @@ import type { Line } from "./line";
 
 type Lines =
   | "title" | "tagline" | "play" | "continue" | "signIn" | "loading" | "level" | "words" | "dictionary"
-  | "soundOn" | "soundOff" | "musicOn" | "musicOff" | "menu" | "signOut" | "close" | "back" | "home"
+  | "soundOn" | "soundOff" | "menu" | "signOut" | "close" | "back" | "home"
   | "walkHint" | "hoverHint" | "lookAt" | "goalMeetFirst" | "goalDone" | "newWord" | "levelUp" | "treeGrows"
   | "next" | "check" | "dontKnow" | "hint" | "listen" | "listenAgain" | "slowly" | "sayIt" | "listening"
   | "writeTarget" | "sayInTarget" | "whatDoesItMean" | "whatDidYouHear" | "buildSentence" | "newPhrase"
@@ -17,7 +17,8 @@ type Lines =
   | "controlsTalk" | "controlsCamera" | "controlsRun" | "spelling" | "article" | "yourStyle" | "style"
   | "englishAuto" | "englishOn" | "englishOff" | "skip" | "tryIt" | "nowYouCanSay" | "letsGo" | "presents"
   | "welcomeTitle" | "learnedBefore" | "quickCheck" | "done" | "startFromTop" | "replyIfYouLike"
-  | "askForBill" | "fillTray" | "ready" | "option" | "yourTray" | "flowers" | "units" | "locked";
+  | "askForBill" | "fillTray" | "ready" | "option" | "yourTray" | "flowers" | "units" | "locked"
+  | "notes" | "conversation" | "situation";
 
 export type UiText = Record<Lines, Line> & {
   talkTo(name: string): Line;
@@ -25,7 +26,6 @@ export type UiText = Record<Lines, Line> & {
   goalLearnMore(name: string): Line;
   newFriend(name: string): Line;
   welcomeBack(name: string): Line;
-  explains(name: string): Line;
   wordGrows(stage: Line): Line;
   startWith(name: string): Line;
   callAndTalk(name: string): Line;

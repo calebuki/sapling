@@ -127,8 +127,21 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   });
 
   const line = lines[index];
+  // A grammar tip takes the place of the dialogue card rather than stacking on it.
+  if (mode === "tip" && tip) {
+    return (
+      <GrammarTipModal
+        tip={tip}
+        onDone={() => {
+          updateSave({ grammarSeen: [...new Set([...save.grammarSeen, tip.id])] });
+          setTip(null);
+          setMode("lesson");
+        }}
+      />
+    );
+  }
   return (
-    <div className="dialogue" role="dialog" aria-label={villager.name}>
+    <div className={`dialogue ${mode === "lesson" ? "is-lesson" : ""}`} role="dialog" aria-label={villager.name}>
       <div className="dialogue-plate">
         <span className="dialogue-name" style={{ background: villager.look.accent }}>
           {villager.name}
@@ -204,22 +217,6 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
               </p>
             ) : null}
           </div>
-        ) : null}
-
-        {mode === "tip" && tip ? (
-          <>
-            <p className="dialogue-hint">
-              <GlossedLine line={ui.explains(villager.name)} />
-            </p>
-            <GrammarTipModal
-              tip={tip}
-              onDone={() => {
-                updateSave({ grammarSeen: [...new Set([...save.grammarSeen, tip.id])] });
-                setTip(null);
-                setMode("lesson");
-              }}
-            />
-          </>
         ) : null}
 
         {mode === "lesson" ? (

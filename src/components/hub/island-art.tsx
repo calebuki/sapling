@@ -1,7 +1,65 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import type { IslandMeta } from "@/content/meta";
 
-// Postcard illustrations of each island for the hub: plain SVG, so the hub
-// stays light and never needs WebGL.
+// Postcard illustrations of each island for the hub. They are drawn as SVG and
+// then rasterised at a low resolution into pixel art that matches the islands,
+// so the hub stays light and never needs WebGL.
+
+const ART_W = 128;
+const ART_H = 80;
+const LEVELS = 14;
+const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+function pixelate(ctx: CanvasRenderingContext2D) {
+  const image = ctx.getImageData(0, 0, ART_W, ART_H);
+  const d = image.data;
+  for (let y = 0; y < ART_H; y++) {
+    for (let x = 0; x < ART_W; x++) {
+      const i = (y * ART_W + x) * 4;
+      const offset = ((bayer[(y & 3) * 4 + (x & 3)] + 0.5) / 16 - 0.5) * 0.7;
+      for (let c = 0; c < 3; c++) {
+        const v = Math.floor((d[i + c] / 255) * LEVELS + 0.5 + offset) / LEVELS;
+        d[i + c] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+      }
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+function PixelArt({ children }: { children: React.ReactNode }) {
+  const source = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const svg = source.current?.querySelector("svg");
+    const ctx = canvas.current?.getContext("2d");
+    if (!svg || !ctx) return;
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      ctx.clearRect(0, 0, ART_W, ART_H);
+      ctx.drawImage(image, 0, 0, ART_W, ART_H);
+      pixelate(ctx);
+      setReady(true);
+    };
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return (
+    <>
+      <div ref={source} className="pixel-art-source" hidden={ready}>
+        {children}
+      </div>
+      <canvas ref={canvas} className="pixel-art" width={ART_W} height={ART_H} hidden={!ready} aria-hidden="true" />
+    </>
+  );
+}
 
 function Sea({ deep, shallow, sky, horizon }: { deep: string; shallow: string; sky: string; horizon: string }) {
   return (
@@ -154,5 +212,5 @@ function Soon() {
 }
 
 export function IslandArt({ art }: { art: IslandMeta["art"] }) {
-  return art === "lilla-o" ? <LillaO /> : art === "tannenau" ? <Tannenau /> : <Soon />;
+  return <PixelArt>{art === "lilla-o" ? <LillaO /> : art === "tannenau" ? <Tannenau /> : <Soon />}</PixelArt>;
 }

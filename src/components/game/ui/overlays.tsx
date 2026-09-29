@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, Languages, Lock, LogOut, Music, Volume2, X } from "lucide-react";
+import { GraduationCap, Languages, Lock, LogOut, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import type { GrammarTip } from "@/lib/game/grammar";
@@ -159,7 +159,6 @@ function Ordbok({ progress }: { progress: GameProgress }) {
 }
 
 function GameMenu() {
-  const music = useGame((s) => s.music);
   const outfit = useGame((s) => s.save.outfit);
   const english = useGame((s) => s.save.english);
   const { ui } = useIsland();
@@ -170,16 +169,6 @@ function GameMenu() {
       <h2>
         <GlossedLine line={ui.menu} />
       </h2>
-      <button
-        className="btn"
-        onClick={() => {
-          sound.setMusic(!music);
-          if (!music) sound.startMusic();
-          setGame({ music: !music });
-        }}
-      >
-        <Music size={18} /> <GlossedLine line={music ? ui.musicOff : ui.musicOn} />
-      </button>
       <button
         className="btn"
         onClick={() => {

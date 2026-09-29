@@ -25,6 +25,7 @@ import {
   type RoundSummary,
 } from "./lesson-round";
 import { Glossed, GlossedLine } from "./glossed";
+import { ConversationLog, LessonSide, LessonTopBar, type LogEntry } from "./lesson-layout";
 
 const SCENE_ROUND = 6;
 
@@ -40,16 +41,6 @@ export function ListenButtons({ onPlay }: { onPlay: (slow: boolean) => void }) {
       <button className="icon-button" aria-label={aria(ui.slowly)} onClick={() => onPlay(true)}>
         <Snail size={18} />
       </button>
-    </div>
-  );
-}
-
-export function RoundProgress({ length, done }: { length: number; done: number }) {
-  return (
-    <div className="lesson-progress" aria-hidden="true">
-      {Array.from({ length }, (_, i) => (
-        <span key={i} className={i < done ? "is-done" : i === done ? "is-current" : ""} />
-      ))}
     </div>
   );
 }
@@ -74,6 +65,7 @@ export function SceneRound({ villager, slugs, onFinish }: { villager: Villager; 
   const round = useLessonRound(villager, slugs, onFinish, { roundLength: SCENE_ROUND, adapt: listenWhenHearingLags });
   const { activity, concept, name, outcome, queued, busy, attempts, summary, stateBefore } = round;
   const [wins, setWins] = useState<SceneBeat[]>([]);
+  const [log, setLog] = useState<LogEntry[]>([]);
   // Varies the variants from one round to the next.
   const [seed] = useState(() => Math.floor(Math.random() * 1e6));
   const [answer, setAnswer] = useState<string | null>(null);
@@ -83,10 +75,14 @@ export function SceneRound({ villager, slugs, onFinish }: { villager: Villager; 
 
   if (!activity || !concept) {
     return (
-      <div className="dialogue-actions">
-        <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
-        </button>
+      <div className="lesson">
+        <div className="lesson-task">
+          <div className="dialogue-actions">
+            <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
+              <GlossedLine line={ui.next} /> <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -105,6 +101,7 @@ export function SceneRound({ villager, slugs, onFinish }: { villager: Villager; 
     setAnswer(p.input === "choice" ? null : p.response);
     await round.record(p);
     if (p.successful && activity.mode !== "encounter" && beat) setWins((w) => [...w, beat]);
+    if (beat) setLog((l) => [...l, { who: speakerOf(beat, true), cue: beat.cue.t, you: p.response || expected, ok: p.successful }]);
   };
 
   const next = () => {
@@ -160,17 +157,22 @@ export function SceneRound({ villager, slugs, onFinish }: { villager: Villager; 
   const showBeat = !puzzle && beat && !listening ? beat : null;
   return (
     <div className={`lesson scene scene-${villager.id}`} aria-busy={busy}>
-      <RoundProgress length={SCENE_ROUND} done={attempts.length} />
-      <Stage beat={puzzle ? null : beat} wins={wins} answered={Boolean(outcome)} />
+      <LessonTopBar length={SCENE_ROUND} done={attempts.length} />
+      <LessonSide>
+        <Stage beat={puzzle ? null : beat} wins={wins} answered={Boolean(outcome)} />
+        <ConversationLog entries={log} />
+      </LessonSide>
       {showBeat ? (
         <Exchange key={`exchange:${key}`} villager={villager} beat={showBeat} target={expected} answer={outcome?.correct ? answer : null} name={name} />
       ) : null}
-      {body}
-      {round.error ? (
-        <p className="lesson-error" role="alert">
-          <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
-        </p>
-      ) : null}
+      <div className="lesson-task">
+        {body}
+        {round.error ? (
+          <p className="lesson-error" role="alert">
+            <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

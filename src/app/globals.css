@@ -292,6 +292,11 @@ button:disabled {
   touch-action: none;
 }
 
+/* The island renders at a low resolution; scale it up with hard pixel edges. */
+.game-canvas canvas {
+  image-rendering: pixelated;
+}
+
 .game-error {
   position: absolute;
   bottom: 16px;
@@ -852,26 +857,302 @@ button:disabled {
 
 /* ---------- Lessons ---------- */
 
-.lesson-progress {
+/* A lesson spreads out: progress at the top of the screen, what people say in
+   a strip above the task, the task itself in one steady card, and anything
+   that is nice to know in a drawer on the right. */
+
+.lesson-topbar {
+  position: absolute;
+  top: max(24px, calc(env(safe-area-inset-top) + 8px));
+  left: 50%;
+  z-index: 31;
   display: flex;
   gap: 6px;
-  margin-bottom: 16px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 4px 0 var(--edge), var(--shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: fade-in 300ms ease;
 }
 
-.lesson-progress span {
+.lesson-topbar span {
   flex: 1;
-  height: 8px;
+  height: 10px;
   border-radius: 99px;
   background: #efe3c9;
   transition: background 300ms ease;
 }
 
-.lesson-progress .is-done {
+.lesson-topbar .is-done {
   background: var(--green);
 }
 
-.lesson-progress .is-current {
+.lesson-topbar .is-current {
   background: var(--yellow);
+}
+
+@media (max-width: 1080px) {
+  .lesson-topbar {
+    top: max(80px, calc(env(safe-area-inset-top) + 64px));
+  }
+}
+
+/* Celebrations drop below the progress bar instead of covering it. */
+.game-root:has(.lesson-topbar) .toasts {
+  top: max(76px, calc(env(safe-area-inset-top) + 60px));
+}
+
+@media (max-width: 1080px) {
+  .game-root:has(.lesson-topbar) .toasts {
+    top: max(132px, calc(env(safe-area-inset-top) + 116px));
+  }
+}
+
+.dialogue.is-lesson {
+  max-height: min(76vh, 700px);
+}
+
+.dialogue.is-lesson .dialogue-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.dialogue.is-lesson .lesson {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* The name plate overlaps whichever card comes first. */
+.dialogue.is-lesson .lesson > :first-child {
+  padding-top: 30px;
+}
+
+.dialogue.is-lesson .scene-thread {
+  flex: none;
+  max-height: 34vh;
+  margin: 0;
+  padding: 16px 18px 14px;
+  overflow: auto;
+  border: 3px solid #fff;
+  border-radius: 24px;
+  background: rgba(255, 250, 240, 0.9);
+  box-shadow: 0 5px 0 var(--edge), 0 14px 34px rgba(20, 30, 50, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.lesson-task {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 22px 26px 20px;
+  overflow: auto;
+  border: 3px solid #fff;
+  border-radius: 28px;
+  background: var(--paper);
+  box-shadow: 0 7px 0 var(--edge), 0 20px 50px rgba(20, 30, 50, 0.3);
+  overscroll-behavior: contain;
+}
+
+/* Inside the task: the situation as a quiet stage direction, then one clear
+   instruction, then the answer, then the buttons. */
+.lesson-task .scene-situation {
+  margin: 0 0 14px;
+  padding: 0 0 12px;
+  border-bottom: 2px dashed var(--edge);
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.lesson-task .activity-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 0 0 14px;
+  padding: 7px 16px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+}
+
+.lesson-task .activity-kicker .scene-hint {
+  color: #ffe3a3;
+}
+
+.lesson-task .dialogue-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid #f1e6cf;
+}
+
+.lesson-side {
+  position: absolute;
+  top: max(80px, calc(env(safe-area-inset-top) + 64px));
+  right: 16px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 29;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: min(300px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.lesson-side > * {
+  pointer-events: auto;
+}
+
+.lesson-side-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  min-width: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.95);
+  box-shadow: 0 3px 0 var(--edge), var(--shadow);
+  font-family: var(--font-display);
+  cursor: pointer;
+}
+
+.lesson-side.is-open .lesson-side-toggle {
+  padding: 0;
+}
+
+.lesson-side-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  width: 100%;
+  min-height: 0;
+  margin-top: 10px;
+  padding: 14px;
+  overflow: auto;
+  border: 3px solid #fff;
+  border-radius: 24px;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 5px 0 var(--edge), var(--shadow);
+  animation: side-in 260ms ease;
+}
+
+@keyframes side-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.lesson-side .scene-stage {
+  flex-direction: column;
+  margin: 0;
+}
+
+.lesson-side .scene-panel {
+  flex: none;
+}
+
+.lesson-side .cafe-board .cafe-board-items {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lesson-side-title {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.lesson-log ol {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-log li {
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--edge);
+  font-size: 0.9rem;
+}
+
+.lesson-log p {
+  margin: 0;
+}
+
+.lesson-log-you {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px !important;
+  color: var(--green-edge);
+}
+
+.lesson-log-you.is-miss {
+  color: var(--red-edge);
+}
+
+/* With the drawer open on a wide screen, the lesson centres in the space left
+   of it; on a narrow one the drawer opens over the lesson instead. */
+@media (min-width: 1100px) {
+  .game-root:has(.lesson-side.is-open) .dialogue.is-lesson {
+    left: calc(50% - 158px);
+    width: min(760px, calc(100vw - 364px));
+  }
+}
+
+@media (max-width: 1099px) {
+  .lesson-side {
+    z-index: 32;
+  }
+}
+
+/* Short screens: tighter cards so the villagers stay in view. */
+@media (max-height: 720px) {
+  .dialogue.is-lesson .scene-thread {
+    max-height: 24vh;
+    padding: 10px 14px;
+  }
+
+  .dialogue.is-lesson .lesson > :first-child {
+    padding-top: 24px;
+  }
+
+  .lesson-task {
+    padding: 14px 18px;
+  }
+
+  .lesson-task .scene-situation {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+
+  .lesson-task .dialogue-actions {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
 }
 
 .activity-kicker {
@@ -3104,10 +3385,23 @@ button:disabled {
   background: var(--sky);
 }
 
-.island-card-art svg {
+.island-card-art svg,
+.island-card-art .pixel-art {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.island-card-art .pixel-art-source {
+  height: 100%;
+}
+
+.island-card-art .pixel-art {
+  image-rendering: pixelated;
+}
+
+.island-card-art [hidden] {
+  display: none;
 }
 
 .island-card.is-soon .island-card-art {

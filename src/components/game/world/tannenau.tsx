@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { world } from "@/content/de/world";
 import { mulberry32 } from "@/lib/game/world";
-import { glow, palette, toon } from "./materials";
+import { glow, palette, toon, type Surface } from "./materials";
 import { Bench, box, Box, cone, cyl, FlowerBox, Lantern, prism, sphere, torus, type V3 } from "./parts";
 
 // Tannenau's buildings: half-timbered houses, Café Kuckuck, the clockmaker's
@@ -31,14 +31,14 @@ function facing(from: { x: number; z: number }, to: { x: number; z: number }) {
 }
 
 // A steep gable roof: ridge along z, slopes down to ±x.
-function GableRoof({ w, d, h, rise, color, overhang = 0.4 }: { w: number; d: number; h: number; rise: number; color: string; overhang?: number }) {
+function GableRoof({ w, d, h, rise, color, overhang = 0.4, surface = "shingle" }: { w: number; d: number; h: number; rise: number; color: string; overhang?: number; surface?: Surface }) {
   const slope = Math.atan2(rise, w / 2);
   const length = Math.hypot(rise, w / 2) + overhang;
   return (
     <group>
-      <mesh geometry={prism} material={toon(colors.plaster)} position={[0, h + rise / 3, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[w / Math.sqrt(3), d, rise / 1.5]} castShadow />
+      <mesh geometry={prism} material={toon(colors.plaster, { surface: "plaster" })} position={[0, h + rise / 3, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[w / Math.sqrt(3), d, rise / 1.5]} castShadow />
       {[-1, 1].map((side) => (
-        <Box key={side} p={[(side * w) / 4, h + rise / 2 + 0.08, 0]} s={[length, 0.16, d + overhang * 1.4]} r={[0, 0, -side * slope]} c={color} />
+        <Box key={side} p={[(side * w) / 4, h + rise / 2 + 0.08, 0]} s={[length, 0.16, d + overhang * 1.4]} r={[0, 0, -side * slope]} c={color} t={surface} />
       ))}
     </group>
   );
@@ -104,16 +104,16 @@ function Window({ p, shutters = colors.shutter, flowers = false }: { p: V3; shut
 function Fachwerk({ w = 4, d = 5, h = 4, wall = colors.plaster, roof = colors.roof, sign }: { w?: number; d?: number; h?: number; wall?: string; roof?: string; sign?: React.ReactNode }) {
   return (
     <group>
-      <Box p={[0, 0.3, 0]} s={[w + 0.2, 0.6, d + 0.2]} c={colors.stone} />
-      <Box p={[0, h / 2, 0]} s={[w, h, d]} c={wall} />
+      <Box p={[0, 0.3, 0]} s={[w + 0.2, 0.6, d + 0.2]} c={colors.stone} t="stone" />
+      <Box p={[0, h / 2, 0]} s={[w, h, d]} c={wall} t="plaster" />
       <Frame w={w} d={d} h={h} />
       <GableRoof w={w} d={d} h={h} rise={w * 0.75} color={roof} />
-      <Box p={[w / 2 + 0.04, 0.95, 0]} s={[0.08, 1.7, 0.9]} c={colors.beam} shadow={false} />
+      <Box p={[w / 2 + 0.04, 0.95, 0]} s={[0.08, 1.7, 0.9]} c={colors.beam} t="siding" shadow={false} />
       <Window p={[w / 2 + 0.04, h * 0.3, -d * 0.3]} />
       <Window p={[w / 2 + 0.04, h * 0.3, d * 0.3]} />
       <Window p={[w / 2 + 0.04, h * 0.75, -d * 0.25]} flowers />
       <Window p={[w / 2 + 0.04, h * 0.75, d * 0.25]} flowers />
-      <Box p={[w * 0.2, h + w * 0.55, d * 0.25]} s={[0.4, 1.2, 0.4]} c={palette.stoneDark} />
+      <Box p={[w * 0.2, h + w * 0.55, d * 0.25]} s={[0.4, 1.2, 0.4]} c={palette.stoneDark} t="stone" />
       {sign}
     </group>
   );
@@ -175,17 +175,17 @@ export function LandingStage() {
   return (
     <group>
       {planks.map((z, i) => (
-        <Box key={z} p={[dock.x, dock.height - 0.08, z]} s={[dock.halfWidth * 2, 0.14, 0.5]} c={i % 3 ? palette.plank : "#8a6a44"} />
+        <Box key={z} p={[dock.x, dock.height - 0.08, z]} s={[dock.halfWidth * 2, 0.14, 0.5]} c={i % 3 ? palette.plank : "#8a6a44"} t="planks" />
       ))}
       {[29, 33, 37, 40].flatMap((z) =>
         [-1, 1].map((side) => (
-          <mesh key={`${z}${side}`} geometry={cyl} material={toon(palette.woodDark)} position={[side * (dock.halfWidth + 0.1), 0.3, z]} scale={[0.15, 2, 0.15]} castShadow />
+          <mesh key={`${z}${side}`} geometry={cyl} material={toon(palette.woodDark, { surface: "bark" })} position={[side * (dock.halfWidth + 0.1), 0.3, z]} scale={[0.15, 2, 0.15]} castShadow />
         )),
       )}
       <Steamer />
       {/* Greta's little ticket hut at the foot of the landing stage */}
       <group position={[-3.4, heightAt(-3.4, 25.5) - 0.05, 25.5]} rotation-y={-Math.PI / 2}>
-        <Box p={[0, 1.1, 0]} s={[2, 2.2, 1.8]} c="#2f6fb5" />
+        <Box p={[0, 1.1, 0]} s={[2, 2.2, 1.8]} c="#2f6fb5" t="siding" />
         <GableRoof w={2} d={1.8} h={2.2} rise={1.1} color={colors.roof} overhang={0.3} />
         <mesh geometry={box} material={glow("#ffd89a", 1)} position={[1.02, 1.3, 0]} scale={[0.05, 0.6, 0.8]} />
       </group>
@@ -223,6 +223,8 @@ function Maibaum({ position }: { position: V3 }) {
   );
 }
 
+const octagon = new THREE.CylinderGeometry(1, 1, 1, 8);
+
 function Fountain({ position }: { position: V3 }) {
   const water = useRef<THREE.Mesh>(null);
   useFrame((state) => {
@@ -230,8 +232,8 @@ function Fountain({ position }: { position: V3 }) {
   });
   return (
     <group position={position}>
-      <mesh geometry={new THREE.CylinderGeometry(1, 1, 1, 8)} material={toon(colors.stone)} position={[0, 0.35, 0]} scale={[1.5, 0.7, 1.5]} castShadow />
-      <mesh ref={water} geometry={new THREE.CylinderGeometry(1, 1, 1, 8)} material={toon("#6fc3d9", { emissive: "#2b8fb0", emissiveIntensity: 0.2 })} position={[0, 0.55, 0]} scale={[1.3, 0.1, 1.3]} />
+      <mesh geometry={octagon} material={toon(colors.stone, { surface: "stone" })} position={[0, 0.35, 0]} scale={[1.5, 0.7, 1.5]} castShadow />
+      <mesh ref={water} geometry={octagon} material={toon("#6fc3d9", { emissive: "#2b8fb0", emissiveIntensity: 0.2, surface: null })} position={[0, 0.55, 0]} scale={[1.3, 0.1, 1.3]} />
       <mesh geometry={cyl} material={toon(colors.stone)} position={[0, 1.3, 0]} scale={[0.18, 1.6, 0.18]} castShadow />
       <mesh geometry={sphere} material={toon("#c8a23a")} position={[0, 2.2, 0]} scale={0.2} />
       {[0, 1, 2, 3].map((i) => (
@@ -249,9 +251,9 @@ function MarketStall({ open }: { open: boolean }) {
     <group position={[x, heightAt(x, z), z]} rotation-y={0.5}>
       {[-1, 1].flatMap((sx) => [-1, 1].map((sz) => <Box key={`${sx}${sz}`} p={[sx * 1, 1.2, sz * 0.7]} s={[0.1, 2.4, 0.1]} c={colors.beam} />))}
       {Array.from({ length: 5 }, (_, i) => (
-        <Box key={i} p={[-0.8 + i * 0.4, 2.45, 0]} s={[0.4, 0.08, 1.8]} r={[0.25, 0, 0]} c={i % 2 ? "#ffffff" : "#2f8f4f"} />
+        <Box key={i} p={[-0.8 + i * 0.4, 2.45, 0]} s={[0.4, 0.08, 1.8]} r={[0.25, 0, 0]} c={i % 2 ? "#ffffff" : "#2f8f4f"} t="fabric" />
       ))}
-      <Box p={[0, 0.85, 0.2]} s={[2.2, 0.12, 1.1]} c={palette.wood} />
+      <Box p={[0, 0.85, 0.2]} s={[2.2, 0.12, 1.1]} c={palette.wood} t="planks" />
       {open
         ? fruit.map((c, i) => (
             <group key={c} position={[-0.8 + i * 0.4, 1, 0.2]}>
@@ -271,8 +273,8 @@ export function Marktplatz({ open }: { open: boolean }) {
   const y = heightAt(x, z);
   return (
     <group>
-      <mesh geometry={new THREE.CylinderGeometry(1, 1, 1, 10)} material={toon("#c4bdae")} position={[x, y - 0.02, z]} scale={[6, 0.08, 6]} receiveShadow />
-      <mesh geometry={torus} material={toon(palette.stone)} position={[x, y + 0.06, z]} rotation-x={Math.PI / 2} scale={[1.7, 1.7, 1.4]} />
+      <mesh geometry={cyl} material={toon("#c4bdae", { surface: "cobble" })} position={[x, y - 0.02, z]} scale={[6, 0.08, 6]} receiveShadow />
+      <mesh geometry={torus} material={toon(palette.stone, { surface: "stone" })} position={[x, y + 0.06, z]} rotation-x={Math.PI / 2} scale={[1.7, 1.7, 1.4]} />
       <Maibaum position={[4.6, heightAt(4.6, 3.6), 3.6]} />
       <Fountain position={[-4.5, heightAt(-4.5, 3.5), 3.5]} />
       <MarketStall open={open} />
@@ -312,7 +314,7 @@ export function CafeKuckuck({ open }: { open: boolean }) {
         <Fachwerk w={6} d={7} h={4.2} sign={pretzelSign} />
         {/* striped awning over the shop window */}
         {Array.from({ length: 6 }, (_, i) => (
-          <Box key={i} p={[3.55, 2.2, -2.5 + i]} s={[1.3, 0.1, 1]} r={[0, 0, -0.35]} c={i % 2 ? "#ffffff" : "#b5541c"} />
+          <Box key={i} p={[3.55, 2.2, -2.5 + i]} s={[1.3, 0.1, 1]} r={[0, 0, -0.35]} c={i % 2 ? "#ffffff" : "#b5541c"} t="fabric" />
         ))}
       </group>
       {/* outdoor tables come out once the café opens */}
@@ -374,7 +376,7 @@ function Sleepers() {
     });
     mesh.current.instanceMatrix.needsUpdate = true;
   }, [zs]);
-  return <instancedMesh ref={mesh} args={[box, toon(palette.woodDark), zs.length]} receiveShadow />;
+  return <instancedMesh ref={mesh} args={[box, toon(palette.woodDark, { surface: "planks" }), zs.length]} receiveShadow />;
 }
 
 // Where the viaduct leaves the island's north-east shore.
@@ -391,13 +393,13 @@ function Viaduct() {
   }, []);
   return (
     <group>
-      <Box p={[track.x, deckY - 0.2, mid]} s={[3, 0.4, length]} c={colors.stone} shadow={false} />
+      <Box p={[track.x, deckY - 0.2, mid]} s={[3, 0.4, length]} c={colors.stone} t="stone" shadow={false} />
       {[-1, 1].map((side) => (
         <Box key={side} p={[track.x + side * 1.45, deckY + 0.12, mid]} s={[0.18, 0.28, length]} c={palette.stoneDark} shadow={false} />
       ))}
       {arches.map((z) => (
         <group key={z}>
-          <Box p={[track.x, deckY - 1.4, z]} s={[2.6, 2.4, 1.3]} c={colors.stone} shadow={false} />
+          <Box p={[track.x, deckY - 1.4, z]} s={[2.6, 2.4, 1.3]} c={colors.stone} t="stone" shadow={false} />
           <mesh geometry={cyl} material={toon("#d6ece6")} position={[track.x, 0.04, z]} scale={[1.7, 0.04, 1]} />
         </group>
       ))}
@@ -425,15 +427,15 @@ export function Bahnhof({ open }: { open: boolean }) {
   return (
     <group>
       <group position={[at.x, y - 0.05, at.z]} rotation-y={Math.PI}>
-        <Box p={[0, 0.9, 0]} s={[5, 1.8, 7]} c={colors.stone} />
-        <Box p={[0, 2.5, 0]} s={[5, 1.4, 7]} c="#f3e6c8" />
+        <Box p={[0, 0.9, 0]} s={[5, 1.8, 7]} c={colors.stone} t="stone" />
+        <Box p={[0, 2.5, 0]} s={[5, 1.4, 7]} c="#f3e6c8" t="plaster" />
         <Frame w={5} d={7} h={3.2} />
         <GableRoof w={5} d={7} h={3.2} rise={3} color={colors.shingle} />
         <mesh geometry={box} material={glow("#ffd89a", 1)} position={[2.53, 1.2, 0]} scale={[0.05, 1.2, 1.8]} />
         <Box p={[2.56, 3.3, 0]} s={[0.06, 0.5, 2.6]} c="#1f4e79" shadow={false} />
       </group>
       {/* platform and tracks */}
-      <Box p={[track.x - 2.1, heightAt(track.x - 2.1, -3) + 0.1, -3]} s={[2.2, 0.35, 16]} c="#b9b4aa" />
+      <Box p={[track.x - 2.1, heightAt(track.x - 2.1, -3) + 0.1, -3]} s={[2.2, 0.35, 16]} c="#b9b4aa" t="cobble" />
       <Sleepers />
       {[-0.55, 0.55].map((dx) => (
         <Box key={dx} p={[track.x + dx, railY, railMid]} s={[0.1, 0.1, railLength]} c="#6d6f75" shadow={false} />
@@ -482,7 +484,7 @@ export function Uhrmacherei() {
       <Fachwerk w={4.4} d={5} h={4} wall="#f3e6c8" />
       {/* a giant cuckoo clock hangs on the front of the house */}
       <group position={[2.35, 3.2, 0]}>
-        <Box p={[0, 0, 0]} s={[0.3, 1.8, 1.5]} c="#6b3f24" />
+        <Box p={[0, 0, 0]} s={[0.3, 1.8, 1.5]} c="#6b3f24" t="planks" />
         <mesh geometry={prism} material={toon("#4a2c19")} position={[0, 1.15, 0]} rotation={[0, 0, 0]} scale={[0.3, 0.6, 1]} />
         <Box p={[0.05, 1.05, 0]} s={[0.3, 0.1, 1.9]} r={[0.5, 0, 0]} c="#4a2c19" />
         <Box p={[0.05, 1.05, 0]} s={[0.3, 0.1, 1.9]} r={[-0.5, 0, 0]} c="#4a2c19" />
@@ -564,12 +566,12 @@ export function Schwarzwaldhof({ open }: { open: boolean }) {
   return (
     <group>
       <group position={[at.x, y - 0.05, at.z]} rotation-y={facing(at, places.square)}>
-        <Box p={[0, 1, 0]} s={[8, 2, 10]} c="#f3ead8" />
-        <Box p={[0, 2.7, 0]} s={[8, 1.4, 10]} c="#7a4b2f" />
-        <mesh geometry={roof} material={toon("#5b3d28", {})} position={[0, 3.2, 0]} castShadow receiveShadow />
+        <Box p={[0, 1, 0]} s={[8, 2, 10]} c="#f3ead8" t="plaster" />
+        <Box p={[0, 2.7, 0]} s={[8, 1.4, 10]} c="#7a4b2f" t="planks" />
+        <mesh geometry={roof} material={toon("#5b3d28", { surface: "shingle" })} position={[0, 3.2, 0]} castShadow receiveShadow />
         {/* the balcony that runs along the front, full of geraniums */}
-        <Box p={[4.4, 2.1, 0]} s={[0.8, 0.12, 9]} c={palette.wood} />
-        <Box p={[4.8, 2.5, 0]} s={[0.08, 0.7, 9]} c={palette.woodDark} />
+        <Box p={[4.4, 2.1, 0]} s={[0.8, 0.12, 9]} c={palette.wood} t="planks" />
+        <Box p={[4.8, 2.5, 0]} s={[0.08, 0.7, 9]} c={palette.woodDark} t="siding" />
         {[-3, -1, 1, 3].map((z) => (
           <FlowerBox key={z} position={[4.9, 2.9, z]} />
         ))}
@@ -589,7 +591,7 @@ export function Schwarzwaldhof({ open }: { open: boolean }) {
           [2.6, 1],
         ].map(([bx, bz], i) => (
           <group key={i} position={[bx, 0, bz]}>
-            <Box p={[0, 0.15, 0]} s={[2.2, 0.3, 1.1]} c={palette.wood} />
+            <Box p={[0, 0.15, 0]} s={[2.2, 0.3, 1.1]} c={palette.wood} t="planks" />
             <Box p={[0, 0.3, 0]} s={[2, 0.06, 0.9]} c="#5a3d2b" shadow={false} />
             {Array.from({ length: 4 }, (_, j) => (
               <group key={j} position={[-0.75 + j * 0.5, 0.45, 0]}>
@@ -611,10 +613,10 @@ export function Forsthaus() {
     <group position={[at.x, y - 0.05, at.z]} rotation-y={facing(at, places.square)}>
       {Array.from({ length: 7 }, (_, i) => (
         <group key={i}>
-          <mesh geometry={cyl} material={toon(i % 2 ? "#7a4b2f" : "#6b3f24")} position={[0, 0.2 + i * 0.36, -1.7]} rotation-z={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
-          <mesh geometry={cyl} material={toon(i % 2 ? "#6b3f24" : "#7a4b2f")} position={[0, 0.2 + i * 0.36, 1.7]} rotation-z={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
-          <mesh geometry={cyl} material={toon(i % 2 ? "#7a4b2f" : "#6b3f24")} position={[1.7, 0.38 + i * 0.36, 0]} rotation-x={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
-          <mesh geometry={cyl} material={toon(i % 2 ? "#6b3f24" : "#7a4b2f")} position={[-1.7, 0.38 + i * 0.36, 0]} rotation-x={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
+          <mesh geometry={cyl} material={toon(i % 2 ? "#7a4b2f" : "#6b3f24", { surface: "bark" })} position={[0, 0.2 + i * 0.36, -1.7]} rotation-z={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
+          <mesh geometry={cyl} material={toon(i % 2 ? "#6b3f24" : "#7a4b2f", { surface: "bark" })} position={[0, 0.2 + i * 0.36, 1.7]} rotation-z={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
+          <mesh geometry={cyl} material={toon(i % 2 ? "#7a4b2f" : "#6b3f24", { surface: "bark" })} position={[1.7, 0.38 + i * 0.36, 0]} rotation-x={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
+          <mesh geometry={cyl} material={toon(i % 2 ? "#6b3f24" : "#7a4b2f", { surface: "bark" })} position={[-1.7, 0.38 + i * 0.36, 0]} rotation-x={Math.PI / 2} scale={[0.19, 3.8, 0.19]} castShadow />
         </group>
       ))}
       <GableRoof w={3.8} d={3.8} h={2.6} rise={1.8} color="#3f5a2a" overhang={0.6} />
@@ -649,9 +651,9 @@ export function Schule() {
   });
   return (
     <group position={[at.x, y - 0.05, at.z]} rotation-y={facing(at, { x: 16, z: -13 })}>
-      <Box p={[0, 1.7, 0]} s={[5, 3.4, 7]} c="#f2d27a" />
+      <Box p={[0, 1.7, 0]} s={[5, 3.4, 7]} c="#f2d27a" t="plaster" />
       <Frame w={5} d={7} h={3.4} beam="#8a5a36" />
-      <GableRoof w={5} d={7} h={3.4} rise={2.6} color="#8c4a3a" />
+      <GableRoof w={5} d={7} h={3.4} rise={2.6} color="#8c4a3a" surface="roof" />
       {[-2, 0, 2].map((z) => (
         <group key={z}>
           <Box p={[2.53, 1.9, z]} s={[0.08, 1.2, 1]} c="#ffffff" shadow={false} />
@@ -673,16 +675,16 @@ export function Kapelle() {
   const y = heightAt(at.x, at.z);
   return (
     <group position={[at.x, y - 0.05, at.z]} rotation-y={facing(at, places.square)}>
-      <Box p={[-0.6, 1.6, 0]} s={[5, 3.2, 3.4]} c="#ffffff" />
+      <Box p={[-0.6, 1.6, 0]} s={[5, 3.2, 3.4]} c="#ffffff" t="plaster" />
       <group rotation-y={Math.PI / 2} position={[-0.6, 0, 0]}>
         <GableRoof w={3.4} d={5} h={3.2} rise={2} color={colors.shingle} overhang={0.3} />
       </group>
       {/* tower with the onion dome, facing the village */}
       <group position={[2.2, 0, 0]}>
-        <Box p={[0, 3, 0]} s={[1.7, 6, 1.7]} c="#ffffff" />
+        <Box p={[0, 3, 0]} s={[1.7, 6, 1.7]} c="#ffffff" t="plaster" />
         <mesh geometry={cyl} material={toon("#fff4e0")} position={[0.87, 4.6, 0]} rotation-z={Math.PI / 2} scale={[0.45, 0.05, 0.45]} />
         <mesh geometry={torus} material={toon("#1d1d24")} position={[0.9, 4.6, 0]} rotation-y={Math.PI / 2} scale={0.45} />
-        <mesh geometry={sphere} material={toon(colors.onion)} position={[0, 6.8, 0]} scale={[1.05, 1.1, 1.05]} castShadow />
+        <mesh geometry={sphere} material={toon(colors.onion, { surface: "shingle" })} position={[0, 6.8, 0]} scale={[1.05, 1.1, 1.05]} castShadow />
         <mesh geometry={cone} material={toon(colors.onion)} position={[0, 8.05, 0]} scale={[0.45, 0.9, 0.45]} castShadow />
         <mesh geometry={sphere} material={toon("#d9a53a")} position={[0, 8.6, 0]} scale={0.12} />
         <Box p={[0, 9.1, 0]} s={[0.06, 0.9, 0.06]} c="#d9a53a" shadow={false} />
@@ -737,7 +739,7 @@ export function Mountains() {
   return (
     <group>
       <mesh geometry={shore} material={toon("#6f9f55")} rotation-x={-Math.PI / 2} position-y={0.25} />
-      <instancedMesh ref={firs} args={[cone, toon("#24533a"), shoreFirs.length]} />
+      <instancedMesh ref={firs} args={[cone, toon("#24533a", { surface: "needles" }), shoreFirs.length]} />
       {mountains.map((m, i) => (
         <group key={i} position={[m.x, 0, m.z]}>
           <mesh geometry={cone} material={toon(i % 2 ? "#3f6f55" : "#4a7a5c")} position={[0, m.height / 2, 0]} scale={[m.width, m.height, m.width]} />
@@ -748,7 +750,7 @@ export function Mountains() {
       ))}
       {/* tunnel portal the train disappears into */}
       <group position={[track.x, deckY, track.portal - 3]}>
-        <Box p={[0, 2.3, 0]} s={[6, 4.6, 6]} c={palette.stoneDark} shadow={false} />
+        <Box p={[0, 2.3, 0]} s={[6, 4.6, 6]} c={palette.stoneDark} t="stone" shadow={false} />
         <mesh geometry={box} material={toon("#141419")} position={[0, 1.7, 3.01]} scale={[2.8, 3.4, 0.05]} />
         <Box p={[0, 4.4, 3.1]} s={[6.4, 0.4, 0.3]} c={palette.stone} shadow={false} />
       </group>

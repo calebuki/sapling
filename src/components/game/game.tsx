@@ -33,13 +33,12 @@ function beginPlay() {
   const { spawn } = island().world;
   sound.ensure();
   sound.setMuted(getGame().muted);
-  sound.setMusic(getGame().music);
   sound.play("whoosh");
   sound.startAmbience();
-  sound.startMusic();
   runtime.player.x = spawn.x;
   runtime.player.z = spawn.z;
   runtime.cameraYaw = 0;
+  runtime.cameraYawTarget = 0;
   setGame({ phase: "arrival" });
   window.setTimeout(() => setGame({ phase: "explore" }), 2600);
 }

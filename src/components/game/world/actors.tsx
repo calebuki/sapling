@@ -8,7 +8,7 @@ import type { Collider } from "@/lib/game/world";
 import { interact } from "../actions";
 import { sound } from "../audio/sfx";
 import { island, villagerById } from "../island";
-import { getGame, runtime, setGame, useGame, type Interactable } from "../store";
+import { getGame, runtime, setCameraSnap, setGame, useGame, type Interactable } from "../store";
 import { Character, type CharacterAnim } from "./character";
 import { glow } from "./materials";
 
@@ -241,13 +241,57 @@ function VillagerActor({ villager, seed, isGoal }: { villager: Villager; seed: n
   );
 }
 
-// Third-person follow camera with drag-to-orbit and scroll-to-zoom.
+const QUARTER = Math.PI / 2;
+
+type Framing = { for: string; position: THREE.Vector3; target: THREE.Vector3 };
+
+// A three-quarter two-shot of the player and the villager. Tries a handful of
+// angles and heights and keeps the first whose view of the pair is not
+// blocked by a tree, lamp post, roof or hill.
+function frameConversation(scene: THREE.Object3D, player: THREE.Vector3, villager: THREE.Vector3): Omit<Framing, "for"> {
+  const toPlayer = player.clone().sub(villager).setY(0).normalize();
+  const side = new THREE.Vector3(toPlayer.z, 0, -toPlayer.x);
+  const mid = player.clone().add(villager).multiplyScalar(0.5);
+  const target = new THREE.Vector3(mid.x, mid.y + 1.0, mid.z);
+  const faces = [villager.clone().setY(villager.y + 1.2), player.clone().setY(player.y + 1.2)];
+  // Faces, bodies and the gap between them all need a clear line of sight.
+  const samples = [...faces, villager.clone().setY(villager.y + 0.6), player.clone().setY(player.y + 0.6), target];
+  const raycaster = new THREE.Raycaster();
+  let best: { position: THREE.Vector3; blocked: number } | null = null;
+  for (const height of [3.2, 5.2])
+    for (const behind of [0.75, 0.45, 1])
+      for (const sign of [1, -1]) {
+        const direction = toPlayer.clone().multiplyScalar(behind).addScaledVector(side, sign).normalize();
+        const position = target.clone().addScaledVector(direction, 8.6).setY(target.y + height);
+        let blocked = 0;
+        for (const point of samples) {
+          const ray = point.clone().sub(position);
+          const distance = ray.length();
+          raycaster.set(position, ray.normalize());
+          raycaster.far = distance - 0.6;
+          // Hits on the two characters themselves don't count.
+          blocked += raycaster
+            .intersectObjects(scene.children, true)
+            .filter((hit) => faces.every((f) => Math.hypot(hit.point.x - f.x, hit.point.z - f.z) > 0.55)).length;
+        }
+        if (!best || blocked < best.blocked) best = { position, blocked };
+        if (blocked === 0) return { position, target };
+      }
+  return { position: best!.position, target };
+}
+
+// Third-person follow camera with drag-to-orbit and scroll-to-zoom. In snap
+// mode it holds a diorama angle, turns in quarter steps and moves in whole
+// pixels so the pixel art never shimmers.
 export function CameraRig() {
-  const { camera, gl } = useThree();
+  const { camera, gl, scene, size } = useThree();
+  const framing = useRef<Framing | null>(null);
+  const viewShift = useRef({ x: 0, y: 0, lift: 0 });
   const { groundAt } = island().world;
   const target = useRef(new THREE.Vector3(0, 2, 20));
   const position = useRef(new THREE.Vector3(60, 40, 60));
-  const drag = useRef<{ x: number; moved: number } | null>(null);
+  const drag = useRef<{ x: number; moved: number; pull?: number } | null>(null);
+  const snapShift = useMemo(() => ({ right: new THREE.Vector3(), up: new THREE.Vector3(), offset: new THREE.Vector3() }), []);
   const arrivalStart = useRef<number | null>(null);
 
   useEffect(() => {
@@ -260,7 +304,14 @@ export function CameraRig() {
       const dx = e.clientX - drag.current.x;
       drag.current.x = e.clientX;
       drag.current.moved += Math.abs(dx);
-      if (drag.current.moved > 4 && getGame().phase === "explore") runtime.cameraYaw -= dx * 0.006;
+      if (drag.current.moved <= 4 || getGame().phase !== "explore") return;
+      if (runtime.cameraSnap) {
+        drag.current.pull = (drag.current.pull ?? 0) + dx;
+        if (Math.abs(drag.current.pull) > 90) {
+          runtime.cameraYawTarget -= Math.sign(drag.current.pull) * QUARTER;
+          drag.current.pull = 0;
+        }
+      } else runtime.cameraYaw -= dx * 0.006;
     };
     const up = () => {
       drag.current = null;
@@ -300,19 +351,21 @@ export function CameraRig() {
       lambda = 1.2;
       arrivalStart.current = null;
     } else if (game.phase === "dialogue" && game.talkingTo) {
-      // Over the player's shoulder onto the villager's face, framed above the dialogue panel.
-      const v = villagerById(game.talkingTo);
-      const [vx, vz] = v.position;
-      const vy = groundAt(vx, vz);
-      const toPlayer = new THREE.Vector3(p.x - vx, 0, p.z - vz).normalize();
-      const side = new THREE.Vector3(toPlayer.z, 0, -toPlayer.x);
-      if (side.dot(position.current.clone().sub(new THREE.Vector3(vx, vy, vz))) < 0) side.negate();
-      wantTarget.set(vx, vy + 0.55, vz).addScaledVector(toPlayer, 0.9);
-      wantPosition.set(vx, vy + 3.1, vz).addScaledVector(toPlayer, 6.8).addScaledVector(side, 3.4);
+      // Both characters in view, placed above the lesson cards.
+      if (framing.current?.for !== game.talkingTo) {
+        const v = villagerById(game.talkingTo);
+        const [vx, vz] = v.position;
+        const shot = frameConversation(scene, new THREE.Vector3(p.x, p.y, p.z), new THREE.Vector3(vx, groundAt(vx, vz), vz));
+        framing.current = { for: game.talkingTo, ...shot };
+      }
+      wantTarget.copy(framing.current.target);
+      wantPosition.copy(framing.current.position);
       lambda = 3;
     } else {
+      framing.current = null;
       if (game.phase === "arrival" && arrivalStart.current === null) arrivalStart.current = t;
-      const pitch = 0.58;
+      if (runtime.cameraSnap) runtime.cameraYaw = THREE.MathUtils.damp(runtime.cameraYaw, runtime.cameraYawTarget, 8, delta);
+      const pitch = runtime.cameraSnap ? 0.72 : 0.58;
       const d = runtime.cameraDistance;
       wantTarget.set(p.x, p.y + 1.3, p.z);
       wantPosition.set(
@@ -332,6 +385,44 @@ export function CameraRig() {
     target.current.z = THREE.MathUtils.damp(target.current.z, wantTarget.z, lambda * 1.3, delta);
     camera.position.copy(position.current);
     camera.lookAt(target.current);
+
+    // In conversation, slide the picture up (and left of an open drawer) so
+    // faces sit clear of the cards along the bottom.
+    const talking = game.phase === "dialogue";
+    const drawer = talking && size.width >= 1100 && document.querySelector(".lesson-side.is-open") ? 158 : 0;
+    let lift = 0;
+    if (talking) {
+      // Centre the pair in the space above the cards, but never under the HUD.
+      const card = document.querySelector(".dialogue");
+      const top = card ? card.getBoundingClientRect().top - gl.domElement.getBoundingClientRect().top : size.height;
+      lift = Math.max(0, size.height / 2 - Math.max(130, top * 0.55));
+    }
+    // Only follow the cards when they change size noticeably, so the view doesn't breathe.
+    if (Math.abs(lift - viewShift.current.lift) > 40 || lift === 0) viewShift.current.lift = lift;
+    viewShift.current.x = THREE.MathUtils.damp(viewShift.current.x, drawer, 4, delta);
+    viewShift.current.y = THREE.MathUtils.damp(viewShift.current.y, viewShift.current.lift, 3, delta);
+    if (camera instanceof THREE.PerspectiveCamera) {
+      if (Math.abs(viewShift.current.x) + Math.abs(viewShift.current.y) > 0.5) {
+        camera.setViewOffset(size.width, size.height, viewShift.current.x, viewShift.current.y, size.width, size.height);
+      } else if (camera.view?.enabled) camera.clearViewOffset();
+    }
+
+    // Once a snap turn settles, slide the view in whole pixels only.
+    const settled = Math.abs(runtime.cameraYaw - runtime.cameraYawTarget) < 0.002;
+    if (runtime.cameraSnap && settled && game.phase === "explore" && camera instanceof THREE.PerspectiveCamera) {
+      const distance = position.current.distanceTo(target.current);
+      const pixel = (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / gl.domElement.height;
+      snapShift.right.setFromMatrixColumn(camera.matrixWorld, 0);
+      snapShift.up.setFromMatrixColumn(camera.matrixWorld, 1);
+      const r = camera.position.dot(snapShift.right);
+      const u = camera.position.dot(snapShift.up);
+      snapShift.offset
+        .copy(snapShift.right)
+        .multiplyScalar(Math.round(r / pixel) * pixel - r)
+        .addScaledVector(snapShift.up, Math.round(u / pixel) * pixel - u);
+      camera.position.add(snapShift.offset);
+      camera.updateMatrixWorld();
+    }
   });
   return null;
 }
@@ -421,6 +512,14 @@ export function useKeyboard() {
       }
       if (key === "escape" && game.overlay) {
         setGame({ overlay: null });
+        return;
+      }
+      if (key === "v" && game.phase === "explore") {
+        setCameraSnap(!runtime.cameraSnap);
+        return;
+      }
+      if ((key === "z" || key === "c") && runtime.cameraSnap && game.phase === "explore") {
+        runtime.cameraYawTarget += key === "z" ? QUARTER : -QUARTER;
         return;
       }
       if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"].includes(key)) {

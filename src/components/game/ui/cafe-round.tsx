@@ -28,6 +28,7 @@ import {
 } from "./lesson-round";
 import { Exchange, ListenButtons } from "./scene-round";
 import { Glossed, GlossedLine } from "./glossed";
+import { LessonSide, LessonTopBar } from "./lesson-layout";
 
 const CAFE_ROUND = 6;
 
@@ -67,10 +68,14 @@ export function CafeRound({ villager, slugs, onFinish }: { villager: Villager; s
 
   if (!activity || !concept) {
     return (
-      <div className="dialogue-actions">
-        <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
-          <GlossedLine line={ui.next} /> <ArrowRight size={18} />
-        </button>
+      <div className="lesson">
+        <div className="lesson-task">
+          <div className="dialogue-actions">
+            <button className="btn btn-primary" autoFocus onClick={() => onFinish(summary.current)}>
+              <GlossedLine line={ui.next} /> <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -178,39 +183,22 @@ export function CafeRound({ villager, slugs, onFinish }: { villager: Villager; s
   }
 
   const pointing = !fix && !outcome && item && (activity.mode === "listen" || activity.mode === "dictation");
+  // The menu board is the answer when pointing at what you heard; otherwise it
+  // is reference, and waits in the drawer with the tray.
+  const boardInTask = pointing || Boolean(outcome && pointed);
   return (
     <div className="lesson cafe" aria-busy={busy}>
-      <div className="lesson-progress" aria-hidden="true">
-        {Array.from({ length: CAFE_ROUND }, (_, i) => (
-          <span key={i} className={i < attempts.length ? "is-done" : i === attempts.length ? "is-current" : ""} />
-        ))}
-      </div>
-      {pointing ? (
-        <PointAt
-          key={`point:${activity.id}:${attempts.length}`}
-          item={item}
-          expected={expected}
-          clipId={exercise.audioId}
-          villager={villager}
-          busy={busy}
-          onRecord={(p) => {
-            setPointed({ picked: cafe().menu.find((i) => i.name === p.response)?.slug ?? "", answer: item.slug });
-            return record(p);
-          }}
-          tray={tray}
-        />
-      ) : outcome && pointed ? (
-        // Keep the board up so the learner sees what they tapped against what the host said.
-        <Counter tray={tray} pick={{ hidden: false, picked: pointed.picked, answer: pointed.answer, busy: true, onPick: () => undefined }} />
-      ) : (
-        <Counter
-          tray={tray}
-          preview={preview}
-          highlight={item && activity.mode === "encounter" ? item.slug : null}
-          // Naming an item from its picture means the board can't show the answer.
-          hideNames={Boolean(item && !outcome && !fix && activity.mode !== "encounter")}
-        />
-      )}
+      <LessonTopBar length={CAFE_ROUND} done={attempts.length} />
+      <LessonSide>
+        {boardInTask ? null : (
+          <Counter
+            highlight={item && activity.mode === "encounter" ? item.slug : null}
+            // Naming an item from its picture means the board can't show the answer.
+            hideNames={Boolean(item && !outcome && !fix && activity.mode !== "encounter")}
+          />
+        )}
+        <CafeTray tray={tray} preview={preview} />
+      </LessonSide>
       {isOrder && !listening && activity.mode !== "encounter" && !fix ? (
         <Exchange
           key={`exchange:${key}`}
@@ -221,33 +209,70 @@ export function CafeRound({ villager, slugs, onFinish }: { villager: Villager; s
           name={name}
         />
       ) : null}
-      {body}
-      {round.error ? (
-        <p className="lesson-error" role="alert">
-          <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
-        </p>
-      ) : null}
+      <div className="lesson-task">
+        {pointing ? (
+          <PointAt
+            key={`point:${activity.id}:${attempts.length}`}
+            item={item}
+            expected={expected}
+            clipId={exercise.audioId}
+            villager={villager}
+            busy={busy}
+            onRecord={(p) => {
+              setPointed({ picked: cafe().menu.find((i) => i.name === p.response)?.slug ?? "", answer: item.slug });
+              return record(p);
+            }}
+          />
+        ) : outcome && pointed ? (
+          // Keep the board up so the learner sees what they tapped against what the host said.
+          <Counter pick={{ hidden: false, picked: pointed.picked, answer: pointed.answer, busy: true, onPick: () => undefined }} />
+        ) : null}
+        {body}
+        {round.error ? (
+          <p className="lesson-error" role="alert">
+            <GlossedLine line={ui.error} /> <button onClick={() => round.setError(false)}><GlossedLine line={ui.tryAgain} /></button>
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 // ---------- The counter: menu board and tray ----------
 
+function CafeTray({ tray, preview }: { tray: CafeItem[]; preview: CafeItem[] }) {
+  const { ui } = useIsland();
+  const ghosts = preview.filter((p, i) => preview.findIndex((q) => q.slug === p.slug) === i);
+  return (
+    <div className="cafe-tray" aria-label={aria(ui.yourTray)}>
+      <GlossedLine line={ui.yourTray} className="cafe-board-title" />
+      <div className="cafe-tray-items">
+        {tray.length === 0 && ghosts.length === 0 ? <span className="cafe-tray-empty">…</span> : null}
+        {tray.map((entry, i) => (
+          <span key={`${entry.slug}-${i}`} className="cafe-served" title={entry.name}>
+            <CafeIconArt icon={entry.icon} />
+          </span>
+        ))}
+        {ghosts.map((entry) => (
+          <span key={`ghost-${entry.slug}`} className="cafe-served is-ghost" title={entry.name}>
+            <CafeIconArt icon={entry.icon} />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Counter({
-  tray,
-  preview = [],
   highlight = null,
   hideNames = false,
   pick,
 }: {
-  tray: CafeItem[];
-  preview?: CafeItem[];
   highlight?: string | null;
   hideNames?: boolean;
   pick?: { hidden: boolean; picked: string | null; answer: string; onPick: (item: CafeItem) => void; busy: boolean };
 }) {
   const { ui } = useIsland();
-  const ghosts = preview.filter((p, i) => preview.findIndex((q) => q.slug === p.slug) === i);
   return (
     <div className="cafe-counter">
       <div className="cafe-board" role={pick ? "group" : undefined} aria-label={aria(cafe().lines.menu)}>
@@ -284,22 +309,6 @@ function Counter({
               </div>
             );
           })}
-        </div>
-      </div>
-      <div className="cafe-tray" aria-label={aria(ui.yourTray)}>
-        <GlossedLine line={island().ui.yourTray} className="cafe-board-title" />
-        <div className="cafe-tray-items">
-          {tray.length === 0 && ghosts.length === 0 ? <span className="cafe-tray-empty">…</span> : null}
-          {tray.map((entry, i) => (
-            <span key={`${entry.slug}-${i}`} className="cafe-served" title={entry.name}>
-              <CafeIconArt icon={entry.icon} />
-            </span>
-          ))}
-          {ghosts.map((entry) => (
-            <span key={`ghost-${entry.slug}`} className="cafe-served is-ghost" title={entry.name}>
-              <CafeIconArt icon={entry.icon} />
-            </span>
-          ))}
         </div>
       </div>
     </div>
@@ -369,7 +378,6 @@ function PointAt({
   villager,
   busy,
   onRecord,
-  tray,
 }: {
   item: CafeItem;
   expected: string;
@@ -377,7 +385,6 @@ function PointAt({
   villager: Villager;
   busy: boolean;
   onRecord: RecordFn;
-  tray: CafeItem[];
 }) {
   const [picked, setPicked] = useState<string | null>(null);
   const replays = useRef(0);
@@ -401,7 +408,6 @@ function PointAt({
         <ListenButtons onPlay={play} />
       </div>
       <Counter
-        tray={tray}
         pick={{
           hidden: true,
           picked,

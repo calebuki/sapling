@@ -1,7 +1,8 @@
 "use client";
 
 // All sound is synthesized at runtime: no asset downloads, and every effect
-// shares one mixer so mute and music toggles behave predictably.
+// shares one mixer so muting behaves predictably. There is no music for now;
+// a soundtrack can play through musicBus, which dips while someone speaks.
 
 type AudioWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
 
@@ -20,16 +21,15 @@ export type Sfx =
   | "sparkle"
   | "ring";
 
+const MUSIC_LEVEL = 0.16;
+
 class SoundEngine {
   ctx: AudioContext | null = null;
   master!: GainNode;
   sfxBus!: GainNode;
   musicBus!: GainNode;
   ambienceBus!: GainNode;
-  delay!: DelayNode;
   muted = false;
-  musicOn = true;
-  private musicTimer: number | null = null;
   private birdTimer: number | null = null;
   private noise: AudioBuffer | null = null;
   private stepFlip = false;
@@ -51,21 +51,11 @@ class SoundEngine {
       this.sfxBus = ctx.createGain();
       this.sfxBus.gain.value = 0.55;
       this.musicBus = ctx.createGain();
-      this.musicBus.gain.value = this.musicOn ? 0.16 : 0;
+      this.musicBus.gain.value = MUSIC_LEVEL;
       this.ambienceBus = ctx.createGain();
       this.ambienceBus.gain.value = 0.22;
-      this.delay = ctx.createDelay(1);
-      this.delay.delayTime.value = 0.36;
-      const feedback = ctx.createGain();
-      feedback.gain.value = 0.32;
-      const tone = ctx.createBiquadFilter();
-      tone.type = "lowpass";
-      tone.frequency.value = 2400;
-      this.delay.connect(tone).connect(feedback).connect(this.delay);
-      tone.connect(this.master);
       this.sfxBus.connect(this.master);
       this.musicBus.connect(this.master);
-      this.musicBus.connect(this.delay);
       this.ambienceBus.connect(this.master);
       const length = ctx.sampleRate * 2;
       this.noise = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -86,20 +76,15 @@ class SoundEngine {
     if (this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 0.9, this.ctx.currentTime, 0.05);
   }
 
-  setMusic(on: boolean) {
-    this.musicOn = on;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? 0.16 : 0, this.ctx.currentTime, 0.2);
-  }
-
-  // Lowers music while someone is speaking so the words stay clear.
+  // Lowers the music bus while someone is speaking so the words stay clear.
   duck(ms: number) {
     const ctx = this.ctx;
-    if (!ctx || !this.musicOn) return;
+    if (!ctx) return;
     this.duckUntil = performance.now() + ms;
-    this.musicBus.gain.setTargetAtTime(0.05, ctx.currentTime, 0.08);
+    this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL * 0.3, ctx.currentTime, 0.08);
     window.setTimeout(() => {
-      if (performance.now() >= this.duckUntil - 20 && this.musicOn && this.ctx) {
-        this.musicBus.gain.setTargetAtTime(0.16, this.ctx.currentTime, 0.6);
+      if (performance.now() >= this.duckUntil - 20 && this.ctx) {
+        this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL, this.ctx.currentTime, 0.6);
       }
     }, ms);
   }
@@ -237,44 +222,6 @@ class SoundEngine {
       this.birdTimer = window.setTimeout(chirp, 2500 + Math.random() * 6000);
     };
     this.birdTimer = window.setTimeout(chirp, 1500);
-  }
-
-  // A gentle generative music box in D major pentatonic, loosely folk-flavoured.
-  startMusic() {
-    const ctx = this.ensure();
-    if (!ctx || this.musicTimer !== null) return;
-    const scale = [293.66, 329.63, 369.99, 440, 493.88, 587.33, 659.25, 739.99, 880];
-    const chords = [
-      [146.83, 220, 293.66],
-      [123.47, 185, 246.94],
-      [98, 146.83, 196],
-      [110, 164.81, 220],
-    ];
-    const beat = 60 / 84 / 2;
-    let step = 0;
-    let degree = 4;
-    let next = ctx.currentTime + 0.3;
-    const schedule = () => {
-      if (!this.ctx) return;
-      while (next < this.ctx.currentTime + 0.4) {
-        const bar = Math.floor(step / 8) % chords.length;
-        if (step % 8 === 0) {
-          chords[bar].forEach((f, i) =>
-            this.tone(f, next + i * 0.02, beat * 7.5, { type: "sine", gain: 0.12, bus: this.musicBus, attack: 0.25 }),
-          );
-        }
-        const rest = step % 8 === 7 || Math.random() < 0.28;
-        if (!rest) {
-          degree = Math.max(0, Math.min(scale.length - 1, degree + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
-          this.tone(scale[degree], next, beat * 2.4, { type: "triangle", gain: 0.1, bus: this.musicBus });
-          this.tone(scale[degree] * 2, next, beat * 1.2, { type: "sine", gain: 0.03, bus: this.musicBus });
-        }
-        step++;
-        next += beat;
-      }
-      this.musicTimer = window.setTimeout(schedule, 120);
-    };
-    schedule();
   }
 }
 

@@ -114,18 +114,18 @@ export function Vegetation({ flora = defaultFlora }: { flora?: Flora }) {
 
   return (
     <group>
-      <Instances geometry={geo.trunk} material={toon(palette.woodDark)} items={data.pines} />
-      <Instances geometry={geo.pine} material={toon(palette.pine)} items={data.pines} />
-      <Instances geometry={geo.pine2} material={toon("#357a52")} items={data.pines} />
-      <Instances geometry={geo.pine3} material={toon("#3d8a5c")} items={data.pines} />
-      <Instances geometry={geo.trunk} material={toon(palette.wood)} items={data.rounds} />
-      <Instances geometry={geo.round} material={toon(palette.leaf)} items={data.rounds} />
-      <Instances geometry={geo.birchTrunk} material={toon(palette.birchBark)} items={data.birches} />
-      <Instances geometry={geo.birchTop} material={toon(palette.leafLight)} items={data.birches} />
-      <Instances geometry={geo.bush} material={toon("#5a9444")} items={data.bushes} />
-      <Instances geometry={geo.rock} material={toon(palette.stone)} items={data.rocks} transform={squash} />
-      <Instances geometry={geo.flower} material={toon("#ffffff")} items={data.flowers} />
-      <Instances geometry={geo.blade} material={toon("#6aa84f")} items={data.grass} />
+      <Instances geometry={geo.trunk} material={toon(palette.woodDark, { surface: "bark" })} items={data.pines} />
+      <Instances geometry={geo.pine} material={toon(palette.pine, { surface: "needles" })} items={data.pines} />
+      <Instances geometry={geo.pine2} material={toon("#357a52", { surface: "needles" })} items={data.pines} />
+      <Instances geometry={geo.pine3} material={toon("#3d8a5c", { surface: "needles" })} items={data.pines} />
+      <Instances geometry={geo.trunk} material={toon(palette.wood, { surface: "bark" })} items={data.rounds} />
+      <Instances geometry={geo.round} material={toon(palette.leaf, { surface: "leaves" })} items={data.rounds} />
+      <Instances geometry={geo.birchTrunk} material={toon(palette.birchBark, { surface: "birch" })} items={data.birches} />
+      <Instances geometry={geo.birchTop} material={toon(palette.leafLight, { surface: "leaves" })} items={data.birches} />
+      <Instances geometry={geo.bush} material={toon("#5a9444", { surface: "leaves" })} items={data.bushes} />
+      <Instances geometry={geo.rock} material={toon(palette.stone, { surface: "stone" })} items={data.rocks} transform={squash} />
+      <Instances geometry={geo.flower} material={toon("#ffffff", { surface: null })} items={data.flowers} />
+      <Instances geometry={geo.blade} material={toon("#6aa84f", { surface: null })} items={data.grass} />
     </group>
   );
 }
@@ -196,7 +196,7 @@ export function GreatTree({ stage }: { stage: number }) {
   return (
     <group position={[x, y, z]}>
       <group ref={group}>
-        <mesh material={toon("#7a5234")} position={[0, 2, 0]} castShadow>
+        <mesh material={toon("#7a5234", { surface: "bark" })} position={[0, 2, 0]} castShadow>
           <cylinderGeometry args={[0.35, 0.6, 4, 9]} />
         </mesh>
         {[
@@ -206,7 +206,7 @@ export function GreatTree({ stage }: { stage: number }) {
           [0.2, 5.6, -0.8, 1.2],
           [-0.5, 5.3, 1, 1.1],
         ].map(([cx, cy, cz, r], i) => (
-          <mesh key={i} material={toon(i % 2 ? "#6bb24f" : "#7cc35a")} position={[cx, cy, cz]} castShadow>
+          <mesh key={i} material={toon(i % 2 ? "#6bb24f" : "#7cc35a", { surface: "leaves" })} position={[cx, cy, cz]} castShadow>
             <icosahedronGeometry args={[r, 1]} />
           </mesh>
         ))}
