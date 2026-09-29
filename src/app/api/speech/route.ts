@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { APICallError, generateSpeech, RetryError } from "ai";
 import { z } from "zod";
 
@@ -5,11 +6,14 @@ import { speechModel } from "@/lib/ai-models";
 import { hasSupabase } from "@/lib/env";
 import { isNeuralVoice } from "@/lib/game/voices";
 import { supportedLanguageCodes, type TargetLanguageCode } from "@/lib/learning/languages";
+import { clipPath, publicClipUrl, SPEECH_BUCKET } from "@/lib/speech/clips";
+import { wavToMp3 } from "@/lib/speech/mp3";
 import { createClient } from "@/lib/supabase/server";
 
-// Natural neural speech for every spoken line. Responses depend only on the
-// query string, so the CDN keeps each line after the first request and
-// villagers answer instantly from then on.
+// Natural neural speech for every spoken line, generated once ever: the game
+// looks for a line in the public speech bucket first and only comes here when
+// it isn't there yet. This route makes it with Gemini, stores the MP3 for
+// every player after it, and returns it.
 
 const inputSchema = z.object({
   l: z.enum(supportedLanguageCodes).default("sv"),
@@ -53,13 +57,20 @@ export async function GET(request: Request) {
   if (!parsed.success) return new Response(null, { status: 400 });
   const model = speechModel();
   if (!model) return new Response(null, { status: 503, headers: { "Cache-Control": "no-store" } });
-  if (hasSupabase) {
-    const supabase = await createClient();
+  const supabase = hasSupabase ? await createClient() : null;
+  if (supabase) {
     const { data } = await supabase.auth.getClaims();
     if (!data?.claims?.sub) return new Response(null, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
 
   const { l: language, t: text, v: voice, s } = parsed.data;
+  const path = await clipPath({ language, voice, slow: s === "1", text });
+  const stored = path ? publicClipUrl(path) : null;
+  // Someone else may have made it since the game looked.
+  if (stored && (await fetch(stored, { method: "HEAD" }).then((r) => r.ok, () => false))) {
+    return Response.redirect(stored, 302);
+  }
+
   try {
     // Gemini returns a complete WAV file, ready for the browser. It detects the
     // language from the text; the instructions set the accent.
@@ -72,9 +83,19 @@ export async function GET(request: Request) {
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(20_000),
     });
-    return new Response(new Uint8Array(audio.uint8Array), {
+    const mp3 = wavToMp3(audio.uint8Array);
+    if (supabase && path) {
+      after(async () => {
+        const { error } = await supabase.storage
+          .from(SPEECH_BUCKET)
+          .upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
+        // Two players asking for a new line at once both make it; the first one is kept.
+        if (error && !/exists|duplicate/i.test(error.message)) console.error("speech clip upload failed", path, error.message);
+      });
+    }
+    return new Response(new Uint8Array(mp3), {
       headers: {
-        "Content-Type": audio.mediaType || "audio/wav",
+        "Content-Type": "audio/mpeg",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

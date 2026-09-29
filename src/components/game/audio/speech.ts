@@ -2,6 +2,7 @@
 
 import { getSpeechAudioUrl } from "@/lib/learning/course";
 import { getTargetLanguage } from "@/lib/learning/languages";
+import { clipPath, publicClipUrl } from "@/lib/speech/clips";
 import { genderOf, passerVoices, playerVoice, type VoiceGender } from "@/lib/game/voices";
 import type { VillagerId } from "@/lib/game/villagers";
 import { island } from "../island";
@@ -38,16 +39,24 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
   const cached = neuralCache.get(key);
   if (cached) return cached;
   const query = new URLSearchParams({ l: code, t: text, v: voice, s: slow ? "1" : "0" });
-  const pending = fetch(`/api/speech?${query}`)
-    .then(async (response) => {
-      if (response.status === 503) neuralAvailable = false;
-      if (!response.ok) throw new Error(String(response.status));
-      return URL.createObjectURL(await response.blob());
-    })
-    .catch(() => {
-      neuralCache.delete(key);
-      return null;
-    });
+  const pending = (async () => {
+    // Every line anyone has heard before is already in the shared bucket;
+    // only a line nobody has asked for yet goes to Gemini (via /api/speech).
+    const path = await clipPath({ language: code, voice, slow, text });
+    const stored = path ? publicClipUrl(path) : null;
+    if (stored) {
+      const response = await fetch(stored).catch(() => null);
+      if (response?.ok) return URL.createObjectURL(await response.blob());
+    }
+    if (!neuralAvailable) throw new Error("neural speech unavailable");
+    const response = await fetch(`/api/speech?${query}`);
+    if (response.status === 503) neuralAvailable = false;
+    if (!response.ok) throw new Error(String(response.status));
+    return URL.createObjectURL(await response.blob());
+  })().catch(() => {
+    neuralCache.delete(key);
+    return null;
+  });
   neuralCache.set(key, pending);
   if (neuralCache.size > SERVER_CACHE_LIMIT) {
     const [oldestKey, oldest] = neuralCache.entries().next().value!;
@@ -59,7 +68,7 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
 
 /** Warm the cache for lines that are about to be spoken. */
 export function prefetchSpeech(text: string, options: Omit<SpeakOptions, "clipId"> = {}) {
-  if (!neuralAvailable || !text.trim()) return;
+  if (!text.trim()) return;
   void neuralClipUrl(text.trim(), voiceFor(options), Boolean(options.slow));
 }
 
@@ -149,7 +158,7 @@ export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
   const gender = genderOf(voice);
   const steps = [
     async () => {
-      if (!neuralAvailable || !text.trim()) return false;
+      if (!text.trim()) return false;
       // Slow lines are generated slowly rather than played back slowed down.
       const url = await neuralClipUrl(text.trim(), voice, slow);
       return id === generation ? playUrl(url, false) : true;
