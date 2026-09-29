@@ -100,10 +100,23 @@ export function glow(color: string, intensity = 2.2) {
   const key = `glow|${color}|${intensity}`;
   let material = cache.get(key);
   if (!material) {
-    material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), toneMapped: false });
+    material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity * glowBoost), toneMapped: false });
+    material.userData.base = new THREE.Color(color).multiplyScalar(intensity);
     cache.set(key, material);
   }
   return material;
+}
+
+let glowBoost = 1;
+
+// Lit windows and lamps shine brighter after dark.
+export function setGlowBoost(boost: number) {
+  if (Math.abs(boost - glowBoost) < 0.01) return;
+  glowBoost = boost;
+  for (const material of cache.values()) {
+    const base = material.userData.base as THREE.Color | undefined;
+    if (base) (material as THREE.MeshBasicMaterial).color.copy(base).multiplyScalar(boost);
+  }
 }
 
 // Warm, slightly muted colours that sit well together once pixelated.

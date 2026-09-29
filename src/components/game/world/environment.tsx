@@ -6,11 +6,11 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { mulberry32 } from "@/lib/game/world";
 import { island } from "../island";
 import { getGame, runtime } from "../store";
+import { daylight } from "./daylight";
 import { groundMaterial } from "./materials";
 import { dither } from "./pixel-textures";
 
 export const FOG = { color: "#cfe6ee", near: 85, far: 260 };
-export const SUN_DIRECTION = new THREE.Vector3(-0.55, 0.62, 0.55).normalize();
 
 const grassA = new THREE.Color("#79b457");
 const grassB = new THREE.Color("#63a04a");
@@ -126,6 +126,8 @@ const waterFragment = (radius: string) => /* glsl */ `
   uniform vec3 uDeep;
   uniform float uFogNear;
   uniform float uFogFar;
+  uniform vec3 uLight;
+  uniform float uGlint;
   varying vec3 vWorld;
   varying float vViewDepth;
 
@@ -173,7 +175,7 @@ const waterFragment = (radius: string) => /* glsl */ `
 
     // Sun glints.
     float glint = step(0.97, noise(P * 2.4 + uTime * 0.6)) * step(0.6, noise(P * 0.2 + uTime * 0.1)) * step(d, 30.0);
-    col = mix(col, vec3(1.0), glint * 0.8);
+    col = mix(col * uLight, vec3(1.0), glint * 0.8 * uGlint);
 
     float fogFactor = smoothstep(uFogNear, uFogFar, vViewDepth);
     gl_FragColor = vec4(mix(col, uFogColor, fogFactor), 1.0);
@@ -193,27 +195,33 @@ export function Water() {
   const radius = island().world.radiusGlsl;
   const water = island().theme?.water ?? seaWater;
   const fog = fogColor();
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
+  const material = useMemo(() => {
+    const light = daylight(fog);
+    return new THREE.ShaderMaterial({
         vertexShader: waterVertex,
         fragmentShader: waterFragment(radius),
         uniforms: {
           uTime: { value: 0 },
-          uFogColor: { value: new THREE.Color(fog) },
+          uFogColor: { value: light.fog.clone() },
           uShallow: { value: new THREE.Color(water.shallow) },
           uMid: { value: new THREE.Color(water.mid) },
           uDeep: { value: new THREE.Color(water.deep) },
           uFogNear: { value: FOG.near },
           uFogFar: { value: FOG.far },
+          uLight: { value: light.water.clone() },
+          uGlint: { value: light.glint },
         },
-      }),
-    [radius, water, fog],
-  );
+      });
+  }, [radius, water, fog]);
   const mesh = useRef<THREE.Mesh>(null);
   useFrame((_, delta) => {
     const shader = mesh.current?.material as THREE.ShaderMaterial | undefined;
-    if (shader) shader.uniforms.uTime.value += delta;
+    if (!shader) return;
+    const light = daylight(fog);
+    shader.uniforms.uTime.value += delta;
+    shader.uniforms.uFogColor.value.copy(light.fog);
+    shader.uniforms.uLight.value.copy(light.water);
+    shader.uniforms.uGlint.value = light.glint;
   });
   return (
     <mesh ref={mesh} rotation-x={-Math.PI / 2} position-y={0.02} material={material}>
@@ -231,38 +239,74 @@ const skyVertex = /* glsl */ `
 `;
 const skyFragment = /* glsl */ `
   uniform vec3 uSun;
+  uniform vec3 uMoon;
+  uniform vec3 uHorizon;
+  uniform vec3 uMid;
+  uniform vec3 uZenith;
+  uniform vec3 uBelow;
+  uniform float uSunDisc;
+  uniform float uStars;
   varying vec3 vDir;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   void main() {
-    float h = vDir.y;
-    vec3 horizon = vec3(1.0, 0.9, 0.76);
-    vec3 mid = vec3(0.66, 0.85, 0.96);
-    vec3 zenith = vec3(0.33, 0.62, 0.9);
-    vec3 col = mix(horizon, mid, smoothstep(-0.02, 0.18, h));
-    col = mix(col, zenith, smoothstep(0.18, 0.75, h));
-    float sun = max(dot(normalize(vDir), normalize(uSun)), 0.0);
-    col += vec3(1.0, 0.85, 0.6) * pow(sun, 24.0) * 0.45;
-    col += vec3(1.0, 0.97, 0.9) * smoothstep(0.9985, 0.9993, sun) * 1.4;
-    col = mix(col, vec3(0.81, 0.9, 0.93), smoothstep(0.05, -0.2, h));
+    vec3 dir = normalize(vDir);
+    float h = dir.y;
+    vec3 col = mix(uHorizon, uMid, smoothstep(-0.02, 0.18, h));
+    col = mix(col, uZenith, smoothstep(0.18, 0.75, h));
+    float sun = max(dot(dir, normalize(uSun)), 0.0);
+    col += vec3(1.0, 0.85, 0.6) * pow(sun, 24.0) * 0.45 * uSunDisc;
+    col += vec3(1.0, 0.97, 0.9) * smoothstep(0.9985, 0.9993, sun) * 1.4 * uSunDisc;
+    // Stars fade in above the horizon at night, with a soft moon.
+    vec2 cell = floor(vec2(atan(dir.z, dir.x) * 200.0, asin(clamp(h, -1.0, 1.0)) * 200.0));
+    float star = step(0.996, hash(cell)) * (0.5 + 0.5 * hash(cell + 7.0));
+    col += vec3(0.9, 0.93, 1.0) * star * uStars * smoothstep(0.04, 0.3, h);
+    float moon = max(dot(dir, normalize(uMoon)), 0.0);
+    col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9993, 0.9996, moon) * 1.2 + pow(moon, 60.0) * 0.12) * uStars;
+    col = mix(col, uBelow, smoothstep(0.05, -0.2, h));
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }
 `;
 
 export function Sky() {
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        vertexShader: skyVertex,
-        fragmentShader: skyFragment,
-        uniforms: { uSun: { value: SUN_DIRECTION } },
-        side: THREE.BackSide,
-        depthWrite: false,
-        fog: false,
-      }),
-    [],
-  );
+  const fog = fogColor();
+  const material = useMemo(() => {
+    const light = daylight(fog);
+    return new THREE.ShaderMaterial({
+      vertexShader: skyVertex,
+      fragmentShader: skyFragment,
+      uniforms: {
+        uSun: { value: light.sunDirection.clone() },
+        uMoon: { value: light.moonDirection.clone() },
+        uHorizon: { value: light.horizon.clone() },
+        uMid: { value: light.mid.clone() },
+        uZenith: { value: light.zenith.clone() },
+        uBelow: { value: light.fog.clone() },
+        uSunDisc: { value: light.sunDisc },
+        uStars: { value: light.stars },
+      },
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    });
+  }, [fog]);
+  const mesh = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    const shader = mesh.current?.material as THREE.ShaderMaterial | undefined;
+    if (!shader) return;
+    const light = daylight(fog);
+    const u = shader.uniforms;
+    u.uSun.value.copy(light.sunDirection);
+    u.uMoon.value.copy(light.moonDirection);
+    u.uHorizon.value.copy(light.horizon);
+    u.uMid.value.copy(light.mid);
+    u.uZenith.value.copy(light.zenith);
+    u.uBelow.value.copy(light.fog);
+    u.uSunDisc.value = light.sunDisc;
+    u.uStars.value = light.stars;
+  });
   return (
-    <mesh material={material} renderOrder={-1}>
+    <mesh ref={mesh} material={material} renderOrder={-1}>
       <sphereGeometry args={[320, 32, 16]} />
     </mesh>
   );
@@ -291,6 +335,9 @@ export function Clouds() {
   }, []);
   useFrame((_, delta) => {
     if (group.current) group.current.rotation.y += delta * 0.004;
+    const light = daylight(fogColor());
+    cloudMaterial.color.copy(light.cloud);
+    cloudMaterial.emissive.copy(light.cloudGlow);
   });
   return (
     <group ref={group}>

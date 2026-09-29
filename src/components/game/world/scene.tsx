@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import * as THREE from "three";
-import { advance, Canvas } from "@react-three/fiber";
+import { advance, Canvas, useFrame } from "@react-three/fiber";
 import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import type { VillagerId } from "@/lib/game/villagers";
@@ -10,7 +10,9 @@ import { island } from "../island";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
-import { Clouds, FOG, fogColor, Sky, SUN_DIRECTION, Terrain, Water } from "./environment";
+import { daylight } from "./daylight";
+import { Clouds, FOG, fogColor, Sky, Terrain, Water } from "./environment";
+import { setGlowBoost } from "./materials";
 import { LillaO } from "./lilla-o";
 import { PixelOutline, PixelPalette, usePixelDpr } from "./pixel-effect";
 import { Tannenau } from "./tannenau";
@@ -28,16 +30,48 @@ export type SceneProps = {
   quality: "high" | "low";
 };
 
+// Lights, fog and the sky colour follow the player's time of day (see ./daylight).
 function Lights() {
-  const sun = SUN_DIRECTION.clone().multiplyScalar(60);
+  const fog = fogColor();
+  const start = daylight(fog);
+  const hemi = useRef<THREE.HemisphereLight>(null);
+  const ambient = useRef<THREE.AmbientLight>(null);
+  const key = useRef<THREE.DirectionalLight>(null);
+  const rim = useRef<THREE.DirectionalLight>(null);
+  useFrame(({ scene }) => {
+    const light = daylight(fog);
+    if (hemi.current) {
+      hemi.current.color.copy(light.hemiSky);
+      hemi.current.groundColor.copy(light.hemiGround);
+      hemi.current.intensity = light.hemiIntensity;
+    }
+    if (ambient.current) {
+      ambient.current.color.copy(light.ambient);
+      ambient.current.intensity = light.ambientIntensity;
+    }
+    if (key.current) {
+      key.current.position.copy(light.keyDirection).multiplyScalar(60);
+      key.current.color.copy(light.key);
+      key.current.intensity = light.keyIntensity;
+    }
+    if (rim.current) {
+      rim.current.color.copy(light.rim);
+      rim.current.intensity = light.rimIntensity;
+    }
+    if (scene.fog) scene.fog.color.copy(light.fog);
+    if (scene.background instanceof THREE.Color) scene.background.copy(light.fog);
+    setGlowBoost(light.glowBoost);
+  });
+  const sun = start.keyDirection.clone().multiplyScalar(60);
   return (
     <>
-      <hemisphereLight args={["#cfe8ff", "#6f8f4f", 1.35]} />
-      <ambientLight intensity={0.25} color="#fff4e0" />
+      <hemisphereLight ref={hemi} args={[start.hemiSky, start.hemiGround, start.hemiIntensity]} />
+      <ambientLight ref={ambient} intensity={start.ambientIntensity} color={start.ambient} />
       <directionalLight
+        ref={key}
         position={[sun.x, sun.y, sun.z]}
-        intensity={2.6}
-        color="#fff0d6"
+        intensity={start.keyIntensity}
+        color={start.key}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0006}
@@ -50,14 +84,14 @@ function Lights() {
         shadow-camera-far={160}
       />
       {/* warm rim light from the opposite side for that storybook glow */}
-      <directionalLight position={[40, 18, -40]} intensity={0.55} color="#ffc9a3" />
+      <directionalLight ref={rim} position={[40, 18, -40]} intensity={start.rimIntensity} color={start.rim} />
     </>
   );
 }
 
 export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
   const { scenery, flora } = island();
-  const fog = fogColor();
+  const fog = daylight(fogColor()).fog.getStyle();
   const dpr = usePixelDpr();
   return (
     <Canvas
