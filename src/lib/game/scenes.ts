@@ -1,6 +1,7 @@
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { capitalize, normalizeText } from "@/lib/learning/text";
 import type { Line } from "./line";
+import type { VoiceGender } from "./voices";
 
 // Each phrase a villager teaches is practised as a turn in a real exchange:
 // someone says the cue, the learner answers, they react. Every phrase has
@@ -59,6 +60,9 @@ export type SceneExtras = {
   lines: SceneLines;
   // Names that turn up in introductions, and how a name tag greets you.
   guestNames: string[];
+  // Whether each scene speaker who isn't a villager is a man or a woman, for
+  // their voice. Unlisted speakers ("a tourist") go by their pitch.
+  speakers: Record<string, VoiceGender>;
   nameTag: string;
   // How learners introduce themselves, capturing the name ("jag heter (\p{L}+)").
   namePattern: string;

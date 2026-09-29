@@ -14,7 +14,7 @@ import type { Villager } from "@/lib/game/villagers";
 import { getTargetLanguage } from "@/lib/learning/languages";
 import type { LearnerConceptState } from "@/types/learning";
 import { sound } from "../audio/sfx";
-import { canRecognizeSpeech, listen, speak, stopListening } from "../audio/speech";
+import { canRecognizeSpeech, listen, speak, stopListening, type SpeakOptions } from "../audio/speech";
 import { island, useIsland } from "../island";
 import { emote, useGame } from "../store";
 import { Glossed, GlossedLine } from "./glossed";
@@ -27,6 +27,8 @@ export type Outcome = {
   check: CheckResult | "choice" | "ai";
   line: Line;
   expected: string;
+  // The line that was played, when it isn't the answer itself (a cue, an example sentence).
+  heard?: { t: string; en?: string; voice?: SpeakOptions };
   gained: number;
   stageUp: { from: Stage; to: Stage } | null;
 };
@@ -92,6 +94,7 @@ export function useLessonRound(
     check: Outcome["check"];
     replays: number;
     input: "text" | "speech" | "tiles" | "choice";
+    heard?: { t: string; en?: string; voice?: SpeakOptions };
   }) {
     if (!activity || busy) return;
     setBusy(true);
@@ -127,7 +130,8 @@ export function useLessonRound(
           input: params.input,
         },
       });
-    } catch {
+    } catch (cause) {
+      console.error("Could not record observation", cause);
       setError(true);
       setBusy(false);
       return;
@@ -171,6 +175,7 @@ export function useLessonRound(
       check: params.check,
       line: params.successful ? pick(script.praise) : pick(script.nudges),
       expected: params.expected,
+      heard: params.heard,
       gained,
       stageUp,
     });
@@ -206,6 +211,16 @@ export function Feedback({ outcome, onNext }: { outcome: Outcome; onNext: () => 
         <GlossedLine line={outcome.line} as="strong" />
         {outcome.correct && outcome.gained > 0 ? <span className="xp-pop">+{outcome.gained}</span> : null}
       </div>
+      {outcome.heard ? (
+        <div className="lesson-heard">
+          <p className="scene-reveal">
+            <Glossed text={outcome.heard.t} en={outcome.heard.en} /> {outcome.heard.en ? <span className="scene-line-en">{outcome.heard.en}</span> : null}
+          </p>
+          <button className="icon-button" aria-label={aria(ui.listenAgain)} onClick={() => void speak(outcome.heard!.t, outcome.heard!.voice)}>
+            <Volume2 size={17} />
+          </button>
+        </div>
+      ) : null}
       <p className="lesson-answer">
         <Glossed text={outcome.expected} />
         <button className="icon-button" aria-label={aria(ui.listenAgain)} onClick={() => void speak(outcome.expected)}>
@@ -249,6 +264,7 @@ export type RecordFn = (p: {
   check: Outcome["check"];
   replays: number;
   input: "text" | "speech" | "tiles" | "choice";
+  heard?: { t: string; en?: string; voice?: SpeakOptions };
 }) => Promise<void>;
 
 export function ActivityView({

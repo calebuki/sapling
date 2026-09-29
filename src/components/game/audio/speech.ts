@@ -2,7 +2,7 @@
 
 import { getSpeechAudioUrl } from "@/lib/learning/course";
 import { getTargetLanguage } from "@/lib/learning/languages";
-import { passerVoices, playerVoice } from "@/lib/game/voices";
+import { genderOf, passerVoices, playerVoice, type VoiceGender } from "@/lib/game/voices";
 import type { VillagerId } from "@/lib/game/villagers";
 import { island } from "../island";
 import { runtime } from "../store";
@@ -14,7 +14,9 @@ import { sound } from "./sfx";
 // finally the browser's default voice. Each source reports whether it actually
 // started so a silent failure moves on to the next one.
 
-type SpeakOptions = { clipId?: string; slow?: boolean; who?: VillagerId | "player"; pitch?: number };
+// `gender` says how a speaker without a voice of their own should sound;
+// without it, a low pitch means a man.
+export type SpeakOptions = { clipId?: string; slow?: boolean; who?: VillagerId | "player"; pitch?: number; gender?: VoiceGender };
 
 let neuralAvailable = true;
 const neuralCache = new Map<string, Promise<string | null>>();
@@ -24,10 +26,10 @@ function locale() {
 }
 
 // The voice a villager always speaks with; passers-by sound like a man or a woman.
-function voiceFor(who: VillagerId | "player" | null | undefined, pitch = 1) {
+function voiceFor({ who, pitch = 1, gender }: Pick<SpeakOptions, "who" | "pitch" | "gender">) {
   if (who === "player") return playerVoice;
   const villager = who ? island().villagers.find((v) => v.id === who) : undefined;
-  return villager?.voice ?? (pitch < 1 ? passerVoices.man : passerVoices.woman);
+  return villager?.voice ?? passerVoices[gender ?? (pitch < 1 ? "man" : "woman")];
 }
 
 function neuralClipUrl(text: string, voice: string, slow: boolean) {
@@ -56,9 +58,9 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
 }
 
 /** Warm the cache for lines that are about to be spoken. */
-export function prefetchSpeech(text: string, options: { who?: VillagerId | "player"; pitch?: number; slow?: boolean } = {}) {
+export function prefetchSpeech(text: string, options: Omit<SpeakOptions, "clipId"> = {}) {
   if (!neuralAvailable || !text.trim()) return;
-  void neuralClipUrl(text.trim(), voiceFor(options.who, options.pitch), Boolean(options.slow));
+  void neuralClipUrl(text.trim(), voiceFor(options), Boolean(options.slow));
 }
 
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
@@ -109,15 +111,18 @@ if (typeof window !== "undefined") {
   if (hasSynth()) window.speechSynthesis.addEventListener?.("voiceschanged", voices);
 }
 
-function deviceVoice(pitchHint: number) {
+const MALE_VOICE = /mattias|conrad|stefan|killian|florian|jeppe|\bmale\b|\bman\b|mann/i;
+const FEMALE_VOICE = /sofie|hillevi|katja|hedda|amala|seraphina|anna|christel|female|kvinna|frau|google/i;
+
+// A man keeps a man's voice even when the only natural-sounding voice on the
+// device is a woman's (Chrome's Google voices), and the other way round.
+function deviceVoice(gender: VoiceGender) {
   const code = island().code;
   const own = voices().filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith(code));
   if (own.length === 0) return null;
-  const natural = own.filter((v) => /natural|online|neural|google/i.test(v.name));
-  const pool = natural.length ? natural : own;
-  const male = pool.find((v) => /mattias|conrad|stefan|killian|jeppe|male|man|mann/i.test(v.name));
-  const female = pool.find((v) => /sofie|hillevi|katja|amala|anna|christel|female|kvinna|frau/i.test(v.name));
-  return (pitchHint < 1 ? male ?? pool[0] : female ?? pool[0]) ?? null;
+  const natural = (v: SpeechSynthesisVoice) => /natural|online|neural|google/i.test(v.name);
+  const matching = own.filter((v) => (gender === "man" ? MALE_VOICE.test(v.name) : FEMALE_VOICE.test(v.name) && !MALE_VOICE.test(v.name)));
+  return matching.find(natural) ?? matching[0] ?? own.find(natural) ?? own[0];
 }
 
 export function stopSpeaking() {
@@ -139,20 +144,23 @@ export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
   const who = options.who ?? null;
   const slow = options.slow ?? false;
   const pitch = options.pitch ?? 1;
+  const voice = voiceFor(options);
+  // Every fallback keeps the speaker's gender.
+  const gender = genderOf(voice);
   const steps = [
     async () => {
       if (!neuralAvailable || !text.trim()) return false;
       // Slow lines are generated slowly rather than played back slowed down.
-      const url = await neuralClipUrl(text.trim(), voiceFor(options.who, pitch), slow);
+      const url = await neuralClipUrl(text.trim(), voice, slow);
       return id === generation ? playUrl(url, false) : true;
     },
     () => playUrl(options.clipId ? getSpeechAudioUrl(island().code, options.clipId) : null, slow),
-    () => speakOnDevice(text, { slow, pitch, anyVoice: false }),
+    () => speakOnDevice(text, { slow, pitch, gender, anyVoice: false }),
     async () => {
-      const url = await serverSpeechUrl(text, pitch);
+      const url = await serverSpeechUrl(text, pitch, gender);
       return id === generation ? playUrl(url, slow) : true;
     },
-    () => speakOnDevice(text, { slow, pitch, anyVoice: true }),
+    () => speakOnDevice(text, { slow, pitch, gender, anyVoice: true }),
   ];
   return (async () => {
     runtime.speaking = who;
@@ -194,9 +202,9 @@ function playUrl(url: string | null, slow: boolean): Promise<boolean> {
   });
 }
 
-function speakOnDevice(text: string, options: { slow: boolean; pitch: number; anyVoice: boolean }): Promise<boolean> {
+function speakOnDevice(text: string, options: { slow: boolean; pitch: number; gender: VoiceGender; anyVoice: boolean }): Promise<boolean> {
   if (!hasSynth()) return Promise.resolve(false);
-  const voice = deviceVoice(options.pitch);
+  const voice = deviceVoice(options.gender);
   if (!voice && !options.anyVoice) return Promise.resolve(false);
   const synth = window.speechSynthesis;
   return new Promise((resolve) => {
@@ -243,8 +251,8 @@ function speakOnDevice(text: string, options: { slow: boolean; pitch: number; an
   });
 }
 
-function serverSpeechUrl(text: string, pitch: number): Promise<string | null> {
-  const voice = pitch < 1 ? "male" : "female";
+function serverSpeechUrl(text: string, pitch: number, gender: VoiceGender): Promise<string | null> {
+  const voice = gender === "man" ? "male" : "female";
   const language = island().code;
   const key = `${language}\u0000${voice}\u0000${pitch}\u0000${text}`;
   const cached = serverAudio.get(key);

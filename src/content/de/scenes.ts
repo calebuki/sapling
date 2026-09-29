@@ -1138,6 +1138,10 @@ export const sceneExtras: SceneExtras = {
     stamps: { t: "Stempel", en: "Stamps" },
   },
   guestNames: ["Anna", "Lukas", "Sophie", "Max", "Emma", "Felix", "Mia", "Tom", "Klara", "Ben", "Jan", "Lea"],
+  speakers: {
+    Anna: "woman", Sophie: "woman", Emma: "woman", Mia: "woman", Klara: "woman", Lea: "woman",
+    Lukas: "man", Max: "man", Felix: "man", Tom: "man", Ben: "man", Jan: "man", Kapitän: "man", "Opa Karl": "man",
+  },
   nameTag: "Hallo! Ich heiße",
   namePattern: "(?:ich heiße|mein name ist)\\s+(\\p{L}+)",
   departures: [

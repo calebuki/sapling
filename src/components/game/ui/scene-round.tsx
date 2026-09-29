@@ -9,9 +9,10 @@ import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
 import type { AdaptiveActivity } from "@/lib/learning/adaptive";
 import { getTargetLanguage } from "@/lib/learning/languages";
+import { normalizeText } from "@/lib/learning/text";
 import type { LearnerConceptState } from "@/types/learning";
 import { sound } from "../audio/sfx";
-import { canRecognizeSpeech, listen, speak, stopListening } from "../audio/speech";
+import { canRecognizeSpeech, listen, speak, stopListening, type SpeakOptions } from "../audio/speech";
 import { island, useIsland } from "../island";
 import {
   ActivityView,
@@ -186,9 +187,21 @@ function speakerOf(beat: SceneBeat, answered: boolean) {
   return beat.speaker === "?" ? (answered && beat.guest ? beat.guest : "?") : beat.speaker;
 }
 
+// The voice for whoever is talking: a villager keeps their own wherever they
+// turn up, anyone else sounds like the man or woman the island says they are.
+function voiceOf(name: string | undefined, villager: Villager, pitch?: number): SpeakOptions {
+  const other = name ? island().villagers.find((v) => v.name === name) : undefined;
+  if (other) return { who: other.id, pitch: other.voicePitch };
+  return { pitch: pitch ?? villager.voicePitch, gender: name ? extras().speakers[name] : undefined };
+}
+
+// A mystery speaker ("?") is still the guest they turn out to be.
+function beatVoice(beat: SceneBeat, villager: Villager) {
+  return voiceOf(beat.speaker === "?" ? beat.guest : beat.speaker, villager, beat.pitch);
+}
+
 function speakAs(beat: SceneBeat, villager: Villager, text: string, slow = false) {
-  const self = beat.speaker === villager.name;
-  return speak(text, { who: self ? villager.id : undefined, pitch: beat.pitch ?? villager.voicePitch, slow });
+  return speak(text, { ...beatVoice(beat, villager), slow });
 }
 
 async function askForReply(body: object): Promise<Reply | null> {
@@ -562,14 +575,14 @@ function ListeningDrill(props: DrillProps) {
 }
 
 // Play a line on arrival, let it be replayed, count replays.
-function useHeard(text: string, villager: Villager, clipId?: string, pitch?: number) {
+function useHeard(text: string, { clipId, who, pitch, gender }: SpeakOptions) {
   const replays = useRef(0);
   const play = useCallback(
     (slow = false) => {
       replays.current++;
-      void speak(text, { clipId, pitch: pitch ?? villager.voicePitch, slow });
+      void speak(text, { clipId, who, pitch, gender, slow });
     },
-    [text, clipId, pitch, villager.voicePitch],
+    [text, clipId, who, pitch, gender],
   );
   useEffect(() => {
     const timer = window.setTimeout(() => play(), 350);
@@ -606,35 +619,61 @@ function Reveal({ line }: { line: { t: string; en?: string } }) {
   );
 }
 
-// Hear what someone says (no text), pick the reply that fits.
+// Whether any part of `option` can be heard in `heard`: the whole of it, or
+// one of its longer words (so "kaufen" is audible inside "einkaufen").
+function audibleIn(option: string, heard: string) {
+  const code = island().code;
+  const text = normalizeText(heard, code);
+  const words = normalizeText(option, code).split(" ").filter((w) => w.length >= 4);
+  return words.length ? words.some((w) => text.includes(w)) : text.includes(normalizeText(option, code));
+}
+
+// With a scene, hear what someone says (no text) and pick the reply that fits.
+// Without one the line heard is the phrase's own example sentence, so the
+// question becomes which phrase was in it.
 function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRecord }: DrillProps) {
-  const { course } = useIsland();
+  const { course, ui } = useIsland();
+  const replying = Boolean(beat);
   const cue = beat?.cue ?? { t: activity.listening?.text ?? expected, en: activity.listening?.meaning };
-  const { play, replays } = useHeard(cue.t, villager, beat ? undefined : activity.listening?.audioId, beat?.pitch);
+  // Without a scene the villager says the phrase's example sentence themselves.
+  const voice = beat ? beatVoice(beat, villager) : { who: villager.id, pitch: villager.voicePitch, clipId: activity.listening?.audioId };
+  const { play, replays } = useHeard(cue.t, voice);
   const [picked, setPicked] = useState<string | null>(null);
   const [options] = useState(() => {
     // Wrong answers come from units the learner has reached, never ones still locked.
     const unit = course.units.findIndex((u) => u.slugs.includes(slug));
-    const reached = new Set(course.units.slice(0, unit + 1).flatMap((u) => u.slugs));
+    const reachedUnits = course.units.slice(0, unit + 1);
+    const reached = new Set(reachedUnits.flatMap((u) => u.slugs));
     const usable = (other: string) => other !== slug && !beat?.notWith?.includes(other);
     const said = (other: string) => {
       const exercise = course.lessons.flatMap((lesson) => lesson.exercises).find((e) => e.conceptSlug === other);
       return exercise ? expectedFor(exercise, name) : "";
     };
     const shuffle = (texts: string[]) => texts.sort(() => Math.random() - 0.5);
-    const scenes = Object.entries(island().scenes[villager.id] ?? {})
-      .filter(([other]) => usable(other) && reached.has(other))
-      .map(([other, vs]) => vs[0].expect?.t ?? said(other));
     // A villager's first unit may have few scenes; the unit's other phrases fill in.
-    const phrases = (course.units[unit]?.slugs ?? []).filter(usable).map(said);
-    const distractors = [...new Set([...shuffle(scenes), ...shuffle(phrases)])].filter((text) => text && text !== expected).slice(0, 2);
+    const phrases = shuffle((course.units[unit]?.slugs ?? []).filter(usable).map(said));
+    let pool: string[];
+    if (replying) {
+      const scenes = Object.entries(island().scenes[villager.id] ?? {})
+        .filter(([other]) => usable(other) && reached.has(other))
+        .map(([other, vs]) => vs[0].expect?.t ?? said(other));
+      pool = [...shuffle(scenes), ...phrases];
+    } else {
+      // A wrong option that can also be heard in the sentence would be right too.
+      const earlier = shuffle(reachedUnits.flatMap((u) => u.slugs).filter(usable).map(said));
+      pool = [...phrases, ...earlier].filter((text) => text && !audibleIn(text, cue.t));
+    }
+    const distractors = [...new Set(pool)].filter((text) => text && text !== expected).slice(0, 2);
     return shuffle([expected, ...distractors]);
   });
   const who = beat ? (beat.speaker === "?" ? "Someone" : beat.speaker) : "Someone";
   return (
     <div className="activity">
-      <DrillHead kicker={extras().lines.whatDoYouSay} situation={`${who} says something to you. Listen, then pick your answer.`} onPlay={play} />
-      {picked ? <Reveal line={cue} /> : null}
+      {replying ? (
+        <DrillHead kicker={extras().lines.whatDoYouSay} situation={`${who} says something to you. Listen, then pick your answer.`} onPlay={play} />
+      ) : (
+        <DrillHead kicker={ui.whatDidYouHear} situation={`${villager.name} says a sentence. Which of these was in it?`} onPlay={play} />
+      )}
       <div className="choice-grid">
         {options.map((option) => (
           <button
@@ -643,8 +682,8 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
             disabled={busy || picked !== null}
             onClick={() => {
               setPicked(option);
-              // The feedback shows (and says) the reply that fits, not the line that was heard.
-              void onRecord({ successful: option === expected, assisted: false, response: option, expected, check: "choice", replays: replays(), input: "choice" });
+              // The feedback shows the line that was heard, then says the answer that fits.
+              void onRecord({ successful: option === expected, assisted: false, response: option, expected, check: "choice", replays: replays(), input: "choice", heard: { ...cue, voice } });
             }}
           >
             <Glossed text={option} />
@@ -659,7 +698,7 @@ function ReplyPick({ villager, slug, beat, expected, activity, busy, name, onRec
 function WhoIsTalking({ villager, activity, busy, onRecord }: DrillProps) {
   const listening = activity.listening!;
   const answer = nameIn(listening.text, extras())!;
-  const { play, replays } = useHeard(listening.text, villager, listening.audioId);
+  const { play, replays } = useHeard(listening.text, { ...voiceOf(answer, villager), clipId: listening.audioId });
   const [picked, setPicked] = useState<string | null>(null);
   const [options] = useState(() => {
     const others = extras().guestNames.filter((n) => n !== answer).sort(() => Math.random() - 0.5).slice(0, 3);
@@ -689,9 +728,9 @@ function WhoIsTalking({ villager, activity, busy, onRecord }: DrillProps) {
 }
 
 // Stina: someone asks the way; point at the right sign.
-function SignPick({ villager, busy, onRecord }: DrillProps) {
+function SignPick({ busy, onRecord }: DrillProps) {
   const [question] = useState(() => extras().whereQuestions[Math.floor(Math.random() * extras().whereQuestions.length)]);
-  const { play, replays } = useHeard(question.t, villager, undefined, 1.1);
+  const { play, replays } = useHeard(question.t, { pitch: 1.1 });
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
@@ -718,9 +757,9 @@ function SignPick({ villager, busy, onRecord }: DrillProps) {
 }
 
 // Stina: a platform announcement; find the train on the board.
-function BoardHunt({ villager, busy, onRecord }: DrillProps) {
+function BoardHunt({ busy, onRecord }: DrillProps) {
   const [announcement] = useState(() => extras().announcements[Math.floor(Math.random() * extras().announcements.length)]);
-  const { play, replays } = useHeard(announcement.t, villager, undefined, 0.95);
+  const { play, replays } = useHeard(announcement.t, { pitch: 0.95 });
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
@@ -753,7 +792,7 @@ function WhenPick({ villager, slug, busy, onRecord }: DrillProps) {
     const pool = extras().whenSentences[slug];
     return pool[Math.floor(Math.random() * pool.length)];
   });
-  const { play, replays } = useHeard(sentence.t, villager);
+  const { play, replays } = useHeard(sentence.t, { who: villager.id, pitch: villager.voicePitch });
   const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="activity">
@@ -816,7 +855,7 @@ function DialogPuzzle({ beat, expected, villager, name, onDone }: { beat: SceneB
                 onClick={() => {
                   if (id === placed.length) {
                     sound.play(id === lines.length - 1 ? "sparkle" : "tile");
-                    void speak(lines[id].t, { pitch: id === 1 ? 1 : beat.pitch ?? villager.voicePitch });
+                    void (id === 1 ? speak(lines[id].t, { who: "player" }) : speakAs(beat, villager, lines[id].t));
                     setPlaced([...placed, id]);
                   } else {
                     sound.play("wrong");

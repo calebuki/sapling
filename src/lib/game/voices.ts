@@ -17,3 +17,16 @@ export function isNeuralVoice(value: string): value is NeuralVoice {
 // Voices for the player and for passers-by without a voice of their own.
 export const playerVoice: NeuralVoice = "Aoede";
 export const passerVoices = { woman: "Autonoe", man: "Umbriel" } as const satisfies Record<string, NeuralVoice>;
+
+export type VoiceGender = "man" | "woman";
+
+const womenVoices = new Set<string>([
+  "Zephyr", "Kore", "Leda", "Aoede", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar",
+  "Gacrux", "Pulcherrima", "Vindemiatrix", "Sulafat",
+] satisfies NeuralVoice[]);
+
+// Whether a neural voice sounds like a man or a woman, so a fallback voice
+// can match it when the neural one is unavailable.
+export function genderOf(voice: string): VoiceGender {
+  return womenVoices.has(voice) ? "woman" : "man";
+}
