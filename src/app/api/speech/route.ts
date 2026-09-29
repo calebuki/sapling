@@ -5,8 +5,9 @@ import { z } from "zod";
 import { speechModel } from "@/lib/ai-models";
 import { hasSupabase } from "@/lib/env";
 import { isNeuralVoice } from "@/lib/game/voices";
-import { supportedLanguageCodes, type TargetLanguageCode } from "@/lib/learning/languages";
+import { supportedLanguageCodes } from "@/lib/learning/languages";
 import { clipPath, publicClipUrl, SPEECH_BUCKET } from "@/lib/speech/clips";
+import { speechDirection } from "@/lib/speech/direction";
 import { wavToMp3 } from "@/lib/speech/mp3";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,23 +23,6 @@ const inputSchema = z.object({
   s: z.enum(["0", "1"]).default("0"),
 });
 
-const direction: Record<TargetLanguageCode, { everyday: string; slow: string }> = {
-  sv: {
-    everyday:
-      "You are a native Swedish speaker from Stockholm chatting with a friend on a small island. Speak natural, relaxed, everyday rikssvenska with warm, lively intonation, natural rhythm and the usual Swedish pitch accent. Never sound like you are reading aloud.",
-    slow: "You are a friendly native Swedish speaker from Stockholm helping a beginner. Speak slowly and clearly, pronouncing every word fully with natural Swedish intonation and pitch accent, like a patient teacher, not a robot.",
-  },
-  de: {
-    everyday:
-      "You are a native German speaker from the Black Forest in southern Germany chatting with a friend in your village. Speak natural, relaxed, everyday standard German (Hochdeutsch) with a warm, friendly southern lilt and natural rhythm, not a heavy dialect. Never sound like you are reading aloud.",
-    slow: "You are a friendly native German speaker helping a beginner. Speak slowly and clearly in standard German, pronouncing every word and ending fully with natural intonation, like a patient teacher, not a robot.",
-  },
-  da: {
-    everyday:
-      "You are a native Danish speaker from Copenhagen chatting with a friend. Speak natural, relaxed, everyday Danish with warm intonation and natural rhythm. Never sound like you are reading aloud.",
-    slow: "You are a friendly native Danish speaker helping a beginner. Speak slowly and clearly with natural Danish intonation, like a patient teacher, not a robot.",
-  },
-};
 
 // The provider refusing us (bad key, no credits) won't fix itself on the next
 // line, so tell the game to stop asking and use device voices instead.
@@ -78,12 +62,12 @@ export async function GET(request: Request) {
       model,
       text,
       voice,
-      instructions: s === "1" ? direction[language].slow : direction[language].everyday,
+      instructions: speechDirection(language, s === "1"),
       outputFormat: "wav",
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(20_000),
     });
-    const mp3 = wavToMp3(audio.uint8Array);
+    const mp3 = await wavToMp3(audio.uint8Array);
     if (supabase && path) {
       after(async () => {
         const { error } = await supabase.storage

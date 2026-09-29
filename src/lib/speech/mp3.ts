@@ -1,11 +1,12 @@
-import { Mp3Encoder } from "@breezystack/lamejs";
-
 // Gemini hands back uncompressed 16-bit PCM WAV; stored clips are MP3s about
 // a tenth of the size. Speech needs no more than 48 kbps.
 const KBPS = 48;
 const FRAME = 1152;
 
-export function wavToMp3(wav: Uint8Array): Uint8Array {
+// The encoder is loaded as an ES module on demand: its CommonJS build only sets
+// a browser global, which scripts run through tsx would otherwise get.
+export async function wavToMp3(wav: Uint8Array): Promise<Uint8Array> {
+  const { Mp3Encoder } = await import("@breezystack/lamejs");
   const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
   const tag = (at: number) => String.fromCharCode(wav[at], wav[at + 1], wav[at + 2], wav[at + 3]);
   if (tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new Error("not a WAV file");
