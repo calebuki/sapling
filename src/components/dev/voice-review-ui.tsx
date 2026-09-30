@@ -54,6 +54,7 @@ export const rejectReasons = [
   "Too slow",
   "Robotic",
   "Cut off / noise",
+  "Breath / gasp",
   "Wrong voice",
   "Wrong words",
 ];
