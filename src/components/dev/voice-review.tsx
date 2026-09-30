@@ -26,7 +26,7 @@ import {
 import type { VoiceLineStatus, VoiceProvider } from "@/types/database";
 import { VoiceLineDetail, type PlayerHandle } from "./voice-line-detail";
 import { QueuePanel, VerdictForm, type Verdict } from "./voice-review-panels";
-import { button, chip, chipOff, chipOn, field, Kbd, LevelPill, statusLabel, StatusPill } from "./voice-review-ui";
+import { button, chip, chipOff, chipOn, field, fieldOn, Kbd, LevelPill, statusLabel, StatusPill } from "./voice-review-ui";
 
 // Every neural voice line the game says, straight from the database, to
 // listen through and approve, reject (which queues a remake) or queue.
@@ -818,7 +818,7 @@ function Select({
   onChange: (value: string) => void;
 }) {
   return (
-    <select className={`${field} max-w-44 ${value ? "border-[var(--ink)] bg-[var(--ink)] text-white" : ""}`} value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+    <select className={`${value ? fieldOn : field} max-w-44`} value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
       <option value="">{label}: any</option>
       {options.map((o) => (
         <option key={o} value={o}>

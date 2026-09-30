@@ -7,7 +7,7 @@ import { previousTakePath, publicClipUrl } from "@/lib/speech/clips";
 import { getTargetLanguage, isTargetLanguageCode } from "@/lib/learning/languages";
 import type { VoiceJob, VoiceLine } from "@/lib/voice-review/filters";
 import type { VoiceLineStatus } from "@/types/database";
-import { button, Kbd, LevelPill, StatusPill } from "./voice-review-ui";
+import { button, Kbd, LevelPill, selectedTone, StatusPill } from "./voice-review-ui";
 
 export type PlayerHandle = { toggle: () => void; replay: () => void };
 
@@ -151,7 +151,7 @@ export function VoiceLineDetail({ line, jobs, userId, autoplay, rate, onRate, on
           {rates.map((r) => (
             <button
               key={r}
-              className={`px-2 py-1 text-xs font-bold ${r === rate ? "bg-[var(--ink)] text-white" : "bg-white"}`}
+              className={`px-2 py-1 text-xs font-bold ${r === rate ? selectedTone : "bg-white"}`}
               onClick={() => onRate(r)}
             >
               {r}×

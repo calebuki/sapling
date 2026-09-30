@@ -60,8 +60,12 @@ export const rejectReasons = [
 
 export const chip =
   "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold transition-colors disabled:opacity-40";
-export const chipOn = "border-[var(--ink)] bg-[var(--ink)] text-white";
+// Selected things are tinted, not inverted: dark text stays readable even where
+// a global rule (button { color: inherit }) wins over a text colour utility.
+export const selectedTone = "border-[var(--blue)] bg-[#dde9f8] text-[#1f4f8f]";
+export const chipOn = selectedTone;
 export const chipOff = "border-[var(--edge-dark)] bg-white text-[var(--ink)] hover:bg-[var(--paper-2)]";
 export const button =
   "inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-bold transition-colors disabled:opacity-40";
 export const field = "rounded-lg border border-[var(--edge-dark)] bg-white px-2 py-1 text-sm font-semibold";
+export const fieldOn = `rounded-lg border px-2 py-1 text-sm font-semibold ${selectedTone}`;
