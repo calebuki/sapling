@@ -32,8 +32,8 @@ const flat = (color: string) => toon(color, { surface: null });
 
 const FACE_W = 16;
 const FACE_H = 13;
-const FRAMES = ["neutral", "blink", "happy", "talk", "think"] as const;
-type Frame = (typeof FRAMES)[number];
+export const FRAMES = ["neutral", "blink", "happy", "talk", "think"] as const;
+export type Frame = (typeof FRAMES)[number];
 
 const ink = "#2b2233";
 const shine = "#ffffff";
@@ -42,7 +42,8 @@ const lip = "#7a3030";
 const tongue = "#e0707a";
 
 let sheet: HTMLCanvasElement | null = null;
-function faceSheet() {
+// Shared with the login scenes, which build villagers outside React.
+export function faceSheet() {
   if (sheet) return sheet;
   sheet = document.createElement("canvas");
   sheet.width = FACE_W * FRAMES.length;

@@ -835,7 +835,7 @@ button:disabled {
 
 .answer-row input,
 .chat-input input,
-.login-card input {
+.login-form input {
   flex: 1;
   min-width: 0;
   height: 54px;
@@ -851,7 +851,7 @@ button:disabled {
 
 .answer-row input:focus,
 .chat-input input:focus,
-.login-card input:focus {
+.login-form input:focus {
   border-color: var(--green);
 }
 
@@ -1965,34 +1965,62 @@ button:disabled {
 
 /* ---------- Login ---------- */
 
-.login-page {
+/* The form takes the left quarter; the rest is a slowed-down moment from the
+   islands that rotates through the scenes in components/login. */
+
+.login {
   display: grid;
-  min-height: 100dvh;
-  place-items: center;
-  padding: 20px;
-  background: linear-gradient(#8fc6ea, var(--sky) 55%, #bfe3c9);
+  grid-template-columns: minmax(320px, 1fr) 3fr;
+  height: 100dvh;
+  background: var(--paper);
 }
 
-.login-card {
+.login-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: max(28px, env(safe-area-inset-top)) clamp(20px, 2.4vw, 40px) max(24px, env(safe-area-inset-bottom));
+  border-right: 3px solid var(--edge);
+  background: var(--paper);
+  overflow-y: auto;
+}
+
+.login-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.login-logo svg {
+  color: var(--green);
+}
+
+.login-form {
   display: grid;
   gap: 14px;
-  width: min(420px, 100%);
-  padding: 30px;
-  border-radius: 28px;
-  background: var(--paper);
-  border: 3px solid #fff;
-  box-shadow: 0 7px 0 var(--edge), 0 30px 60px rgba(20, 40, 80, 0.25);
+  margin-block: auto;
 }
 
-.login-card h1 {
+.login-form h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 2.2rem;
+  font-size: clamp(1.8rem, 2.4vw, 2.3rem);
   font-weight: 600;
-  text-align: center;
+  line-height: 1.1;
+  text-wrap: balance;
 }
 
-.login-card label {
+.login-lede {
+  margin: -6px 0 6px;
+  color: var(--ink-soft);
+}
+
+.login-form label {
   display: grid;
   gap: 6px;
   font-size: 0.95rem;
@@ -2004,6 +2032,148 @@ button:disabled {
   border-radius: 14px;
   background: #ffe9e6;
   color: var(--red-edge);
+}
+
+.login-islands {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.login-islands b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.login-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.login-stage {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--sky);
+}
+
+.reel {
+  position: absolute;
+  inset: 0;
+}
+
+.reel-fade,
+.reel-tags {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.reel-fade {
+  opacity: 1;
+  background: var(--sky);
+}
+
+.reel-tags {
+  overflow: hidden;
+}
+
+.reel-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 10px 4px;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 3px 0 rgba(44, 42, 61, 0.14);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: default;
+  will-change: transform, opacity;
+}
+
+.reel-tag::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  bottom: -5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.reel-tag span {
+  display: none;
+  margin-left: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.reel-tag:hover {
+  background: #fff;
+  box-shadow: 0 3px 0 rgba(44, 42, 61, 0.14), 0 0 0 2px var(--green);
+}
+
+.reel-tag:hover span {
+  display: inline;
+}
+
+.reel-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 250, 240, 0.35);
+}
+
+.reel-progress div {
+  height: 100%;
+  background: var(--green);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+@media (max-width: 760px) {
+  .login {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(300px, 46dvh) auto;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .login-stage {
+    order: -1;
+  }
+
+  .login-panel {
+    border-top: 3px solid var(--edge);
+    border-right: 0;
+    overflow: visible;
+  }
+
+  .login-form {
+    margin-block: 0;
+  }
+
+  .reel-tag {
+    font-size: 13px;
+  }
 }
 
 /* ---------- Small screens ---------- */
