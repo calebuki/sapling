@@ -3489,9 +3489,114 @@ button:disabled {
 }
 
 .hub-hero {
+  position: relative;
   display: grid;
   gap: 12px;
   padding: 36px 0 28px;
+}
+
+/* The mascot stands in the open sky to the right of the welcome. */
+.sapling-mascot {
+  position: absolute;
+  top: 8px;
+  right: clamp(24px, 8%, 120px);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.sapling-mascot-bubble {
+  position: relative;
+  padding: 6px 14px 7px;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.95);
+  box-shadow: 0 3px 0 var(--edge);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sapling-mascot-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sapling-mascot-stage {
+  position: relative;
+  width: 190px;
+  height: 212px;
+}
+
+.sapling-mascot-sprite,
+.sapling-mascot-3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.sapling-mascot-sprite {
+  animation: mascot-bob 2.4s steps(4, jump-none) infinite alternate;
+}
+
+.sapling-mascot.is-3d .sapling-mascot-sprite {
+  display: none;
+}
+
+.sapling-mascot.is-waving .sapling-mascot-sprite {
+  animation: mascot-wave 1.8s steps(12, jump-none);
+}
+
+/* The pop lasts as long as a wave, so its end also ends the wave. */
+.sapling-mascot.is-waving .sapling-mascot-bubble {
+  animation: mascot-pop 1.8s ease-out;
+}
+
+@keyframes mascot-bob {
+  to {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes mascot-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  20%,
+  60% {
+    transform: translateY(-12px);
+  }
+  40%,
+  80% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes mascot-pop {
+  0% {
+    transform: scale(0.85);
+  }
+  17%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 1020px) {
+  .sapling-mascot {
+    display: none;
+  }
 }
 
 .hub-hero h1 {

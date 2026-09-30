@@ -13,6 +13,7 @@ import type { LearningOverview } from "@/lib/repositories/types";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
 import { IslandArt } from "./island-art";
+import { SaplingMascot } from "./sapling-mascot";
 
 // Home: every island, how far along each language is, and a way back in.
 
@@ -26,6 +27,9 @@ function savesFor(learnerId: string) {
   }
   return cachedSaves.saves;
 }
+
+// The mascot says hello in the language you were last learning.
+const HELLO: Record<TargetLanguageCode, string> = { sv: "Hej", de: "Hallo", da: "Hej" };
 
 type Status = { kind: "loading" } | { kind: "ready"; overview: LearningOverview } | { kind: "error" } | { kind: "signed-out" };
 
@@ -83,6 +87,7 @@ export function Hub({ learnerId }: { learnerId: string | null }) {
       </header>
 
       <section className="hub-hero">
+        <SaplingMascot greeting={`${HELLO[last ?? "sv"]}${name ? `, ${name}` : ""}!`} lang={last ?? "sv"} />
         <h1>{name ? `Welcome back, ${name}.` : "Learn a language on an island."}</h1>
         <p>
           Each island speaks one language. Walk around, meet the people who live there, and learn by talking with them, from
