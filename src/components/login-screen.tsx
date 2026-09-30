@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { ArrowRight, LoaderCircle, Sprout } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { islandMeta } from "@/content/meta";
-import { getTargetLanguage } from "@/lib/learning/languages";
 import { createClient } from "@/lib/supabase/client";
 
-// The 3D reel loads after the form so signing in is never waiting on WebGL.
-const SceneReel = dynamic(() => import("./login/scene-reel").then((m) => m.SceneReel), { ssr: false });
+// The islands need WebGL, so the scene only renders on the client.
+const IslandStage = dynamic(() => import("./login/island-stage"), {
+  ssr: false,
+  loading: () => <div className="login-stage" />,
+});
+
+const ISLANDS = [
+  { name: "Lilla Ö", language: "Swedish", color: "#3f7fd1" },
+  { name: "Tannenau", language: "German", color: "#2f7d4f" },
+  { name: "Coming soon", language: "Danish", color: "#c8102e" },
+];
 
 export function LoginScreen() {
   const router = useRouter();
@@ -50,19 +58,26 @@ export function LoginScreen() {
 
   const signIn = mode === "sign-in";
   return (
-    <main className="login">
+    <main className="login-page">
       <aside className="login-panel">
-        <span className="login-logo">
+        <Link className="login-logo" href="/">
           <Sprout size={26} aria-hidden="true" /> Sapling
-        </span>
-        <form className="login-form" onSubmit={authenticate}>
+        </Link>
+        <form className="login-card" onSubmit={authenticate}>
           <h1>{signIn ? "Welcome back!" : "Create an account"}</h1>
           <p className="login-lede">
             {signIn ? "Sign in to pick up where you left off on the islands." : "Make an account to keep your progress on every island."}
           </p>
           <label>
             Email
-            <input autoComplete="email" onChange={(e) => setEmail(e.target.value)} required type="email" value={email} />
+            <input
+              autoComplete="email"
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              type="email"
+              value={email}
+            />
           </label>
           <label>
             Password
@@ -70,6 +85,7 @@ export function LoginScreen() {
               autoComplete={signIn ? "current-password" : "new-password"}
               minLength={6}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
               required
               type="password"
               value={password}
@@ -93,18 +109,18 @@ export function LoginScreen() {
             {signIn ? "Create an account" : "Back to sign in"}
           </button>
         </form>
-        <ul className="login-islands" aria-label="Islands">
-          {islandMeta.map((meta) => (
-            <li key={meta.code}>
-              <span className="login-swatch" style={{ background: meta.accent }} />
-              <b>{meta.island}</b> · {getTargetLanguage(meta.code).name}
+        <ul aria-label="Islands" className="login-islands">
+          {ISLANDS.map((island) => (
+            <li key={island.language}>
+              <span className="login-swatch" style={{ background: island.color }} />
+              <span>
+                <b>{island.name}</b> · {island.language}
+              </span>
             </li>
           ))}
         </ul>
       </aside>
-      <section className="login-stage" aria-hidden="true">
-        <SceneReel />
-      </section>
+      <IslandStage />
     </main>
   );
 }
