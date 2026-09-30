@@ -52,7 +52,7 @@ export type IslandPack = {
   cafe: CafeConfig | null;
   discoveries: Discovery[];
   world: World;
-  scenery: "lilla-o" | "tannenau";
+  scenery: "lilla-o" | "tannenau" | "cat-ba";
   // How the island looks beyond its buildings: sea or lake colours, and the
   // mix of trees and flowers it grows.
   theme?: { fog: string; water: { shallow: string; mid: string; deep: string } };

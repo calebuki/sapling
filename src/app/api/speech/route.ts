@@ -6,7 +6,7 @@ import { speechModel } from "@/lib/ai-models";
 import { hasSupabase } from "@/lib/env";
 import { isNeuralVoice } from "@/lib/game/voices";
 import { supportedLanguageCodes } from "@/lib/learning/languages";
-import { clipPath, publicClipUrl, SPEECH_BUCKET } from "@/lib/speech/clips";
+import { CLIP_VERSION, clipPath, clipText, publicClipUrl, SPEECH_BUCKET } from "@/lib/speech/clips";
 import { speechDirection } from "@/lib/speech/direction";
 import { wavToMp3 } from "@/lib/speech/mp3";
 import { createClient } from "@/lib/supabase/server";
@@ -24,11 +24,14 @@ const inputSchema = z.object({
 });
 
 
-// The provider refusing us (bad key, no credits) won't fix itself on the next
-// line, so tell the game to stop asking and use device voices instead.
+// The provider refusing us (bad key, no credits, the day's quota spent) won't
+// fix itself on the next line, so tell the game to stop asking and use its
+// fallback voices instead. A per-minute limit will, so that one is left out.
 function refusedByProvider(error: unknown) {
   const cause = RetryError.isInstance(error) ? error.lastError : error;
-  return APICallError.isInstance(cause) && [401, 402, 403].includes(cause.statusCode ?? 0);
+  if (!APICallError.isInstance(cause)) return false;
+  if ([401, 402, 403].includes(cause.statusCode ?? 0)) return true;
+  return cause.statusCode === 429 && /per_day|PerDay/.test(`${cause.message} ${cause.responseBody ?? ""}`);
 }
 
 export const maxDuration = 30;
@@ -74,7 +77,20 @@ export async function GET(request: Request) {
           .from(SPEECH_BUCKET)
           .upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
         // Two players asking for a new line at once both make it; the first one is kept.
-        if (error && !/exists|duplicate/i.test(error.message)) console.error("speech clip upload failed", path, error.message);
+        if (error && !/exists|duplicate/i.test(error.message)) {
+          console.error("speech clip upload failed", path, error.message);
+          return;
+        }
+        // So the line shows up in voice review, even one only an AI reply says.
+        const { error: recordError } = await supabase.rpc("record_speech_clip", {
+          p_path: path,
+          p_language_code: language,
+          p_voice: voice,
+          p_slow: s === "1",
+          p_text: clipText(text),
+          p_version: CLIP_VERSION,
+        });
+        if (recordError) console.error("speech clip record failed", path, recordError.message);
       });
     }
     return new Response(new Uint8Array(mp3), {

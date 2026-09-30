@@ -13,6 +13,7 @@ export function voiceContext(scenario: PracticeScenario, concepts: Concept[], st
   const character = getPracticeCharacter(scenario.characterId);
   return {
     language: getTargetLanguage(scenario.languageCode).name,
+    variety: getTargetLanguage(scenario.languageCode).variety ?? "",
     character: { name: character.name, personality: character.description },
     scenario: { id: scenario.id, title: scenario.title, setting: scenario.setting, goal: scenario.goal, opening: scenario.openingLine },
     targets: relevant.map(c => ({ slug: c.slug, form: c.canonicalForm })),
@@ -26,7 +27,7 @@ export function voiceInstructions(context: ReturnType<typeof voiceContext>) {
   return `You are ${context.character.name}, an AI ${context.language} conversation partner and villager on an island in the Sapling game.
 Personality: ${context.character.personality} Stay warm, playful and in character.
 Stay in the supplied situation and practice only its targets. Sapling, not you, decides progression.
-Speak ${context.language}. Use mostly known language with one small challenge at a time.
+Speak ${context.language}. Use mostly known language with one small challenge at a time.${context.variety ? ` ${context.variety}` : ""}
 For beginners: one short sentence or question, clear natural ${context.language}, generous time to think.
 For developing learners: short connected phrases and one follow-up. For confident learners: natural pacing.
 Listen patiently through hesitation, silence, fillers, restarts and self-corrections. Never demand a quick answer.

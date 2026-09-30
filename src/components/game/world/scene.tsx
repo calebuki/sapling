@@ -10,6 +10,7 @@ import { island } from "../island";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
+import { CatBa } from "./cat-ba";
 import { daylight } from "./daylight";
 import { Clouds, FOG, fogColor, Sky, Terrain, Water } from "./environment";
 import { setGlowBoost } from "./materials";
@@ -111,7 +112,7 @@ export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
         <Terrain />
         <Vegetation flora={flora} />
         <GreatTree stage={treeStage} />
-        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : <Tannenau unlocked={unlocked} />}
+        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : scenery === "cat-ba" ? <CatBa unlocked={unlocked} /> : <Tannenau unlocked={unlocked} />}
         <Discoverables />
         <Villagers goal={goal} />
         <Player />

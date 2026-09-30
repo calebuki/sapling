@@ -1,6 +1,6 @@
 import type { LessonExercise } from "@/lib/learning/course";
 import { getTargetLanguage, type TargetLanguageCode } from "@/lib/learning/languages";
-import { foldsFor, normalizeText, withoutArticle } from "@/lib/learning/text";
+import { foldsFor, normalizeText, withoutArticle, wrongTones } from "@/lib/learning/text";
 import { mulberry32 } from "./world";
 
 export function personalize(text: string, name: string | null) {
@@ -64,9 +64,11 @@ export function checkAnswer(answer: string, expected: string, code: TargetLangua
   if (!a) return "wrong";
   if (a === e) return "exact";
   const folds = foldsFor(code);
-  if (folds.some((fold) => fold(a) === fold(e))) return "accent";
-  if (e.length >= 6 && folds.some((fold) => levenshtein(fold(a), fold(e)) <= (e.length > 16 ? 2 : 1))) return "typo";
+  // A wrong Vietnamese tone is a different word, never a spelling slip.
+  const toned = !wrongTones(a, e, code);
+  if (toned && folds.some((fold) => fold(a) === fold(e))) return "accent";
+  if (toned && e.length >= 6 && folds.some((fold) => levenshtein(fold(a), fold(e)) <= (e.length > 16 ? 2 : 1))) return "typo";
   const bare = withoutArticle(e, code);
-  if (bare && folds.some((fold) => fold(a) === fold(bare))) return "article";
+  if (bare && !wrongTones(a, bare, code) && folds.some((fold) => fold(a) === fold(bare))) return "article";
   return "wrong";
 }

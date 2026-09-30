@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import { createPortal } from "react-dom";
 import type { Line } from "@/lib/game/line";
 import { getTargetLanguage } from "@/lib/learning/languages";
+import { wordParts } from "@/lib/game/glossary";
 import { normalizeWord } from "@/lib/learning/text";
 import { island } from "../island";
 
@@ -66,8 +67,6 @@ function hide(event?: { pointerType?: string }) {
   hideTimer = window.setTimeout(() => setTip(null), event?.pointerType === "touch" ? 2200 : 60);
 }
 
-const WORD = /(\p{L}[\p{L}\p{N}]*)/u;
-
 // Target-language text whose every word shows its English on hover.
 export function Glossed({
   text,
@@ -80,7 +79,7 @@ export function Glossed({
   as?: ElementType;
   className?: string;
 }) {
-  const parts = text.split(WORD);
+  const parts = wordParts(text, island().code, (word) => glossFor(word) !== null);
   const Tag = (as ?? "span") as "span";
   return (
     <Tag className={`tl ${className ?? ""}`} lang={getTargetLanguage(island().code).locale}>

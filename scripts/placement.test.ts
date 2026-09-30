@@ -62,6 +62,30 @@ test("answer checking forgives keyboard accents, single typos and a missing arti
   assert.ok(tiles.length >= 5);
 });
 
+test("Vietnamese forgives missing marks but never a wrong tone", () => {
+  assert.equal(checkAnswer("Cảm ơn!", "Cảm ơn!", "vi"), "exact");
+  // No marks at all, or only the vowel shapes, pass with the spelling shown.
+  assert.equal(checkAnswer("cam on", "Cảm ơn!", "vi"), "accent");
+  assert.equal(checkAnswer("cam ơn", "Cảm ơn!", "vi"), "accent");
+  assert.equal(checkAnswer("xin chao", "Xin chào!", "vi"), "accent");
+  // Right tones on bare vowels still count.
+  assert.equal(checkAnswer("cảm on", "Cảm ơn!", "vi"), "accent");
+  // A wrong or missing tone once tones are typed is a different word.
+  assert.equal(checkAnswer("cám ơn", "Cảm ơn!", "vi"), "wrong");
+  assert.equal(checkAnswer("mà", "má", "vi"), "wrong");
+  assert.equal(checkAnswer("toi khoe cam ơn ban", "Tôi khỏe, cảm ơn bạn.", "vi"), "accent");
+  assert.equal(checkAnswer("tôi khỏe cảm ơn ban", "Tôi khỏe, cảm ơn bạn.", "vi"), "wrong");
+  // The older tone placement (khoẻ for khỏe) is the same word, so it passes.
+  assert.equal(checkAnswer("tôi khoẻ cảm ơn", "Tôi khỏe, cảm ơn.", "vi"), "accent");
+  // Classifiers can be left off like articles.
+  assert.equal(checkAnswer("xoai", "quả xoài", "vi"), "article");
+  // Accepted-answer patterns work with or without tones, but not wrong ones.
+  const intro = ["^(tôi tên là|tên tôi là) \\p{L}+"];
+  assert.ok(acceptsAnswer(intro, "Tôi tên là Kim.", "vi"));
+  assert.ok(acceptsAnswer(intro, "toi ten la Kim", "vi"));
+  assert.ok(!acceptsAnswer(intro, "tối tên là Kim", "vi"));
+});
+
 test("Lilla Ö's scenes react to what the learner actually said", () => {
   for (const item of course.listenSpeakItems.filter((i) => i.conceptSlug === "jag-heter")) assert.ok(nameIn(item.text, sceneExtras), item.text);
   const maja = scenes.elin["jag-heter"][0];

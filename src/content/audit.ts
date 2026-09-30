@@ -1,3 +1,4 @@
+import { wordParts } from "@/lib/game/glossary";
 import type { IslandPack } from "./types";
 
 // Content checks shared by the tests and the authoring report
@@ -63,12 +64,12 @@ export function extraText(pack: IslandPack) {
   return texts;
 }
 
-const WORD = /\p{L}[\p{L}\p{N}]*/gu;
-
 export function missingGlosses(pack: IslandPack, texts: string[], ignore: readonly string[] = ["Kim"]) {
   const missing = new Map<string, number>();
+  const knows = (word: string) => Boolean(pack.glossary.lookup(word));
   for (const text of texts) {
-    for (const [word] of text.matchAll(WORD)) {
+    // Placeholders ({name}, {n}) are filled in at runtime.
+    for (const word of wordParts(text.replace(/\{\w+\}/g, ""), pack.code, knows).filter((_, i) => i % 2 === 1)) {
       if (!ignore.includes(word) && !pack.glossary.lookup(word)) missing.set(word, (missing.get(word) ?? 0) + 1);
     }
   }

@@ -41,6 +41,10 @@ type LearnerConceptStateRow = {
   updated_at: string;
 };
 
+export type VoiceLineStatus = "unreviewed" | "approved" | "rejected" | "queued";
+export type VoiceProvider = "gemini" | "openai";
+export type VoiceJobReason = "rejected" | "requested" | "generate";
+
 export interface Database {
   public: {
     Tables: {
@@ -311,6 +315,91 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      voice_reviewers: {
+        Row: { user_id: string; added_at: string };
+        Insert: { user_id: string; added_at?: string };
+        Update: Partial<Database["public"]["Tables"]["voice_reviewers"]["Insert"]>;
+        Relationships: [];
+      };
+      voice_lines: {
+        Row: {
+          id: string;
+          path: string;
+          language_code: string;
+          voice: string;
+          slow: boolean;
+          text: string;
+          en: string | null;
+          word_count: number;
+          speaker: string | null;
+          sources: string[];
+          units: string[];
+          level: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | null;
+          in_catalog: boolean;
+          has_audio: boolean;
+          provider: VoiceProvider;
+          take: number;
+          status: VoiceLineStatus;
+          note: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          audio_updated_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          path: string;
+          language_code: string;
+          voice: string;
+          slow?: boolean;
+          text: string;
+          en?: string | null;
+          speaker?: string | null;
+          sources?: string[];
+          units?: string[];
+          level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | null;
+          in_catalog?: boolean;
+          has_audio?: boolean;
+          provider?: VoiceProvider;
+          take?: number;
+          status?: VoiceLineStatus;
+          note?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          audio_updated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["voice_lines"]["Insert"]>;
+        Relationships: [];
+      };
+      voice_line_jobs: {
+        Row: {
+          id: number;
+          line_id: string;
+          provider: VoiceProvider;
+          direction: string | null;
+          reason: VoiceJobReason;
+          status: "queued" | "running" | "done" | "failed" | "cancelled";
+          error: string | null;
+          requested_by: string | null;
+          created_at: string;
+          started_at: string | null;
+          finished_at: string | null;
+        };
+        Insert: {
+          line_id: string;
+          provider?: VoiceProvider;
+          direction?: string | null;
+          reason?: VoiceJobReason;
+          status?: "queued" | "running" | "done" | "failed" | "cancelled";
+          error?: string | null;
+          requested_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["voice_line_jobs"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -426,6 +515,59 @@ export interface Database {
           p_evidence: Json;
         };
         Returns: number;
+      };
+      is_voice_reviewer: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      review_voice_lines: {
+        Args: {
+          p_ids: string[];
+          p_status: VoiceLineStatus;
+          p_note?: string | null;
+          p_provider?: VoiceProvider;
+          p_direction?: string | null;
+        };
+        Returns: number;
+      };
+      retry_voice_line_jobs: {
+        Args: { p_ids: number[] };
+        Returns: number;
+      };
+      claim_voice_line_job: {
+        Args: Record<string, never>;
+        Returns: Array<{
+          job_id: number;
+          provider: VoiceProvider;
+          direction: string | null;
+          line_id: string;
+          path: string;
+          language_code: string;
+          voice: string;
+          slow: boolean;
+          text: string;
+          take: number;
+          has_audio: boolean;
+        }>;
+      };
+      finish_voice_line_job: {
+        Args: { p_job_id: number; p_error?: string | null; p_requeue?: boolean };
+        Returns: undefined;
+      };
+      record_speech_clip: {
+        Args: {
+          p_path: string;
+          p_language_code: string;
+          p_voice: string;
+          p_slow: boolean;
+          p_text: string;
+          p_version: string;
+        };
+        Returns: undefined;
+      };
+      sync_voice_lines: {
+        Args: { p_language_code: string; p_lines: Json };
+        Returns: { added: number; changed: number; dropped: number; audio: number };
       };
     };
     Enums: Record<string, never>;

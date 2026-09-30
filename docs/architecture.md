@@ -22,7 +22,7 @@ The learner-facing product has two primary areas:
 Learning happens on islands: one small explorable village per language, whose
 villagers teach the course and hold the conversations. The hub at `/` lists
 every island with the learner's progress; each island lives at its language
-code (`/sv` Lilla Ö, `/de` Tannenau). Every table and route keeps the
+code (`/sv` Lilla Ö, `/de` Tannenau, `/vi` Cát Bà). Every table and route keeps the
 `user_id` and `language_code` boundaries, so a new language is new content,
 not new code.
 
@@ -124,6 +124,14 @@ without a gloss, and the island tests run the same checks for every pack.
 
 German and the Swedish A2 units have not yet been reviewed by a native speaker.
 
+Cát Bà teaches Northern (Hanoi) Vietnamese, the standard variety and the one
+whose six tones match the spelling; its words, voice direction and AI prompts
+all keep to Northern forms (bố, bát, cốc, nghìn, quả). Vietnamese answers typed
+without tone marks pass like a missing å, but once a learner types tones they
+must all be right, since a tone changes the word. Words written as several
+syllables ("cà phê") gloss and hover as one word. Only A1 exists so far, and it
+has not been reviewed by a native speaker.
+
 ### Speech
 
 Villagers speak with Gemini neural voices through `/api/speech`. The
@@ -132,6 +140,18 @@ its first request. Recorded clips exist only for the original Swedish and
 Danish lessons, listed in `public/audio/*/manifest.json`. If the provider
 refuses (bad key or no credits), the route answers 503 and the game switches to
 device voices for the rest of the visit.
+
+Every line lives in `voice_lines` with its words, English, speaker, units and
+CEFR level, so it can be reviewed at `/dev/voices` (reviewers in
+`voice_reviewers` only; everyone else gets a 404). **Sync** lists everything
+the islands say (`src/lib/speech/catalog.ts`, which the pre-generation script
+also uses); `/api/speech` records runtime-only lines such as AI replies when it
+stores them. Lines with no clip yet can be generated there: queueing them
+(`voice_line_jobs`) makes their first clip with Gemini or OpenAI, in the order
+the reviewer sees them, and sends each back for review. Rejecting a line queues
+a remake the same way; the new take replaces the clip in the bucket and the old
+one is kept under `history/`. Everything runs as the reviewer, through their
+session and reviewer-only storage policies, so no secret key is involved.
 
 ## Data model
 

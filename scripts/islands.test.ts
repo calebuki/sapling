@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { coreText, extraText, missingGlosses } from "../src/content/audit";
 import { island as de } from "../src/content/de";
 import { island as sv } from "../src/content/sv";
+import { island as vi } from "../src/content/vi";
 import type { IslandPack } from "../src/content/types";
 import { gatedSlugs, pendingTip } from "../src/lib/game/grammar";
 import { itemsIn, mixUp } from "../src/lib/game/cafe";
@@ -16,7 +17,7 @@ import type { Concept, LearnerConceptState } from "../src/types/learning";
 
 // Every island must hold together the same way: its course, its people, its
 // words and its ground. These run once per island.
-const islands: IslandPack[] = [sv, de];
+const islands: IslandPack[] = [sv, de, vi];
 
 function concepts(pack: IslandPack): Concept[] {
   return pack.course.concepts.map((seed, i) => ({

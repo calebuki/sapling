@@ -10,17 +10,19 @@ import { runtime } from "../store";
 import { sound } from "./sfx";
 
 // Every line is spoken by a natural neural voice from /api/speech, one voice
-// per villager. If that is unavailable: the recorded course clip, the device's
-// voice for the island's language, the Azure/OpenAI neural fallback, and
-// finally the browser's default voice. Each source reports whether it actually
-// started so a silent failure moves on to the next one.
+// per villager. If that is unavailable: the recorded course clip, OpenAI's
+// neural voice, the device's voice for the island's language, and finally the
+// browser's default voice. Each source reports whether it actually started so
+// a silent failure moves on to the next one.
 
 // `gender` says how a speaker without a voice of their own should sound;
 // without it, a low pitch means a man.
 export type SpeakOptions = { clipId?: string; slow?: boolean; who?: VillagerId | "player"; pitch?: number; gender?: VoiceGender };
 
 let neuralAvailable = true;
-const neuralCache = new Map<string, Promise<string | null>>();
+let openAiAvailable = true;
+// `generates` is false for lookups that only check the shared bucket.
+const neuralCache = new Map<string, { url: Promise<string | null>; generates: boolean }>();
 
 function locale() {
   return getTargetLanguage(island().code).locale;
@@ -33,11 +35,16 @@ function voiceFor({ who, pitch = 1, gender }: Pick<SpeakOptions, "who" | "pitch"
   return villager?.voice ?? passerVoices[gender ?? (pitch < 1 ? "man" : "woman")];
 }
 
-function neuralClipUrl(text: string, voice: string, slow: boolean) {
+// Gemini allows only so many new lines a day, so only lines actually spoken
+// may generate one; prefetching just looks in the bucket.
+function neuralClipUrl(text: string, voice: string, slow: boolean, generate: boolean): Promise<string | null> {
   const code = island().code;
   const key = `${code}|${voice}|${slow ? 1 : 0}|${text}`;
   const cached = neuralCache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    // A bucket-only lookup found nothing; a spoken line may still make it.
+    return generate && !cached.generates ? cached.url.then((url) => url ?? neuralClipUrl(text, voice, slow, true)) : cached.url;
+  }
   const query = new URLSearchParams({ l: code, t: text, v: voice, s: slow ? "1" : "0" });
   const pending = (async () => {
     // Every line anyone has heard before is already in the shared bucket;
@@ -48,7 +55,7 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
       const response = await fetch(stored).catch(() => null);
       if (response?.ok) return URL.createObjectURL(await response.blob());
     }
-    if (!neuralAvailable) throw new Error("neural speech unavailable");
+    if (!generate || !neuralAvailable) throw new Error("neural speech unavailable");
     const response = await fetch(`/api/speech?${query}`);
     if (response.status === 503) neuralAvailable = false;
     if (!response.ok) throw new Error(String(response.status));
@@ -57,11 +64,11 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
     neuralCache.delete(key);
     return null;
   });
-  neuralCache.set(key, pending);
+  neuralCache.set(key, { url: pending, generates: generate });
   if (neuralCache.size > SERVER_CACHE_LIMIT) {
     const [oldestKey, oldest] = neuralCache.entries().next().value!;
     neuralCache.delete(oldestKey);
-    void oldest.then((url) => url && URL.revokeObjectURL(url));
+    void oldest.url.then((url) => url && URL.revokeObjectURL(url));
   }
   return pending;
 }
@@ -69,7 +76,7 @@ function neuralClipUrl(text: string, voice: string, slow: boolean) {
 /** Warm the cache for lines that are about to be spoken. */
 export function prefetchSpeech(text: string, options: Omit<SpeakOptions, "clipId"> = {}) {
   if (!text.trim()) return;
-  void neuralClipUrl(text.trim(), voiceFor(options), Boolean(options.slow));
+  void neuralClipUrl(text.trim(), voiceFor(options), Boolean(options.slow), false);
 }
 
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
@@ -160,15 +167,15 @@ export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
     async () => {
       if (!text.trim()) return false;
       // Slow lines are generated slowly rather than played back slowed down.
-      const url = await neuralClipUrl(text.trim(), voice, slow);
+      const url = await neuralClipUrl(text.trim(), voice, slow, true);
       return id === generation ? playUrl(url, false) : true;
     },
     () => playUrl(options.clipId ? getSpeechAudioUrl(island().code, options.clipId) : null, slow),
-    () => speakOnDevice(text, { slow, pitch, gender, anyVoice: false }),
     async () => {
-      const url = await serverSpeechUrl(text, pitch, gender);
+      const url = await serverSpeechUrl(text, gender);
       return id === generation ? playUrl(url, slow) : true;
     },
+    () => speakOnDevice(text, { slow, pitch, gender, anyVoice: false }),
     () => speakOnDevice(text, { slow, pitch, gender, anyVoice: true }),
   ];
   return (async () => {
@@ -260,18 +267,22 @@ function speakOnDevice(text: string, options: { slow: boolean; pitch: number; ge
   });
 }
 
-function serverSpeechUrl(text: string, pitch: number, gender: VoiceGender): Promise<string | null> {
+function serverSpeechUrl(text: string, gender: VoiceGender): Promise<string | null> {
+  if (!openAiAvailable) return Promise.resolve(null);
   const voice = gender === "man" ? "male" : "female";
   const language = island().code;
-  const key = `${language}\u0000${voice}\u0000${pitch}\u0000${text}`;
+  const key = `${language}\u0000${voice}\u0000${text}`;
   const cached = serverAudio.get(key);
   if (cached) return cached;
   const request = fetch("/api/speech/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ language, text, voice, pitch }),
+    body: JSON.stringify({ language, text, voice }),
   })
-    .then((response) => (response.ok ? response.blob() : null))
+    .then((response) => {
+      if (response.status === 503) openAiAvailable = false;
+      return response.ok ? response.blob() : null;
+    })
     .then((blob) => (blob && blob.size > 0 ? URL.createObjectURL(blob) : null))
     .catch(() => null);
   serverAudio.set(key, request);

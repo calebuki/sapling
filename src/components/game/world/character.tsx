@@ -23,6 +23,7 @@ const g = {
   box: new THREE.BoxGeometry(1, 1, 1),
   cylinder: new THREE.CylinderGeometry(1, 1, 1, 10),
   sphere: new THREE.SphereGeometry(1, 8, 6),
+  cone: new THREE.ConeGeometry(1, 1, 12),
   face: new THREE.PlaneGeometry(1, 1),
 };
 
@@ -399,6 +400,24 @@ function Hat({ look }: { look: CharacterLook }) {
           ].map(([x, y, z], i) => (
             <mesh key={i} geometry={g.round} material={flat("#d42a2a")} position={[x, y, z]} scale={0.2} castShadow />
           ))}
+        </group>
+      );
+    // The Vietnamese nón lá: a wide cone of palm leaves with darker rims.
+    case "nonla":
+      return (
+        <group position={[0, 0.72, -0.02]} rotation-x={-0.06}>
+          <mesh geometry={g.cone} material={flat("#ead9a2")} position={[0, 0.22, 0]} scale={[0.82, 0.44, 0.82]} castShadow />
+          <mesh geometry={g.cylinder} material={flat("#c9b26e")} position={[0, 0.005, 0]} scale={[0.83, 0.02, 0.83]} />
+          <mesh geometry={g.cylinder} material={flat("#c9b26e")} position={[0, 0.16, 0]} scale={[0.53, 0.015, 0.53]} />
+        </group>
+      );
+    // The mũ cối, the pith helmet older men in the North still wear.
+    case "pith":
+      return (
+        <group position={[0, 0.72, -0.02]} rotation-x={-0.08}>
+          <mesh geometry={g.cylinder} material={flat(look.accent)} position={[0, 0.02, 0]} scale={[0.62, 0.04, 0.58]} castShadow />
+          <mesh geometry={g.sphere} material={flat(look.accent)} position={[0, 0.08, 0]} scale={[0.5, 0.34, 0.48]} castShadow />
+          <mesh geometry={g.sphere} material={flat("#5f7046")} position={[0, 0.41, 0]} scale={0.05} />
         </group>
       );
     default:

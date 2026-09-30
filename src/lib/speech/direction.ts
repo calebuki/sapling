@@ -13,6 +13,12 @@ const direction: Record<TargetLanguageCode, { everyday: string; slow: string }> 
       "You are a native German speaker from the Black Forest in southern Germany chatting with a friend in your village. Speak natural, relaxed, everyday standard German (Hochdeutsch) with a warm, friendly southern lilt and natural rhythm, not a heavy dialect. Never sound like you are reading aloud.",
     slow: "You are a friendly native German speaker helping a beginner. Speak slowly and clearly in standard German, pronouncing every word and ending fully with natural intonation, like a patient teacher, not a robot.",
   },
+  // Northern (Hanoi) Vietnamese, the accent whose six tones match the spelling.
+  vi: {
+    everyday:
+      "You are a native Vietnamese speaker from Hanoi chatting with a friend in a fishing village on Cát Bà island. Speak natural, relaxed, everyday Northern (Hanoi) Vietnamese with a warm tone and natural rhythm, keeping all six tones clear and distinct (including hỏi and ngã). Never use a Southern accent. Never sound like you are reading aloud.",
+    slow: "You are a friendly native Vietnamese speaker from Hanoi helping a beginner. Speak slowly and clearly in Northern (Hanoi) Vietnamese, giving every syllable its full, distinct tone, like a patient teacher, not a robot.",
+  },
   da: {
     everyday:
       "You are a native Danish speaker from Copenhagen chatting with a friend. Speak natural, relaxed, everyday Danish with warm intonation and natural rhythm. Never sound like you are reading aloud.",

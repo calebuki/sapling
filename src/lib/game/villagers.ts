@@ -12,7 +12,7 @@ export type CharacterLook = {
   shirt: string;
   pants: string;
   accent: string;
-  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut";
+  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut" | "nonla" | "pith";
   beard?: boolean;
   apron?: string;
   scale?: number;

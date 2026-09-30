@@ -29,7 +29,7 @@ function savesFor(learnerId: string) {
 }
 
 // The mascot says hello in the language you were last learning.
-const HELLO: Record<TargetLanguageCode, string> = { sv: "Hej", de: "Hallo", da: "Hej" };
+const HELLO: Record<TargetLanguageCode, string> = { sv: "Hej", de: "Hallo", vi: "Xin chào", da: "Hej" };
 
 type Status = { kind: "loading" } | { kind: "ready"; overview: LearningOverview } | { kind: "error" } | { kind: "signed-out" };
 

@@ -7,7 +7,7 @@ export type IslandMeta = {
   islandEn: string;
   blurb: string;
   // Colours for the island's postcard on the hub.
-  art: "lilla-o" | "tannenau" | "soon";
+  art: "lilla-o" | "tannenau" | "cat-ba" | "soon";
   accent: string;
   accentEdge: string;
 };
@@ -30,6 +30,15 @@ export const islandMeta: IslandMeta[] = [
     art: "tannenau",
     accent: "#2f7d4f",
     accentEdge: "#1f5a37",
+  },
+  {
+    code: "vi",
+    island: "Cát Bà",
+    islandEn: "Cat Ba Island",
+    blurb: "A fishing village on the edge of Hạ Long Bay, ringed by limestone pillars. Slurp phở at Bác Hùng's, haggle at the market and row out to the floating village.",
+    art: "cat-ba",
+    accent: "#c8412b",
+    accentEdge: "#8f2c1c",
   },
   {
     code: "da",

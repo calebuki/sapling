@@ -1,5 +1,5 @@
 import type { TargetLanguageCode } from "@/lib/learning/languages";
-import { capitalize, normalizeText } from "@/lib/learning/text";
+import { capitalize, normalizeText, untonedFold } from "@/lib/learning/text";
 import type { Line } from "./line";
 import type { VoiceGender } from "./voices";
 
@@ -86,7 +86,10 @@ export function pickVariant<T>(variants: readonly T[], key: string) {
 // Did the learner say it right in one of the other accepted ways?
 export function acceptsAnswer(patterns: readonly string[] | undefined, answer: string, code: TargetLanguageCode) {
   const text = normalizeText(answer, code);
-  return Boolean(text) && (patterns ?? []).some((p) => new RegExp(p, "u").test(text));
+  if (!text) return false;
+  // Vietnamese typed without tones is checked on bare letters.
+  const fold = untonedFold(text, code);
+  return (patterns ?? []).some((p) => new RegExp(p, "u").test(text) || (fold !== null && new RegExp(fold(p), "u").test(fold(text))));
 }
 
 // The name the learner introduced themselves with, if they did.

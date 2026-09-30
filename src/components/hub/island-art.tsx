@@ -197,6 +197,67 @@ function Tannenau() {
   );
 }
 
+// Limestone towers rising out of the bay: undercut at the water, green on top.
+function Karst({ x, w, h, shade = "#8e988f" }: { x: number; w: number; h: number; shade?: string }) {
+  return (
+    <g transform={`translate(${x} 116)`}>
+      <path d={`M${-w * 0.35} 0C${-w * 0.6} ${-h * 0.3} ${-w * 0.55} ${-h * 0.8} ${-w * 0.2} ${-h}C${w * 0.1} ${-h * 1.05} ${w * 0.5} ${-h * 0.85} ${w * 0.5} ${-h * 0.4}C${w * 0.5} ${-h * 0.15} ${w * 0.45} 0 ${w * 0.3} 0z`} fill={shade} />
+      <path d={`M${-w * 0.3} ${-h * 0.82}C${-w * 0.2} ${-h * 1.08} ${w * 0.3} ${-h * 1.02} ${w * 0.45} ${-h * 0.7}C${w * 0.1} ${-h * 0.78} ${-w * 0.1} ${-h * 0.7} ${-w * 0.3} ${-h * 0.82}z`} fill="#3f7a45" />
+    </g>
+  );
+}
+
+function CatBa() {
+  return (
+    <svg viewBox="0 0 320 200" aria-hidden="true">
+      <Sea deep="#1f6f6a" shallow="#4fae9c" sky="#b7d3cf" horizon="#eef1e6" />
+      <g opacity="0.55">
+        <Karst x={30} w={30} h={54} shade="#9fb0ab" />
+        <Karst x={70} w={22} h={40} shade="#9fb0ab" />
+        <Karst x={250} w={34} h={62} shade="#9fb0ab" />
+        <Karst x={292} w={24} h={44} shade="#9fb0ab" />
+      </g>
+      <Karst x={12} w={26} h={70} />
+      <Karst x={304} w={30} h={78} />
+      <Karst x={276} w={18} h={46} />
+      <path d="M50 136c18-30 70-46 118-44 54 2 98 20 110 44 6 12-30 22-116 22S40 150 50 136z" fill="#5f9c47" />
+      <path d="M50 136c-4 10 22 20 114 20s120-8 116-20c-4 8-38 14-116 14S54 146 50 136z" fill="#e8d7a4" />
+      <path d="M126 104c14-22 44-26 62-10" fill="#4f8f3a" />
+      <g transform="translate(112 130)">
+        <rect x="-8" y="-30" width="16" height="31" fill="#e9b949" />
+        <rect x="-10" y="-33" width="20" height="4" fill="#a4462f" />
+        <rect x="-6" y="-24" width="4" height="5" fill="#3f7d5a" />
+        <rect x="2" y="-24" width="4" height="5" fill="#3f7d5a" />
+        <rect x="-5" y="-12" width="10" height="12" fill="#ffcf8a" />
+      </g>
+      <g transform="translate(168 124)">
+        <rect x="-12" y="-14" width="24" height="15" fill="#e8c07a" />
+        <path d="M-17 -12L0 -24L17 -12z" fill="#a4462f" />
+        <path d="M-17 -12l-3-4M17 -12l3-4" stroke="#7e3322" strokeWidth="2" />
+        <rect x="-8" y="-12" width="2" height="13" fill="#b3261e" />
+        <rect x="6" y="-12" width="2" height="13" fill="#b3261e" />
+      </g>
+      <g transform="translate(220 128)">
+        <rect x="-1.5" y="-30" width="3" height="30" fill="#8a6a44" transform="rotate(12)" />
+        <path d="M6 -30c-8-6-18-4-22 2M6 -30c8-6 18-2 20 4M6 -30c-2-8-10-12-16-10M6 -30c4-8 12-10 16-6" stroke="#4f8f3a" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+      </g>
+      <rect x="150" y="142" width="6" height="30" fill="#8a6a44" />
+      <g transform="translate(184 170)">
+        <path d="M-22 -4h44l-6 8h-32z" fill="#6b4228" />
+        {[-12, 0, 11].map((x, i) => (
+          <path key={x} d={`M${x} -4v-${[22, 28, 16][i]}M${x} -${[22, 28, 16][i]}l${[10, 12, 8][i]} 4v${[15, 20, 11][i]}h-${[10, 12, 8][i]}z`} fill="#c8552b" stroke="#3b2616" strokeWidth="1" />
+        ))}
+      </g>
+      <g transform="translate(132 176)">
+        <ellipse rx="6" ry="3" fill="#b08a4f" />
+      </g>
+      <g transform="translate(270 34)">
+        <circle r="11" fill="#fff4c2" />
+      </g>
+    </svg>
+  );
+}
+
 function Soon() {
   return (
     <svg viewBox="0 0 320 200" aria-hidden="true">
@@ -212,5 +273,5 @@ function Soon() {
 }
 
 export function IslandArt({ art }: { art: IslandMeta["art"] }) {
-  return <PixelArt>{art === "lilla-o" ? <LillaO /> : art === "tannenau" ? <Tannenau /> : <Soon />}</PixelArt>;
+  return <PixelArt>{art === "lilla-o" ? <LillaO /> : art === "tannenau" ? <Tannenau /> : art === "cat-ba" ? <CatBa /> : <Soon />}</PixelArt>;
 }

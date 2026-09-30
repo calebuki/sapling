@@ -18,19 +18,13 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { APICallError, generateSpeech, RetryError } from "ai";
 
 import { loadIsland } from "../src/content/islands";
-import type { IslandPack } from "../src/content/types";
 import { speechModel } from "../src/lib/ai-models";
-import { expectedFor } from "../src/lib/game/lesson";
-import type { Line } from "../src/lib/game/line";
-import type { SceneBeat } from "../src/lib/game/scenes";
-import type { Villager } from "../src/lib/game/villagers";
-import { passerVoices, playerVoice } from "../src/lib/game/voices";
 import { isTargetLanguageCode, type TargetLanguageCode } from "../src/lib/learning/languages";
-import { clipPath, clipText, SPEECH_BUCKET } from "../src/lib/speech/clips";
+import { collectLines } from "../src/lib/speech/catalog";
+import { clipPath, SPEECH_BUCKET } from "../src/lib/speech/clips";
 import { speechDirection } from "../src/lib/speech/direction";
 import { wavToMp3 } from "../src/lib/speech/mp3";
 
-type Clip = { text: string; voice: string; slow: boolean; source: string; priority: number };
 type Bucket = ReturnType<SupabaseClient["storage"]["from"]>;
 
 const args = process.argv.slice(2);
@@ -44,133 +38,6 @@ const dryRun = flag("dry-run");
 const withSlow = flag("slow");
 const delaySeconds = option("delay", 7);
 const limit = option("limit", Infinity);
-
-// ---------- What the game says, and in whose voice ----------
-
-// Lines with the learner's own name differ per player, so they can't be made ahead.
-const personal = (text: string) => /Caleb|\{name\}|\{n\}/.test(text);
-
-function collect(island: IslandPack): Clip[] {
-  const clips = new Map<string, Clip>();
-  // Lines the neutral voice repeats (phrase book, replays) are heard least, so they go last.
-  const add = (text: string | undefined, voice: string, source: string, slow = false) => {
-    const t = text ? clipText(text) : "";
-    if (!t || personal(t)) return;
-    const key = `${voice}|${slow}|${t}`;
-    const priority = (slow ? 2 : 0) + (voice === passerVoices.woman && !/where|customer|scene|café cue|café reaction/.test(source) ? 1 : 0);
-    if (!clips.has(key)) clips.set(key, { text: t, voice, slow, source, priority });
-  };
-  const addLines = (lines: Line[] | undefined, voice: string, source: string) => lines?.forEach((l) => add(l.t, voice, source));
-
-  const villagers = new Map(island.villagers.map((v) => [v.id, v]));
-  const byName = new Map(island.villagers.map((v) => [v.name, v]));
-  const extras = island.sceneExtras;
-  const neutral = passerVoices.woman;
-  const teacherOf = (slug: string) => {
-    const unit = island.course.units.find((u) => u.slugs.includes(slug));
-    return unit ? villagers.get(unit.villager) : undefined;
-  };
-  // Same rules as voiceOf in scene-round.tsx.
-  const voiceOf = (name: string | undefined, villager: Villager, pitch?: number) => {
-    const other = name ? byName.get(name) : undefined;
-    if (other) return other.voice;
-    const gender = (name ? extras.speakers[name] : undefined) ?? ((pitch ?? villager.voicePitch) < 1 ? "man" : "woman");
-    return passerVoices[gender];
-  };
-  const beatVoice = (beat: SceneBeat, villager: Villager) => voiceOf(beat.speaker === "?" ? beat.guest : beat.speaker, villager, beat.pitch);
-  const addBeat = (beat: SceneBeat, villager: Villager, source: string) => {
-    const voice = beatVoice(beat, villager);
-    add(beat.cue.t, voice, `${source} cue`);
-    add(beat.reaction.t, voice, `${source} reaction`);
-    beat.branches?.forEach((b) => add(b.reaction.t, voice, `${source} reaction`));
-    if (beat.expect) {
-      // Said back by the villager in feedback, and by the neutral voice on "you can say".
-      add(beat.expect.t, villager.voice, `${source} answer`);
-      add(beat.expect.t, neutral, `${source} answer`);
-    }
-  };
-
-  // Dialogue.
-  const host = villagers.get(island.host);
-  if (host) addLines(island.script.intro, host.voice, "intro");
-  for (const v of island.villagers) {
-    addLines([...v.greetings, ...v.chatter, v.locked, v.teach, v.talk, ...v.goodbye], v.voice, `${v.id} dialogue`);
-  }
-
-  // Lesson phrases: the teacher says them, the phrase book and replays use the neutral voice.
-  for (const lesson of island.course.lessons) {
-    for (const exercise of lesson.exercises) {
-      const teacher = teacherOf(exercise.conceptSlug);
-      const text = expectedFor(exercise, null);
-      if (teacher) add(text, teacher.voice, "lesson phrase");
-      add(text, neutral, "lesson phrase");
-      if (withSlow) {
-        if (teacher) add(text, teacher.voice, "lesson phrase (slow)", true);
-        add(text, neutral, "lesson phrase (slow)", true);
-      }
-    }
-  }
-
-  // Listening items, and introductions in the voice of whoever introduces themselves.
-  for (const item of island.course.listenSpeakItems) {
-    const teacher = teacherOf(item.conceptSlug);
-    if (!teacher) continue;
-    add(item.text, teacher.voice, "listening");
-    const name = extras.guestNames.find((n) => item.text.includes(n));
-    if (name) add(item.text, voiceOf(name, teacher), "introduction");
-  }
-
-  // Scenes.
-  for (const [villagerId, bySlug] of Object.entries(island.scenes)) {
-    const villager = villagers.get(villagerId);
-    if (!villager) continue;
-    for (const beats of Object.values(bySlug)) beats.forEach((beat) => addBeat(beat, villager, `${villagerId} scene`));
-  }
-
-  // Drills.
-  extras.whereQuestions.forEach((q) => add(q.t, passerVoices.woman, "where question"));
-  extras.announcements.forEach((a) => add(a.t, passerVoices.man, "announcement"));
-  for (const [slug, sentences] of Object.entries(extras.whenSentences)) {
-    const teacher = teacherOf(slug);
-    if (teacher) sentences.forEach((s) => add(s.t, teacher.voice, "when sentence"));
-  }
-
-  // The café.
-  const cafe = island.cafe;
-  const barista = island.villagers.find((v) => v.round === "cafe");
-  if (cafe && barista) {
-    for (const item of cafe.menu) {
-      for (const line of [cafe.introduce(item), cafe.price(item), cafe.serve(item), cafe.checkOrder(item)]) add(line.t, barista.voice, "café");
-    }
-    addLines(Object.values(cafe.lines), barista.voice, "café");
-    for (const variants of Object.values(cafe.orderVariants)) {
-      variants.forEach((o) => {
-        add(o.t, barista.voice, "café order");
-        add(o.t, neutral, "café order");
-      });
-    }
-    cafe.trayOrders.forEach((o) => add(o.t, passerVoices.woman, "café customer"));
-    addBeat(cafe.orderExchange, barista, "café");
-    addBeat(cafe.billExchange, barista, "café");
-  }
-
-  // Grammar tips, read out by whoever teaches the unit.
-  for (const tip of island.grammar) {
-    const unit = island.course.units.find((u) => u.id === tip.unit);
-    const teacher = unit ? villagers.get(unit.villager) : undefined;
-    if (!teacher) continue;
-    tip.cards.forEach((card) => card.examples.forEach((e) => add(e.t.replace("→", ","), teacher.voice, "grammar")));
-    add(tip.check.answer, teacher.voice, "grammar");
-  }
-
-  // Things you find: you say them, the phrase book repeats them.
-  island.discoveries.forEach((d) => {
-    add(d.t, playerVoice, "discovery");
-    add(d.t, neutral, "discovery");
-  });
-
-  return [...clips.values()].sort((a, b) => a.priority - b.priority);
-}
 
 // ---------- Storage ----------
 
@@ -205,7 +72,7 @@ async function main() {
   const island = await loadIsland(code);
   if (!island) throw new Error(`No island for "${code}"`);
 
-  const clips = collect(island);
+  const clips = collectLines(island, { withSlow }).map((c) => ({ ...c, source: c.sources[0] }));
   const withPaths = await Promise.all(clips.map(async (c) => ({ ...c, path: (await clipPath({ language: code, ...c }))! })));
   const bySource: Record<string, number> = {};
   for (const c of withPaths) {

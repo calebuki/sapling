@@ -9,7 +9,7 @@ import type { TargetLanguageCode } from "@/lib/learning/languages";
 export const SPEECH_BUCKET = "speech";
 
 // Bump when the voice direction changes enough that old clips should be redone.
-const CLIP_VERSION = "gemini-1";
+export const CLIP_VERSION = "gemini-1";
 
 export type ClipSpec = { language: TargetLanguageCode; voice: string; slow: boolean; text: string };
 
@@ -29,4 +29,9 @@ export async function clipPath({ language, voice, slow, text }: ClipSpec): Promi
 
 export function publicClipUrl(path: string) {
   return publicEnv.supabaseUrl ? `${publicEnv.supabaseUrl}/storage/v1/object/public/${SPEECH_BUCKET}/${path}` : null;
+}
+
+// Earlier takes of a clip that review replaced, kept to compare against.
+export function previousTakePath(path: string, take: number) {
+  return `history/${path.replace(/\.mp3$/, "")}.take${take}.mp3`;
 }

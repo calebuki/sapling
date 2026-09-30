@@ -13,7 +13,9 @@ export type SpeechVoice =
   | "sv-SE-SofieNeural"
   | "sv-SE-MattiasNeural"
   | "de-DE-KatjaNeural"
-  | "de-DE-ConradNeural";
+  | "de-DE-ConradNeural"
+  | "vi-VN-HoaiMyNeural"
+  | "vi-VN-NamMinhNeural";
 
 export type FallbackPattern = {
   requiredPhrase: string;
