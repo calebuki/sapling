@@ -12,7 +12,7 @@ import { createLearningRepository } from "@/lib/repositories";
 import type { LearningOverview } from "@/lib/repositories/types";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
-import { PlayerPreview, WardrobeButton } from "@/components/wardrobe/hub-entry";
+import { PlayerPreview } from "@/components/wardrobe/hub-entry";
 import { loadWardrobe } from "@/components/wardrobe/store";
 import { Wardrobe } from "@/components/wardrobe/wardrobe";
 import { IslandArt } from "./island-art";
@@ -76,25 +76,22 @@ export function Hub({ learnerId }: { learnerId: string | null }) {
         <span className="hub-logo">
           <Sprout size={26} aria-hidden="true" /> Sapling
         </span>
-        <div className="hub-top-actions">
-          {learnerId ? <WardrobeButton onOpen={() => setWardrobeOpen(true)} /> : null}
-          {learnerId && hasSupabase ? (
-            <button
-              className="btn btn-quiet hub-account"
-              onClick={async () => {
-                await createClient().auth.signOut();
-                router.replace("/login");
-                router.refresh();
-              }}
-            >
-              <LogOut size={17} /> Sign out
-            </button>
-          ) : !learnerId ? (
-            <Link className="btn hub-account" href="/login">
-              <LogIn size={17} /> Sign in
-            </Link>
-          ) : null}
-        </div>
+        {learnerId && hasSupabase ? (
+          <button
+            className="btn btn-quiet hub-account"
+            onClick={async () => {
+              await createClient().auth.signOut();
+              router.replace("/login");
+              router.refresh();
+            }}
+          >
+            <LogOut size={17} /> Sign out
+          </button>
+        ) : !learnerId ? (
+          <Link className="btn hub-account" href="/login">
+            <LogIn size={17} /> Sign in
+          </Link>
+        ) : null}
       </header>
 
       <section className="hub-hero">

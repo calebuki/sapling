@@ -4236,14 +4236,25 @@ button:disabled {
   }
 }
 
-/* The player stands beside Sapling on the hub; click them to open the wardrobe. */
+/* The player stands at the left of the welcome; click them to open the wardrobe. */
+.hub-hero:has(.player-preview) {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 32px;
+  /* Room on the right for Sapling. */
+  padding-right: calc(clamp(24px, 8%, 120px) + 210px);
+}
+
+.hub-hero:has(.player-preview) > :not(.player-preview, .sapling-mascot) {
+  grid-column: 2;
+}
+
 .player-preview {
-  position: absolute;
-  top: 34px;
-  right: calc(clamp(24px, 8%, 120px) + 186px);
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  align-self: center;
   display: grid;
   justify-items: center;
-  gap: 2px;
+  gap: 4px;
   padding: 0;
   border: 0;
   background: none;
@@ -4251,8 +4262,8 @@ button:disabled {
 
 .player-preview-stage {
   position: relative;
-  width: 132px;
-  height: 178px;
+  width: 210px;
+  height: 284px;
   transition: transform 160ms ease;
 }
 
@@ -4264,45 +4275,46 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px 6px;
+  padding: 6px 14px 7px;
   border-radius: 999px;
   background: rgba(255, 250, 240, 0.95);
   box-shadow: 0 3px 0 var(--edge);
   font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .player-preview-label .wardrobe-dot {
   margin-left: 2px;
 }
 
-/* Leave room on the right for the two of them. */
-.hub-hero:has(.player-preview) h1,
-.hub-hero:has(.player-preview) p {
-  max-width: min(62ch, calc(100% - 440px));
-}
-
-.hub-hero:has(.player-preview) h1 {
-  max-width: min(18ch, calc(100% - 440px));
-}
-
+/* Sapling hides below this width, so the text can use the room. */
 @media (max-width: 1020px) {
-  .player-preview {
-    display: none;
+  .hub-hero:has(.player-preview) {
+    padding-right: 0;
   }
 
-  .hub-hero:has(.player-preview) h1,
-  .hub-hero:has(.player-preview) p {
-    max-width: 62ch;
-  }
-
-  .hub-hero:has(.player-preview) h1 {
-    max-width: 18ch;
+  .player-preview-stage {
+    width: 170px;
+    height: 230px;
   }
 }
 
-.hub-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+@media (max-width: 640px) {
+  .hub-hero:has(.player-preview) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-hero:has(.player-preview) > :not(.player-preview, .sapling-mascot) {
+    grid-column: 1;
+  }
+
+  .player-preview {
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .player-preview-stage {
+    width: 140px;
+    height: 190px;
+  }
 }
