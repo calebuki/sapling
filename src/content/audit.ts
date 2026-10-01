@@ -2,6 +2,7 @@ import { wordParts } from "@/lib/game/glossary";
 import { allClinicLines } from "@/lib/game/clinic";
 import { allClockLines } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
+import { allMarketLines } from "@/lib/game/market";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
@@ -77,6 +78,12 @@ export function coreText(pack: IslandPack) {
     texts.push(...allFerryLines(ferry).map((l) => l.t), ...Object.values(ferry.times).map((l) => l.t));
     for (const p of ferry.people) texts.push(p.name, ...p.decoys);
     texts.push(...[...ferry.countries, ...ferry.cities, ...ferry.languages].map((p) => p.name.t));
+  }
+  if (pack.market) {
+    const { market } = pack;
+    for (const value of Object.values(market.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
+    texts.push(...allMarketLines(market).map((l) => l.t));
+    texts.push(...[...market.produce, ...market.clothes, ...market.colours].map((p) => p.name.t));
   }
   return texts;
 }

@@ -3,6 +3,7 @@ import type { ClinicConfig } from "@/lib/game/clinic";
 import type { ClockConfig } from "@/lib/game/clock";
 import type { Discovery } from "@/lib/game/discoveries";
 import type { FerryConfig } from "@/lib/game/ferry";
+import type { MarketConfig } from "@/lib/game/market";
 import type { Glossary } from "@/lib/game/glossary";
 import type { HomeConfig } from "@/lib/game/home";
 import type { GrammarTip } from "@/lib/game/grammar";
@@ -62,6 +63,8 @@ export type IslandPack = {
   clock?: ClockConfig;
   // Checking passengers onto the ferry, if the island has it.
   ferry?: FerryConfig;
+  // Selling at the market stall, if the island has it.
+  market?: MarketConfig;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

@@ -8,6 +8,7 @@ import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
 import { allTimes, customerGender, requestVariant } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
+import { allPrices, clothesGender, type Payment } from "@/lib/game/market";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -263,6 +264,23 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     const own = new Set([ferry.askName.du.say.t, ferry.askName.Sie.say.t, ...Object.values(ferry.repairs).flatMap((r) => [r.say.du.t, r.say.Sie.t])]);
     for (const voice of [passerVoices.woman, passerVoices.man]) addLines([...shared.filter((l) => !own.has(l.t)), lines.pardon], voice, { ...where, speaker: "passenger" });
     addLines(shared.filter((l) => own.has(l.t)), playerVoice, { ...where, speaker: "player" });
+  }
+
+  // The market stall: customers order (in either voice), clothes shoppers in
+  // the voice their wish belongs to, the seller says the price.
+  const market = island.market;
+  const seller = market ? villagers.get(market.host) : undefined;
+  if (market && seller) {
+    const where = { source: "market job", unit: firstUnitOf(seller.id) };
+    const { lines } = market;
+    addLines([...lines.intro, lines.clothesIntro, lines.priceWrong, lines.words, lines.late, ...lines.done, lines.harder], seller.voice, where);
+    const customers: Line[] = [...lines.hello, lines.yes, lines.thatsAll, lines.wrongBasket, lines.notThat, lines.whatCosts, ...lines.thanks];
+    for (const p of market.produce) for (const n of p.by === "kilo" ? [1, 2, 4] : [1, 2, 3, 4, 5]) customers.push(market.order({ produce: p, n }, 0), market.order({ produce: p, n }, 1));
+    for (const item of market.clothes) customers.push(market.wrongSize(item, "small"), market.wrongSize(item, "large"), market.fits(item));
+    for (const payment of ["cash", "card"] as Payment[]) customers.push(market.pay(payment), market.wrongPay(payment));
+    for (const voice of [passerVoices.woman, passerVoices.man]) addLines(customers, voice, { ...where, speaker: "customer" });
+    for (const item of market.clothes) for (const colour of market.colours) add(market.ask(item, colour), passerVoices[clothesGender(item, colour)], { ...where, speaker: "customer" });
+    addLines([lines.anythingElse, ...allPrices(market).map((c) => market.price(c))], playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

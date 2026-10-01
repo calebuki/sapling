@@ -27,6 +27,7 @@ import { ShiftUI } from "./jobs/cafe-ui";
 import { ClinicUI } from "./jobs/clinic-ui";
 import { ClockUI } from "./jobs/clock-ui";
 import { FerryUI } from "./jobs/ferry-ui";
+import { MarketUI } from "./jobs/market-ui";
 import { HomeUI } from "./jobs/home-ui";
 import { Scene } from "./world/scene";
 import { WorldLabels } from "./world-labels";
@@ -178,7 +179,7 @@ function IslandGame() {
         quality={quality}
         job={phase === "job" ? job : null}
       />
-      {phase !== "job" ? <WorldLabels unlocked={unlocked} /> : job === "cafe" ? <ShiftUI /> : job === "home" ? <HomeUI /> : job === "clinic" ? <ClinicUI /> : job === "clock" ? <ClockUI /> : job === "ferry" ? <FerryUI /> : null}
+      {phase !== "job" ? <WorldLabels unlocked={unlocked} /> : job === "cafe" ? <ShiftUI /> : job === "home" ? <HomeUI /> : job === "clinic" ? <ClinicUI /> : job === "clock" ? <ClockUI /> : job === "ferry" ? <FerryUI /> : job === "market" ? <MarketUI /> : null}
       <Hud progress={progress} />
       {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} /> : null}
       <Toasts />

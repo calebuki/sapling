@@ -176,6 +176,14 @@ speak). "Wie bitte?", "Kannst du langsamer sprechen?" and "Wie schreibt man
 das?" are the buttons for hearing it again, slowly, or spelled; then a
 goodbye as they walk up the gangway.
 
+The sixth is **Marie's market stall** (German only): customers ask for fruit
+and vegetables by the piece or by the kilo ("Haben Sie Kirschen? Ein halbes
+Kilo, bitte."); you fill the basket from the crates and ask "Sonst noch
+etwas?" until they say that's all, then say the price on the till in words
+and take cash or card as they ask. From the third level some want clothes in
+a colour ("Ich suche einen roten Pullover."), and later what you hand over is
+"zu klein" or "zu groß" and you swap the size.
+
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
 which room is open.

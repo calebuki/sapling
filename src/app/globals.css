@@ -4764,6 +4764,52 @@ button:disabled {
   }
 }
 
+/* ---------- Marie's market stall ---------- */
+
+.market-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #f3ead6;
+  font-family: var(--font-display);
+}
+
+.market-chip i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.market-till {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: #2d3436;
+  color: #9fe8b0;
+}
+
+.market-till strong {
+  font-family: ui-monospace, monospace;
+  font-size: 1.6rem;
+  letter-spacing: 0.04em;
+}
+
+.market-till-name {
+  color: #dfe6e9;
+  font-size: 0.85rem;
+}
+
+.market-pay-button {
+  width: 64px;
+  height: 52px;
+  justify-content: center;
+}
+
 /* ---------- Greta's ferry ---------- */
 
 .ferry-time {

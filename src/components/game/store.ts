@@ -10,7 +10,7 @@ import type { TargetLanguageCode } from "@/lib/learning/languages";
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
 export type Phase = "title" | "arrival" | "explore" | "dialogue" | "job";
 // Mini-games played indoors with your own character: the café rush, Hilde's farmhouse.
-export type JobId = "cafe" | "home" | "clinic" | "clock" | "ferry";
+export type JobId = "cafe" | "home" | "clinic" | "clock" | "ferry" | "market";
 export type Overlay = null | "ordbok" | "menu" | "wardrobe";
 export type Toast = { id: number; kind: "word" | "level" | "info" | "friend" | "gift"; line: Line; detail?: Line };
 
