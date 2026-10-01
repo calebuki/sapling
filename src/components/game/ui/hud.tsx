@@ -17,7 +17,7 @@ export function Hud({ progress }: { progress: GameProgress }) {
   const introDone = useGame((s) => s.save.introDone);
   const discovered = useGame((s) => s.save.discovered);
   const { ui, discoveries } = useIsland();
-  if (phase === "title") return null;
+  if (phase === "title" || phase === "shift") return null;
 
   const goalVillager = progress.goal ? villagerById(progress.goal) : null;
   const goal = !introDone

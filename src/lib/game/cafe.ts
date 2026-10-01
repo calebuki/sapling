@@ -1,6 +1,7 @@
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { normalizeText } from "@/lib/learning/text";
 import type { Line } from "./line";
+import type { RushConfig } from "./rush";
 import type { SceneBeat } from "./scenes";
 
 // A café counter: items on the menu board, orders that land on your tray, and
@@ -42,6 +43,8 @@ export type CafeConfig = {
   checkOrder(item: CafeItem): Line;
   // One right way to point out the mix-up, then two wrong ones.
   fixOptions(want: CafeItem, got: CafeItem, decoy: CafeItem): [Line, Line, Line];
+  // The busy shift behind the counter, once the host lets you help.
+  rush?: RushConfig;
 };
 
 export function cafeItem(config: CafeConfig, slug: string) {

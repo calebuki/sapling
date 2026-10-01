@@ -7,6 +7,7 @@ import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postp
 import { ToneMappingMode } from "postprocessing";
 import type { VillagerId } from "@/lib/game/villagers";
 import { island } from "../island";
+import { CafeRoom } from "../shift/cafe-room";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
@@ -29,6 +30,8 @@ export type SceneProps = {
   goal: VillagerId | null;
   unlocked: Record<VillagerId, boolean>;
   quality: "high" | "low";
+  // A café shift swaps the island for the café's back room.
+  shift?: boolean;
 };
 
 // Lights, fog and the sky colour follow the player's time of day (see ./daylight).
@@ -90,8 +93,29 @@ function Lights() {
   );
 }
 
-export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
+// Everything outside: sky, water, the island, its people and you.
+function Island({ treeStage, goal, unlocked }: Pick<SceneProps, "treeStage" | "goal" | "unlocked">) {
   const { scenery, flora } = island();
+  return (
+    <>
+      <Sky />
+      <Clouds />
+      <Water />
+      <Terrain />
+      <Vegetation flora={flora} />
+      <GreatTree stage={treeStage} />
+      {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : scenery === "cat-ba" ? <CatBa unlocked={unlocked} /> : <Tannenau unlocked={unlocked} />}
+      <Discoverables />
+      <Villagers goal={goal} />
+      <Player />
+      <Wildlife />
+      <CameraRig />
+      <LabelProjector />
+    </>
+  );
+}
+
+export function Scene({ treeStage, goal, unlocked, quality, shift = false }: SceneProps) {
   const fog = daylight(fogColor()).fog.getStyle();
   const dpr = usePixelDpr();
   return (
@@ -106,19 +130,7 @@ export function Scene({ treeStage, goal, unlocked, quality }: SceneProps) {
       <fog attach="fog" args={[fog, FOG.near, FOG.far]} />
       <Suspense fallback={null}>
         <Lights />
-        <Sky />
-        <Clouds />
-        <Water />
-        <Terrain />
-        <Vegetation flora={flora} />
-        <GreatTree stage={treeStage} />
-        {scenery === "lilla-o" ? <LillaO unlocked={unlocked} /> : scenery === "cat-ba" ? <CatBa unlocked={unlocked} /> : <Tannenau unlocked={unlocked} />}
-        <Discoverables />
-        <Villagers goal={goal} />
-        <Player />
-        <Wildlife />
-        <CameraRig />
-        <LabelProjector />
+        {shift ? <CafeRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
       </Suspense>
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <PixelOutline />

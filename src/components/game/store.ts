@@ -7,7 +7,7 @@ import type { VillagerId } from "@/lib/game/villagers";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
-export type Phase = "title" | "arrival" | "explore" | "dialogue";
+export type Phase = "title" | "arrival" | "explore" | "dialogue" | "shift";
 export type Overlay = null | "ordbok" | "menu" | "wardrobe";
 export type Toast = { id: number; kind: "word" | "level" | "info" | "friend" | "gift"; line: Line; detail?: Line };
 
@@ -26,6 +26,8 @@ export type SaveData = {
   grammarSeen: string[];
   // English under target-language lines: "auto" shows it to brand-new learners early on.
   english: "auto" | "on" | "off";
+  // Café shifts per host: the busiest shift opened so far, and the best stars on each.
+  shifts: Record<string, { level: number; stars: number[] }>;
 };
 
 export type GameState = {
@@ -52,6 +54,7 @@ const emptySave: SaveData = {
   placedBand: 0,
   grammarSeen: [],
   english: "auto",
+  shifts: {},
 };
 
 let state: GameState = {
@@ -129,6 +132,7 @@ export function readSave(learnerId: string, code: TargetLanguageCode): SaveData 
       v: 3,
       discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
       grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
+      shifts: parsed.shifts && typeof parsed.shifts === "object" ? parsed.shifts : {},
       noticed: Array.isArray(parsed.noticed) ? parsed.noticed.filter((id): id is string => typeof id === "string") : [],
       // Saves from before onboarding existed already met the host; don't quiz them again.
       experience: parsed.experience ?? (parsed.introDone ? "little" : null),
@@ -184,6 +188,8 @@ export function setCameraSnap(on: boolean) {
 export const runtime = {
   player: { x: 0, y: 1, z: 0, rot: Math.PI, speed: 0 },
   walkTarget: null as null | { x: number; z: number; then?: Interactable },
+  // The spawn point last applied, so returning from a shift doesn't send you back to it.
+  spawnedAt: null as unknown,
   keys: new Set<string>(),
   cameraYaw: 0,
   cameraDistance: 15,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, GraduationCap, MessageCircle, Phone, Volume2 } from "lucide-react";
+import { BookOpen, ChefHat, GraduationCap, MessageCircle, Phone, Volume2 } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
 import { praiseFor } from "@/content/wardrobe";
@@ -18,6 +18,7 @@ import { sound } from "../audio/sfx";
 import { prefetchSpeech, speak, stopSpeaking } from "../audio/speech";
 import { island, villagerById, useIsland } from "../island";
 import { emote, getGame, updateSave, useGame } from "../store";
+import { useShiftStarter } from "../shift/shift-ui";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
 import { SceneRound } from "./scene-round";
@@ -58,6 +59,8 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   // Fixed while the dialogue is open, so a round never loses phrases midway.
   const [slugs] = useState(() => teachableSlugs(progress, id));
   const showEnglish = save.english === "on" || (save.english === "auto" && save.experience === "new" && progress.level < 5);
+  // Café hosts can use a hand behind the counter once you know a few things on the menu.
+  const shift = useShiftStarter(villager);
 
   const finishRound = (result: RoundSummary) => {
     setSummary(result);
@@ -217,9 +220,27 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
             >
               {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <GlossedLine line={villager.talk} />
             </button>
+            {shift ? (
+              <button
+                className="btn"
+                disabled={!shift.ready}
+                title={shift.ready ? undefined : shift.notYet.en}
+                onClick={() => {
+                  sound.play("click");
+                  shift.start();
+                }}
+              >
+                <ChefHat size={18} /> <GlossedLine line={shift.invite} />
+              </button>
+            ) : null}
             <button className="btn btn-quiet" onClick={() => say([pick(villager.goodbye)], endDialogue)}>
               <GlossedLine line={ui.bye} />
             </button>
+            {shift && !shift.ready ? (
+              <p className="dialogue-hint">
+                <GlossedLine line={shift.notYet} />
+              </p>
+            ) : null}
             {!canTalk ? (
               <p className="dialogue-hint">
                 <GlossedLine line={ui.notReadyToTalk} />

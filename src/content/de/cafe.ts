@@ -1,4 +1,5 @@
 import type { CafeConfig, CafeItem } from "@/lib/game/cafe";
+import type { OrderPart, RushConfig } from "@/lib/game/rush";
 
 // Café Kuckuck's counter. Franz teaches here: the menu board, orders that land
 // on your tray, and the odd mix-up for you to sort out. German articles change
@@ -19,6 +20,84 @@ const forms: Record<string, Forms> = {
 const of = (item: CafeItem) => forms[item.slug];
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const euros = (price: number) => price.toFixed(2).replace(".", ",");
+
+// Two of something, the way a café counter says it: "zwei Kaffee", "zwei Brezeln".
+const two: Record<string, { t: string; en: string }> = {
+  kaffee: { t: "zwei Kaffee", en: "two coffees" },
+  tee: { t: "zwei Tee", en: "two teas" },
+  brezel: { t: "zwei Brezeln", en: "two pretzels" },
+  kuchen: { t: "zwei Stück Kuchen", en: "two pieces of cake" },
+  saft: { t: "zwei Säfte", en: "two juices" },
+  milch: { t: "zwei Glas Milch", en: "two glasses of milk" },
+  wasser: { t: "zwei Wasser", en: "two waters" },
+};
+
+function phrase(part: OrderPart) {
+  const base = part.count === 2 ? two[part.item] : { t: forms[part.item].acc, en: forms[part.item].en };
+  return part.with ? { t: `${base.t} mit Milch`, en: `${base.en} with milk` } : base;
+}
+
+const rush: RushConfig = {
+  kitchen: ["brezel", "kuchen"],
+  modifier: { item: "milch", concept: "mit-milch", on: ["kaffee", "tee"] },
+  quantity: { concept: "zwei", words: ["zwei", "2"] },
+  and: { t: "und", en: "and" },
+  phrase,
+  openers: [
+    { t: "Ich hätte gern {x}.", en: "I'd like {x}." },
+    { t: "{X}, bitte.", en: "{X}, please." },
+    { t: "Ich möchte {x}, bitte.", en: "I'd like {x}, please." },
+  ],
+  changeMind: { t: "{X}, bitte … ach nein, doch lieber {y}!", en: "{X}, please… oh no, {y} instead!" },
+  lines: {
+    invite: { t: "Kann ich dir helfen?", en: "Can I help you?" },
+    notYet: { t: "Lern zuerst ein paar Sachen von der Karte!", en: "First learn a few things on the menu!" },
+    intro: [
+      { t: "Oh, danke! Heute ist so viel los!", en: "Oh, thanks! It's so busy today!" },
+      { t: "Die Gäste bestellen an der Theke. Hör gut zu!", en: "The guests order at the counter. Listen carefully!" },
+      { t: "Brezeln und Kuchen mache ich in der Küche. Sag mir einfach, was du brauchst!", en: "I make the pretzels and cake in the kitchen. Just tell me what you need!" },
+    ],
+    title: { t: "Schicht im Café", en: "Shift at the café" },
+    guests: { t: "Gäste", en: "guests" },
+    till: { t: "Kasse", en: "till" },
+    tips: { t: "Trinkgeld", en: "tips" },
+    howTo: { t: "Klick auf die Sachen hinter der Theke, dann auf den Gast.", en: "Click the things behind the counter, then the guest." },
+    kitchenAsk: { t: "Was brauchst du?", en: "What do you need?" },
+    kitchenHuh: { t: "Wie bitte? Was brauchst du?", en: "Pardon? What do you need?" },
+    kitchenNotHere: { t: "Das machst du selbst, da drüben!", en: "You make that yourself, over there!" },
+    repeat: { t: "Wie bitte?", en: "Pardon?" },
+    thanks: [
+      { t: "Danke schön!", en: "Thank you!" },
+      { t: "Super, danke!", en: "Great, thanks!" },
+      { t: "Perfekt, vielen Dank!", en: "Perfect, thanks a lot!" },
+    ],
+    angry: { t: "Das dauert zu lange. Tschüss!", en: "This is taking too long. Bye!" },
+    done: [
+      { t: "Wow, du bist ein Profi!", en: "Wow, you're a pro!" },
+      { t: "Gut gemacht, danke!", en: "Well done, thanks!" },
+      { t: "Puh, geschafft! Danke für die Hilfe.", en: "Phew, done! Thanks for the help." },
+    ],
+    harder: { t: "Morgen kommen mehr Gäste!", en: "Tomorrow more guests are coming!" },
+    again: { t: "Noch eine Schicht!", en: "Another shift!" },
+    back: { t: "Zurück ins Dorf", en: "Back to the village" },
+    trash: { t: "Tablett leeren", en: "Empty the tray" },
+    ask: { t: "Sag es Franz!", en: "Tell Franz!" },
+  },
+  kitchenGive(parts) {
+    const said = parts.map(phrase);
+    const t = said.map((p) => p.t).join(" und ");
+    return { t: `${capital(t)}? Kommt sofort!`, en: `${capital(said.map((p) => p.en).join(" and "))}? Coming right up!` };
+  },
+  wrong(want, got) {
+    return { t: `Nein, ich wollte ${of(want).acc}, ${of(got).neg}.`, en: `No, I wanted ${of(want).en}, not ${of(got).en}.` };
+  },
+  missing(want) {
+    return { t: `Ich wollte auch ${of(want).acc}.`, en: `I wanted ${of(want).en} too.` };
+  },
+  extra(got) {
+    return { t: `${capital(of(got).nom)}? Das habe ich nicht bestellt.`, en: `${capital(of(got).en)}? I didn't order that.` };
+  },
+};
 
 export const cafe: CafeConfig = {
   menu: [
@@ -112,4 +191,5 @@ export const cafe: CafeConfig = {
       { t: capital(`nein, ich wollte ${of(decoy).acc}, ${of(got).neg}.`), en: `No, I wanted ${decoy.en}, not ${got.en}.` },
     ];
   },
+  rush,
 };

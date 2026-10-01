@@ -21,6 +21,7 @@ import { Onboarding } from "./ui/onboarding";
 import { Overlays } from "./ui/overlays";
 import { TitleScreen } from "./ui/title-screen";
 import { useKeyboard } from "./world/actors";
+import { ShiftUI } from "./shift/shift-ui";
 import { Scene } from "./world/scene";
 import { WorldLabels } from "./world-labels";
 
@@ -175,8 +176,9 @@ function IslandGame() {
         goal={phase === "title" ? null : introDone ? progress.goal : host}
         unlocked={unlocked}
         quality={quality}
+        shift={phase === "shift"}
       />
-      <WorldLabels unlocked={unlocked} />
+      {phase === "shift" ? <ShiftUI /> : <WorldLabels unlocked={unlocked} />}
       <Hud progress={progress} />
       {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} liveAvailable={liveAvailable} /> : null}
       <Toasts />

@@ -3,6 +3,7 @@ import { expectedFor } from "@/lib/game/lesson";
 import type { Line } from "@/lib/game/line";
 import type { SceneBeat } from "@/lib/game/scenes";
 import type { Villager } from "@/lib/game/villagers";
+import { allOrders, orderVoice } from "@/lib/game/rush";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -180,6 +181,22 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     cafe.trayOrders.forEach((o) => add(o, passerVoices.woman, { source: "café customer", unit, speaker: "customer" }));
     addBeat(cafe.orderExchange, barista, "café", unit);
     addBeat(cafe.billExchange, barista, "café", unit);
+    // The busy shift: the host's lines, then everything guests can say.
+    const rush = cafe.rush;
+    if (rush) {
+      const { lines } = rush;
+      addLines([...lines.intro, ...lines.done, lines.kitchenAsk, lines.kitchenHuh, lines.kitchenNotHere, lines.harder], barista.voice, { source: "café shift", unit });
+      for (const item of rush.kitchen) {
+        for (const count of [1, 2] as const) add(rush.kitchenGive([{ item, count }]), barista.voice, { source: "café shift", unit });
+      }
+      for (const order of allOrders(cafe, rush)) add(order, passerVoices[orderVoice(order.t)], { source: "café shift guest", unit, speaker: "customer" });
+      const guestLines = [...lines.thanks, lines.angry];
+      for (const want of cafe.menu) {
+        guestLines.push(rush.missing(want), rush.extra(want));
+        for (const got of cafe.menu) if (got.slug !== want.slug) guestLines.push(rush.wrong(want, got));
+      }
+      for (const voice of [passerVoices.woman, passerVoices.man]) guestLines.forEach((line) => add(line, voice, { source: "café shift guest", unit, speaker: "customer" }));
+    }
   }
 
   // Grammar tips, read out by whoever teaches the unit.

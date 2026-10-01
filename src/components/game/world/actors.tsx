@@ -31,7 +31,11 @@ export function Player() {
   const { spawn, groundAt, resolveMove } = world;
   const villagerColliders = useMemo<Collider[]>(() => villagers.map((v) => ({ x: v.position[0], z: v.position[1], r: 0.5 })), [villagers]);
 
+  // Only a new island starts you at its spawn; coming back out of a café
+  // shift remounts the player, and you should be where you went in.
   useEffect(() => {
+    if (runtime.spawnedAt === spawn) return;
+    runtime.spawnedAt = spawn;
     runtime.player.x = spawn.x;
     runtime.player.z = spawn.z;
     runtime.player.rot = spawn.facing;
@@ -275,6 +279,23 @@ function frameConversation(scene: THREE.Object3D, player: THREE.Vector3, village
   return { position: best!.position, target };
 }
 
+// Where the follow camera wants to be: behind and above the player.
+function followTarget() {
+  const p = runtime.player;
+  return new THREE.Vector3(p.x, p.y + 1.3, p.z);
+}
+
+function followPosition() {
+  const p = runtime.player;
+  const pitch = runtime.cameraSnap ? 0.72 : 0.58;
+  const d = runtime.cameraDistance;
+  return new THREE.Vector3(
+    p.x + Math.sin(runtime.cameraYaw) * d * Math.cos(pitch),
+    p.y + 1.3 + d * Math.sin(pitch),
+    p.z + Math.cos(runtime.cameraYaw) * d * Math.cos(pitch),
+  );
+}
+
 // Third-person follow camera with drag-to-orbit and scroll-to-zoom. In snap
 // mode it holds a diorama angle, turns in quarter steps and moves in whole
 // pixels so the pixel art never shimmers.
@@ -283,8 +304,9 @@ export function CameraRig() {
   const framing = useRef<Framing | null>(null);
   const viewShift = useRef({ x: 0, y: 0, lift: 0 });
   const { groundAt } = island().world;
-  const target = useRef(new THREE.Vector3(0, 2, 20));
-  const position = useRef(new THREE.Vector3(60, 40, 60));
+  // Remounting mid-game (back from a café shift) starts behind the player, not out over the lake.
+  const target = useRef(getGame().phase === "title" ? new THREE.Vector3(0, 2, 20) : followTarget());
+  const position = useRef(getGame().phase === "title" ? new THREE.Vector3(60, 40, 60) : followPosition());
   const drag = useRef<{ x: number; moved: number; pull?: number } | null>(null);
   const snapShift = useMemo(() => ({ right: new THREE.Vector3(), up: new THREE.Vector3(), offset: new THREE.Vector3() }), []);
   const arrivalStart = useRef<number | null>(null);
@@ -360,14 +382,8 @@ export function CameraRig() {
       framing.current = null;
       if (game.phase === "arrival" && arrivalStart.current === null) arrivalStart.current = t;
       if (runtime.cameraSnap) runtime.cameraYaw = THREE.MathUtils.damp(runtime.cameraYaw, runtime.cameraYawTarget, 8, delta);
-      const pitch = runtime.cameraSnap ? 0.72 : 0.58;
-      const d = runtime.cameraDistance;
-      wantTarget.set(p.x, p.y + 1.3, p.z);
-      wantPosition.set(
-        p.x + Math.sin(runtime.cameraYaw) * d * Math.cos(pitch),
-        p.y + 1.3 + d * Math.sin(pitch),
-        p.z + Math.cos(runtime.cameraYaw) * d * Math.cos(pitch),
-      );
+      wantTarget.copy(followTarget());
+      wantPosition.copy(followPosition());
       lambda = game.phase === "arrival" ? 1.4 : 5;
     }
     const floor = groundAt(wantPosition.x, wantPosition.z) + 1.2;

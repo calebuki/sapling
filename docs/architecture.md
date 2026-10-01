@@ -132,6 +132,29 @@ must all be right, since a tone changes the word. Words written as several
 syllables ("cà phê") gloss and hover as one word. Only A1 exists so far, and it
 has not been reviewed by a native speaker.
 
+### Jobs: mini-games in a villager's own place
+
+Between lessons, villagers ask for help with a job played in 3D with the
+player's own character. The first is the **café shift**: the café host's
+menu offers "Kann ich dir helfen?", and the game enters the `shift` phase,
+which swaps the island for the café interior (`src/components/game/shift`).
+Guests queue at the counter and order out loud; the player fills a tray from
+unlabelled drink stations and asks the host for kitchen items by typing or
+saying them. The language is load-bearing: station names only show on the
+first rungs, later orders are heard and only shown after "Wie bitte?", and
+the kitchen bakes exactly what was asked for, saying it back correctly.
+
+A job splits like the rest of the game. The rules live in `src/lib/game`
+(`rush.ts`: difficulty rungs, order generation, tray checks, parsing a kitchen
+request) and are tested without a browser. Each language pack supplies the
+words (`cafe.rush` in `src/content/<code>/cafe.ts`). Orders only use menu
+words the learner has met, weak words come up more often, and every shift
+records evidence through the same `recordObservation` path as lessons:
+orders understood by ear count as audio recognition, orders read off the
+bubble as exposure, and kitchen requests as production. A shift with two or
+more stars opens the next, busier rung (`save.shifts`). Everything a guest or
+host can say is in the gloss audit and the voice catalog.
+
 ### Speech
 
 Villagers speak with Gemini neural voices through `/api/speech`. The
