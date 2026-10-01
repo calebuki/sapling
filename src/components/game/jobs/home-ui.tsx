@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ear, Home as HomeIcon, Search, Volume2 } from "lucide-react";
+import { useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { HOME_LEVELS, homeStars, type Spot } from "@/lib/game/home";
 import { conceptStrength } from "@/lib/game/progression";
@@ -23,6 +24,7 @@ import { JobBar, JobClock, JobIntro, JobLabel, JobSummary, useWordLabel } from "
 // things to find and place words, all met in lessons first.
 export function useHomeStarter(villager: Villager) {
   const model = useLearningModel();
+  const dev = useDevMode();
   const pack = useIsland();
   const save = useGame((s) => s.save.shifts[villager.id]);
   return useMemo(() => {
@@ -33,7 +35,8 @@ export function useHomeStarter(villager: Villager) {
       const c = concept(slug);
       return c ? model.states.find((s) => s.conceptId === c.id) : undefined;
     };
-    const met = (slug: string) => (stateOf(slug)?.exposureCount ?? 0) > 0;
+    // Developer mode treats every word as met, so all of the job opens.
+    const met = (slug: string) => dev || (stateOf(slug)?.exposureCount ?? 0) > 0;
     const spots = (Object.keys(home.prepositions) as Spot[]).filter((s) => met(home.prepositions[s].concept));
     const anchors = home.anchors.filter((a) => met(a.slug) && a.spots.some((s) => spots.includes(s))).map((a) => a.slug);
     const things = home.things.filter((t) => met(t.slug)).map((t) => t.slug);
@@ -50,7 +53,7 @@ export function useHomeStarter(villager: Villager) {
       record: model.recordObservation,
     };
     return { ready, start: (level = save?.level ?? 0) => startHome(setup, level), invite: home.lines.invite, notYet: home.lines.notYet };
-  }, [model.concepts, model.states, model.recordObservation, pack, villager, save]);
+  }, [model.concepts, model.states, model.recordObservation, pack, villager, save, dev]);
 }
 
 // ---------- The overlay ----------
@@ -77,10 +80,13 @@ export function HomeUI() {
 }
 
 function HomeTop({ setup }: { setup: HomeSetup }) {
+  // Developer mode lets you jump to any rung from the dots.
+  const starter = useHomeStarter(setup.host);
+  const dev = useDevMode();
   const { levelIndex, found, tasks } = useHome((s) => s);
   const { lines } = setup.home;
   return (
-    <JobBar icon={<HomeIcon size={22} />} title={lines.title} levelIndex={levelIndex} levels={HOME_LEVELS.length} onClose={leaveHome}>
+    <JobBar icon={<HomeIcon size={22} />} title={lines.title} levelIndex={levelIndex} levels={HOME_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveHome}>
       <span>
         <Search size={18} /> <strong>{found}</strong>
         <span className="shift-of">/ {tasks.length}</span>

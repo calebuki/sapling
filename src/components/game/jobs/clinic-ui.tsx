@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { BedDouble, Check, Ear, GlassWater, Sofa, Stethoscope, Trash2, Users, Volume2 } from "lucide-react";
+import { useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { CLINIC_LEVELS, clinicStars, type Advice, type HerbColor, type Reply, type Spoons } from "@/lib/game/clinic";
 import { conceptStrength } from "@/lib/game/progression";
@@ -39,6 +40,7 @@ import { JobBar, JobClock, JobIntro, JobLabel, JobSummary, useWordLabel } from "
 // The doctor can use a hand once you know a few body parts and colours.
 export function useClinicStarter(villager: Villager) {
   const model = useLearningModel();
+  const dev = useDevMode();
   const pack = useIsland();
   const save = useGame((s) => s.save.shifts[villager.id]);
   return useMemo(() => {
@@ -49,7 +51,8 @@ export function useClinicStarter(villager: Villager) {
       const c = concept(slug);
       return c ? model.states.find((s) => s.conceptId === c.id) : undefined;
     };
-    const met = (slug: string) => (stateOf(slug)?.exposureCount ?? 0) > 0;
+    // Developer mode treats every word as met, so all of the job opens.
+    const met = (slug: string) => dev || (stateOf(slug)?.exposureCount ?? 0) > 0;
     const parts = clinic.parts.filter((p) => met(p.slug)).map((p) => p.slug);
     const colors = clinic.colors.filter((c) => met(c.slug)).map((c) => c.slug);
     const spoons = ([1, 2, 3] as Spoons[]).filter((n) => met(clinic.numbers[n]));
@@ -71,7 +74,7 @@ export function useClinicStarter(villager: Villager) {
     };
     const ready = parts.length >= 4 && colors.length >= 2;
     return { ready, start: (level = save?.level ?? 0) => startClinic(setup, level), invite: clinic.lines.invite, notYet: clinic.lines.notYet };
-  }, [model.concepts, model.states, model.recordObservation, pack, villager, save]);
+  }, [model.concepts, model.states, model.recordObservation, pack, villager, save, dev]);
 }
 
 // ---------- The overlay ----------
@@ -105,10 +108,13 @@ export function ClinicUI() {
 }
 
 function ClinicTop({ setup }: { setup: ClinicSetup }) {
+  // Developer mode lets you jump to any rung from the dots.
+  const starter = useClinicStarter(setup.host);
+  const dev = useDevMode();
   const { levelIndex, helped, patients } = useClinic((s) => s);
   const { lines } = setup.clinic;
   return (
-    <JobBar icon={<Stethoscope size={22} />} title={lines.title} levelIndex={levelIndex} levels={CLINIC_LEVELS.length} onClose={leaveClinic}>
+    <JobBar icon={<Stethoscope size={22} />} title={lines.title} levelIndex={levelIndex} levels={CLINIC_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveClinic}>
       <span>
         <Users size={18} /> <strong>{helped}</strong>
         <span className="shift-of">/ {patients.length}</span>

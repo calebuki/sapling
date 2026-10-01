@@ -13,6 +13,7 @@ import type { LearningOverview } from "@/lib/repositories/types";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
 import { PlayerPreview } from "@/components/wardrobe/hub-entry";
+import { loadDevMode } from "@/components/dev-mode";
 import { loadWardrobe } from "@/components/wardrobe/store";
 import { Wardrobe } from "@/components/wardrobe/wardrobe";
 import { IslandArt } from "./island-art";
@@ -42,7 +43,10 @@ export function Hub({ learnerId }: { learnerId: string | null }) {
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
 
   useEffect(() => {
-    if (learnerId) void loadWardrobe(learnerId);
+    if (learnerId) {
+      void loadWardrobe(learnerId);
+      loadDevMode(learnerId);
+    }
   }, [learnerId]);
 
   useEffect(() => {

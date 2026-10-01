@@ -1,5 +1,6 @@
 "use client";
 
+import { useDevMode } from "@/components/dev-mode";
 import Link from "next/link";
 import { BookOpen, Home, Menu, Sparkles, Target, Volume2, VolumeX } from "lucide-react";
 import type { GameProgress } from "@/lib/game/progression";
@@ -11,6 +12,7 @@ import { setGame, useGame } from "../store";
 import { GlossedLine } from "./glossed";
 
 export function Hud({ progress }: { progress: GameProgress }) {
+  const dev = useDevMode();
   const phase = useGame((s) => s.phase);
   const nearby = useGame((s) => s.nearby);
   const muted = useGame((s) => s.muted);
@@ -56,6 +58,7 @@ export function Hud({ progress }: { progress: GameProgress }) {
           <strong>{progress.level}</strong>
         </div>
         <div className="level-text">
+          {dev ? <span className="dev-badge" title="Developer mode: everything is open">DEV</span> : null}
           <GlossedLine line={ui.level} as="span" className="level-label" />
           <span className="level-words">
             {progress.wordsMet}/{progress.wordsTotal} <GlossedLine line={ui.words} /> · {discovered.length} <Sparkles size={12} />

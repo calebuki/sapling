@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, Languages, Lock, LogOut, Shirt, Volume2, X } from "lucide-react";
+import { AudioLines, GraduationCap, Languages, Lock, LogOut, Shirt, Volume2, Wrench, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { setDevMode, useDevAllowed, useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { Wardrobe } from "@/components/wardrobe/wardrobe";
 import type { GrammarTip } from "@/lib/game/grammar";
@@ -160,6 +162,34 @@ function Ordbok({ progress }: { progress: GameProgress }) {
   );
 }
 
+// Only developers (voice reviewers) see this. It's a tool for building the
+// game, so it speaks English rather than the island's language.
+function DeveloperSwitch() {
+  const allowed = useDevAllowed();
+  const on = useDevMode();
+  if (!allowed) return null;
+  return (
+    <div className="dev-switch">
+      <button
+        className={`btn ${on ? "btn-primary" : ""}`}
+        aria-pressed={on}
+        onClick={() => {
+          sound.play("click");
+          setDevMode(!on);
+        }}
+      >
+        <Wrench size={18} /> Developer mode: {on ? "on" : "off"}
+      </button>
+      <p className="dev-switch-note">Opens every villager, unit, job level and wardrobe piece. Your learning progress stays as it is.</p>
+      {hasSupabase ? (
+        <Link className="btn btn-quiet" href="/dev/voices">
+          <AudioLines size={18} /> Voice review
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 function GameMenu() {
   const english = useGame((s) => s.save.english);
   const { ui } = useIsland();
@@ -188,6 +218,7 @@ function GameMenu() {
       >
         <Shirt size={18} /> <GlossedLine line={ui.yourStyle} />
       </button>
+      <DeveloperSwitch />
       <div className="controls-help">
         <GlossedLine line={ui.controls} as="strong" />
         <GlossedLine line={ui.controlsMove} as="p" />

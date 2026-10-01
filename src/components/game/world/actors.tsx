@@ -9,7 +9,7 @@ import type { Collider } from "@/lib/game/world";
 import { interact } from "../actions";
 import { sound } from "../audio/sfx";
 import { island, villagerById } from "../island";
-import { outfitOf, useWardrobe } from "@/components/wardrobe/store";
+import { outfitOf, useWearRecord } from "@/components/wardrobe/store";
 import { getGame, runtime, setCameraSnap, setGame, useGame, type Interactable } from "../store";
 import { Character, type CharacterAnim } from "./character";
 import { glow } from "./materials";
@@ -22,7 +22,7 @@ function emoteFor(who: VillagerId | "player") {
 }
 
 export function Player() {
-  const wardrobe = useWardrobe((s) => s.record);
+  const wardrobe = useWearRecord();
   const look = useMemo(() => lookOf(outfitOf(wardrobe)), [wardrobe]);
   const group = useRef<THREE.Group>(null);
   const velocity = useRef(new THREE.Vector2());

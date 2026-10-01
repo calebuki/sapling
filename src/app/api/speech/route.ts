@@ -3,7 +3,9 @@ import { APICallError, generateSpeech, RetryError } from "ai";
 import { z } from "zod";
 
 import { speechModel } from "@/lib/ai-models";
-import { hasSupabase } from "@/lib/env";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+
+import { hasSpeechStore, hasSupabase, publicEnv } from "@/lib/env";
 import { isNeuralVoice } from "@/lib/game/voices";
 import { supportedLanguageCodes } from "@/lib/learning/languages";
 import { CLIP_VERSION, clipPath, clipText, publicClipUrl, SPEECH_BUCKET } from "@/lib/speech/clips";
@@ -14,7 +16,9 @@ import { createClient } from "@/lib/supabase/server";
 // Natural neural speech for every spoken line, generated once ever: the game
 // looks for a line in the public speech bucket first and only comes here when
 // it isn't there yet. This route makes it with Gemini, stores the MP3 for
-// every player after it, and returns it.
+// every player after it, and returns it. Every line made is kept, whoever
+// asked: a signed-in player's session stores it, and so does a visitor's
+// (demo mode, local testing), so nothing generated is ever thrown away.
 
 const inputSchema = z.object({
   l: z.enum(supportedLanguageCodes).default("sv"),
@@ -71,9 +75,11 @@ export async function GET(request: Request) {
       abortSignal: AbortSignal.timeout(20_000),
     });
     const mp3 = await wavToMp3(audio.uint8Array);
-    if (supabase && path) {
+    // The signed-in player's session when there is one, otherwise a visitor's.
+    const store = supabase ?? (hasSpeechStore ? createAnonClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, { auth: { persistSession: false } }) : null);
+    if (store && path) {
       after(async () => {
-        const { error } = await supabase.storage
+        const { error } = await store.storage
           .from(SPEECH_BUCKET)
           .upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
         // Two players asking for a new line at once both make it; the first one is kept.
@@ -82,7 +88,7 @@ export async function GET(request: Request) {
           return;
         }
         // So the line shows up in voice review, even one only an AI reply says.
-        const { error: recordError } = await supabase.rpc("record_speech_clip", {
+        const { error: recordError } = await store.rpc("record_speech_clip", {
           p_path: path,
           p_language_code: language,
           p_voice: voice,

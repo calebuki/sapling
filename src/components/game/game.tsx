@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { loadDevMode, useDevMode } from "@/components/dev-mode";
 import { loadWardrobe, recordProgress, useWardrobe } from "@/components/wardrobe/store";
 import { loadIsland } from "@/content/islands";
 import { itemName, wardrobeNews } from "@/content/wardrobe";
@@ -85,11 +86,14 @@ function IslandGame() {
   const placed = useGame((s) => s.save.placedBand);
   const loaded = useGame((s) => s.loadedFor === `${model.learnerId}:${code}`);
   const [liveAvailable, setLiveAvailable] = useState(false);
+  // Developer mode opens every unit; the learning model itself is untouched.
+  const dev = useDevMode();
   useKeyboard();
 
   useEffect(() => {
     loadSave(model.learnerId, code);
     void loadWardrobe(model.learnerId);
+    loadDevMode(model.learnerId);
   }, [model.learnerId, code]);
 
   useEffect(() => {
@@ -116,10 +120,10 @@ function IslandGame() {
         concepts: model.concepts,
         states: model.states,
         discoveredCount: discovered.length,
-        openThrough: openThrough(placement, course.units, placed),
+        openThrough: dev ? course.units.length : openThrough(placement, course.units, placed),
         startUnit: placement.bands[placed] ?? 0,
       }),
-    [course, villagers, placement, model.concepts, model.states, discovered.length, placed],
+    [course, villagers, placement, model.concepts, model.states, discovered.length, placed, dev],
   );
 
   const ready = loaded && !model.isLoading && model.targetLanguage.code === code;

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Shirt } from "lucide-react";
 import { lookOf, newIds } from "@/lib/game/wardrobe";
-import { outfitOf, useWardrobe } from "./store";
+import { outfitOf, useWearRecord } from "./store";
 
 const PlayerPreviewScene = dynamic(() => import("./player-preview").then((m) => m.PlayerPreviewScene), { ssr: false });
 
@@ -12,7 +12,7 @@ const PlayerPreviewScene = dynamic(() => import("./player-preview").then((m) => 
 // the welcome.
 
 export function PlayerPreview({ onOpen, paused }: { onOpen: () => void; paused: boolean }) {
-  const record = useWardrobe((s) => s.record);
+  const record = useWearRecord();
   const look = useMemo(() => lookOf(outfitOf(record)), [record]);
   const fresh = useMemo(() => newIds(record).length > 0, [record]);
   return (

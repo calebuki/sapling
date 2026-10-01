@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import {
   defaultOutfit,
   emptyRecord,
@@ -10,12 +10,14 @@ import {
   sameRecord,
   unlockedIds,
   wearable,
+  withEverything,
   type ItemId,
   type Outfit,
   type WardrobeRecord,
 } from "@/lib/game/wardrobe";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { createLearningRepository } from "@/lib/repositories";
+import { useDevMode } from "../dev-mode";
 
 // The wardrobe lives with the account. This device keeps a copy so the right
 // outfit shows at once, and a "dirty" flag for changes the account hasn't
@@ -135,6 +137,14 @@ export function useWardrobe<T>(selector: (state: WardrobeState) => T): T {
     () => selector(state),
     () => selector(state),
   );
+}
+
+// The record to dress from: everything open in developer mode, otherwise
+// exactly what's been earned.
+export function useWearRecord() {
+  const record = useWardrobe((s) => s.record);
+  const dev = useDevMode();
+  return useMemo(() => (dev ? withEverything(record) : record), [record, dev]);
 }
 
 // What the player has on, with anything they haven't earned swapped out.

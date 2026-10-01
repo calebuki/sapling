@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { outfitOf, useWardrobe } from "@/components/wardrobe/store";
+import { outfitOf, useWearRecord } from "@/components/wardrobe/store";
 import { lookOf } from "@/lib/game/wardrobe";
 import { runtime } from "../store";
 import { Character, type CharacterAnim } from "../world/character";
@@ -52,7 +52,7 @@ export function emoteOf(who: string) {
 
 // You, in your own clothes, carrying whatever the job hands you (children sit at your hands).
 export function JobPlayer({ children }: { children?: ReactNode }) {
-  const wardrobe = useWardrobe((s) => s.record);
+  const wardrobe = useWearRecord();
   const look = useMemo(() => lookOf(outfitOf(wardrobe)), [wardrobe]);
   const group = useRef<THREE.Group>(null);
   const anim = useMemo(() => (): CharacterAnim => ({ speed: jobPlayer.walker.speed, talking: runtime.speaking === "player", emote: emoteOf("player") }), []);

@@ -28,7 +28,7 @@ import {
 } from "@/lib/game/wardrobe";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { FaceIcon, HairIcon, ItemIcon, NoneIcon } from "./icons";
-import { loadWardrobe, markSeen, outfitOf, setOutfit, useWardrobe } from "./store";
+import { loadWardrobe, markSeen, outfitOf, setOutfit, useWardrobe, useWearRecord } from "./store";
 import type { Focus, Spin } from "./wardrobe-scene";
 
 const WardrobeScene = dynamic(() => import("./wardrobe-scene").then((m) => m.WardrobeScene), { ssr: false });
@@ -65,8 +65,10 @@ const hairNames = {
 
 export function Wardrobe({ learnerId, language, onClose }: { learnerId: string; language: TargetLanguageCode; onClose: () => void }) {
   const record = useWardrobe((s) => s.record);
+  // What can be worn: everything in developer mode, otherwise what's earned.
+  const wearRecord = useWearRecord();
   const ready = useWardrobe((s) => s.ready);
-  const outfit = useMemo(() => outfitOf(record), [record]);
+  const outfit = useMemo(() => outfitOf(wearRecord), [wearRecord]);
   const look = useMemo(() => lookOf(outfit), [outfit]);
   const [tab, setTab] = useState<Tab>("you");
   const [hopAt, setHopAt] = useState(0);
@@ -182,7 +184,7 @@ export function Wardrobe({ learnerId, language, onClose }: { learnerId: string; 
           {tab === "you" ? (
             <YouTab outfit={outfit} wear={wear} />
           ) : (
-            <SlotTab slot={tab} outfit={outfit} wear={wear} language={language} record={record} badged={badged} />
+            <SlotTab slot={tab} outfit={outfit} wear={wear} language={language} record={wearRecord} badged={badged} />
           )}
         </div>
 

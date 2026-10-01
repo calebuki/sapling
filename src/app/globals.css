@@ -4881,3 +4881,52 @@ button:disabled {
 .clock-week td.is-busy {
   background: repeating-linear-gradient(135deg, #e0584f 0 6px, #ec8a83 6px 12px);
 }
+
+/* ---------- Developer mode ---------- */
+
+.dev-switch {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 2px dashed var(--edge-dark);
+  border-radius: 16px;
+}
+
+.dev-switch-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.dev-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--yellow);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+
+.shift-pip {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #eee3cc;
+  cursor: pointer;
+}
+
+.shift-pip.is-on {
+  background: var(--yellow);
+  box-shadow: 0 1px 0 var(--yellow-edge);
+}
+
+.shift-pip:hover {
+  outline: 2px solid var(--yellow-edge);
+}

@@ -21,6 +21,7 @@ export function JobBar({
   levelIndex,
   levels,
   children,
+  onPick,
   onClose,
 }: {
   icon: ReactNode;
@@ -28,6 +29,8 @@ export function JobBar({
   levelIndex: number;
   levels: number;
   children: ReactNode;
+  // Developer mode: jump straight to a rung.
+  onPick?: (level: number) => void;
   onClose: () => void;
 }) {
   const { ui } = useIsland();
@@ -37,9 +40,13 @@ export function JobBar({
         {icon}
         <GlossedLine line={title} />
         <span className="shift-pips" aria-label={`${levelIndex + 1} / ${levels}`}>
-          {Array.from({ length: levels }, (_, i) => (
-            <i key={i} className={i <= levelIndex ? "is-on" : ""} />
-          ))}
+          {Array.from({ length: levels }, (_, i) =>
+            onPick ? (
+              <button key={i} className={`shift-pip ${i <= levelIndex ? "is-on" : ""}`} aria-label={`${i + 1}`} onClick={() => onPick(i)} />
+            ) : (
+              <i key={i} className={i <= levelIndex ? "is-on" : ""} />
+            ),
+          )}
         </span>
       </div>
       <div className="shift-score">{children}</div>

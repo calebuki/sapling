@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChefHat, Coins, Ear, Trash2, Users, Volume2 } from "lucide-react";
+import { useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { cafeItem } from "@/lib/game/cafe";
 import { conceptStrength } from "@/lib/game/progression";
@@ -43,6 +44,7 @@ import {
 // menu items the learner has met, so it needs a couple of them first.
 export function useShiftStarter(villager: Villager) {
   const model = useLearningModel();
+  const dev = useDevMode();
   const pack = useIsland();
   const save = useGame((s) => s.save.shifts[villager.id]);
   return useMemo(() => {
@@ -54,7 +56,8 @@ export function useShiftStarter(villager: Villager) {
       const c = concept(slug);
       return c ? model.states.find((s) => s.conceptId === c.id) : undefined;
     };
-    const met = (slug: string) => (stateOf(slug)?.exposureCount ?? 0) > 0;
+    // Developer mode treats every word as met, so all of the job opens.
+    const met = (slug: string) => dev || (stateOf(slug)?.exposureCount ?? 0) > 0;
     const items = cafe.menu.map((m) => m.slug).filter(met);
     const ready = items.length >= 2;
     const setup: ShiftSetup = {
@@ -71,7 +74,7 @@ export function useShiftStarter(villager: Villager) {
       record: model.recordObservation,
     };
     return { ready, level: save?.level ?? 0, start: (level = save?.level ?? 0) => startShift(setup, level), invite: rush.lines.invite, notYet: rush.lines.notYet };
-  }, [model.concepts, model.states, model.recordObservation, pack, villager, save]);
+  }, [model.concepts, model.states, model.recordObservation, pack, villager, save, dev]);
 }
 
 // ---------- The overlay ----------
@@ -99,11 +102,14 @@ export function ShiftUI() {
 }
 
 function ShiftTop({ setup }: { setup: ShiftSetup }) {
+  // Developer mode lets you jump to any rung from the dots.
+  const starter = useShiftStarter(setup.host);
+  const dev = useDevMode();
   const { levelIndex, level, served, lost, tips, coming, customers } = useShift((s) => s);
   const { lines } = setup.rush;
   const left = coming + customers.filter((c) => c.status === "entering" || c.status === "waiting").length;
   return (
-    <JobBar icon={<ChefHat size={22} />} title={lines.title} levelIndex={levelIndex} levels={RUSH_LEVELS.length} onClose={leaveShift}>
+    <JobBar icon={<ChefHat size={22} />} title={lines.title} levelIndex={levelIndex} levels={RUSH_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveShift}>
       <span title={lines.guests.en}>
         <Users size={18} /> <GlossedLine line={lines.guests} /> <strong>{served}</strong>
         <span className="shift-of">/ {level.guests}</span>

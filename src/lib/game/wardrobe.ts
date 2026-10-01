@@ -145,6 +145,13 @@ export function isUnlocked(item: Item, record: Pick<WardrobeRecord, "levels" | "
   return record.gifts.includes(item.id);
 }
 
+// Every piece open, for developer mode. The real record is left as it is.
+export function withEverything<T extends Pick<WardrobeRecord, "levels" | "gifts">>(record: T): T {
+  const gifts = items.filter((item) => item.unlock.kind === "gift").map((item) => item.id);
+  // A level far past the last piece; this is only ever a view, never saved.
+  return { ...record, levels: { ...record.levels, de: 1000 }, gifts: [...new Set([...record.gifts, ...gifts])] };
+}
+
 export function unlockedIds(record: Pick<WardrobeRecord, "levels" | "gifts">) {
   return items.filter((item) => isUnlocked(item, record)).map((item) => item.id);
 }

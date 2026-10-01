@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Clock3, Ear, Users, Volume2 } from "lucide-react";
+import { useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { CALENDAR_HOURS, CLOCK_LEVELS, clockStars, type TimeForm } from "@/lib/game/clock";
 import { conceptStrength } from "@/lib/game/progression";
@@ -39,6 +40,7 @@ import { JobBar, JobClock, JobIntro, JobSummary, useWordLabel } from "./job-ui";
 // The clockmaker can use a hand once you can say a few times.
 export function useClockStarter(villager: Villager) {
   const model = useLearningModel();
+  const dev = useDevMode();
   const pack = useIsland();
   const save = useGame((s) => s.save.shifts[villager.id]);
   return useMemo(() => {
@@ -49,7 +51,8 @@ export function useClockStarter(villager: Villager) {
       const c = concept(slug);
       return c ? model.states.find((s) => s.conceptId === c.id) : undefined;
     };
-    const met = (slug: string) => (stateOf(slug)?.exposureCount ?? 0) > 0;
+    // Developer mode treats every word as met, so all of the job opens.
+    const met = (slug: string) => dev || (stateOf(slug)?.exposureCount ?? 0) > 0;
     const forms = (Object.keys(clock.forms) as TimeForm[]).filter((f) => met(clock.forms[f]));
     const hours = clock.numbers.map((slug, i) => (met(slug) ? i + 1 : 0)).filter(Boolean);
     const appointments = clock.appointments;
@@ -67,7 +70,7 @@ export function useClockStarter(villager: Villager) {
     };
     const ready = forms.includes("oclock") && forms.includes("half") && hours.length >= 4;
     return { ready, start: (level = save?.level ?? 0) => startClock(setup, level), invite: clock.lines.invite, notYet: clock.lines.notYet };
-  }, [model.concepts, model.states, model.recordObservation, pack, villager, save]);
+  }, [model.concepts, model.states, model.recordObservation, pack, villager, save, dev]);
 }
 
 // ---------- The overlay ----------
@@ -95,10 +98,13 @@ export function ClockUI() {
 }
 
 function ClockTop({ setup }: { setup: ClockSetup }) {
+  // Developer mode lets you jump to any rung from the dots.
+  const starter = useClockStarter(setup.host);
+  const dev = useDevMode();
   const { levelIndex, helped, customers } = useClock((s) => s);
   const { lines } = setup.clock;
   return (
-    <JobBar icon={<Clock3 size={22} />} title={lines.title} levelIndex={levelIndex} levels={CLOCK_LEVELS.length} onClose={leaveClock}>
+    <JobBar icon={<Clock3 size={22} />} title={lines.title} levelIndex={levelIndex} levels={CLOCK_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveClock}>
       <span>
         <Users size={18} /> <strong>{helped}</strong>
         <span className="shift-of">/ {customers.length}</span>
