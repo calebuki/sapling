@@ -12,16 +12,20 @@ export type CharacterLook = {
   shirt: string;
   pants: string;
   accent: string;
-  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut" | "nonla" | "pith" | "crown";
+  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut" | "nonla" | "pith" | "crown" | "captain";
   beard?: boolean;
   apron?: string;
   scale?: number;
   // Wardrobe pieces; villagers leave these out and get the defaults.
   face?: { eyes: "round" | "lashes" | "sleepy"; cheeks: "blush" | "freckles" | "none" };
-  top?: "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat";
-  bottom?: "trousers" | "shorts" | "overalls";
+  top?: "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat" | "labcoat";
+  bottom?: "trousers" | "shorts" | "overalls" | "skirt";
   glasses?: boolean;
   scarf?: string;
+  // Work clothes from the villagers' jobs, in the extras colour.
+  boots?: string;
+  bowtie?: string;
+  backpack?: string;
   // The band at the neck; defaults to the accent.
   collar?: string;
 };

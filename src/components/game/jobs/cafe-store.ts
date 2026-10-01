@@ -10,8 +10,10 @@ import { mulberry32 } from "@/lib/game/world";
 import type { Observation } from "@/lib/learning/adaptive";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "../audio/sfx";
-import { speak } from "../audio/speech";
-import { emote, getGame, setGame, updateSave } from "../store";
+import { speakLine } from "../audio/speech";
+import type { ItemId } from "@/lib/game/wardrobe";
+import { emote, setGame } from "../store";
+import { finishJob } from "./progress";
 import { COUNTER_SPOTS, DOOR, KITCHEN_SPOT, serveSpot, STAFF, STAFF_DOOR, STAFF_ENTRY, STAFF_START, stationSlugs, stationSpot, TRASH_SPOT } from "./cafe-layout";
 import { jobPlayer, placePlayer, stepWalker, walkTo, type Walker } from "./walk";
 
@@ -52,6 +54,8 @@ export type ShiftState = {
   // Words practised this shift: slug → [right, total].
   words: Record<string, [number, number]>;
   levelUp: boolean;
+  // Work clothes the host just gave you, if this run earned them.
+  gift: ItemId | null;
 };
 
 export type ShiftSetup = {
@@ -88,7 +92,7 @@ function blank(levelIndex: number): ShiftState {
     tray: [],
     kitchen: { open: false, reply: null },
     words: {},
-    levelUp: false,
+    levelUp: false, gift: null,
   };
 }
 
@@ -233,7 +237,7 @@ function leave(customer: Customer, status: "happy" | "angry", said: Line) {
 function giveUp(customer: Customer) {
   if (!setup) return;
   sound.play("wrong");
-  void speak(setup.rush.lines.angry.t, { gender: customer.gender });
+  void speakLine(setup.rush.lines.angry, { gender: customer.gender });
   leave(customer, "angry", setup.rush.lines.angry);
   set((s) => ({ lost: s.lost + 1 }));
 }
@@ -242,23 +246,18 @@ function finishIfDone() {
   if (state.status !== "running" || state.coming > 0 || state.customers.length > 0 || !setup) return;
   const stars = starsFor(state.served, state.level.guests);
   const host = setup.host.id;
-  const saved = getGame().save.shifts[host] ?? { level: 0, stars: [] };
-  const best = [...saved.stars];
-  best[state.levelIndex] = Math.max(best[state.levelIndex] ?? 0, stars);
-  // A good shift opens the next, busier one.
-  const levelUp = stars >= 2 && state.levelIndex === saved.level && saved.level < 4;
-  updateSave({ shifts: { ...getGame().save.shifts, [host]: { level: levelUp ? saved.level + 1 : saved.level, stars: best } } });
+  const { levelUp, gift } = finishJob(host, state.levelIndex, stars);
   sound.play(stars >= 2 ? "levelup" : "sparkle");
   emote(host, "happy", 2000);
   const line = setup.rush.lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2];
-  void speak(line.t, { who: host, pitch: setup.host.voicePitch });
-  set({ status: "done", levelUp });
+  void speakLine(line, { who: host, pitch: setup.host.voicePitch });
+  set({ status: "done", levelUp, gift });
 }
 
 // ---------- What the customer says ----------
 
 export function sayOrder(customer: Customer, slow: boolean) {
-  void speak(customer.order.line.t, { gender: customer.gender, slow });
+  void speakLine(customer.order.line, { gender: customer.gender, slow });
 }
 
 // "Pardon?": they say it again, slowly, and the words show. Costs a little patience.
@@ -305,7 +304,7 @@ export function goToKitchen() {
     jobPlayer.locked = true;
     sound.play("open");
     emote(setup.host.id, "wave", 1000);
-    void speak(setup.rush.lines.kitchenAsk.t, { who: setup.host.id, pitch: setup.host.voicePitch });
+    void speakLine(setup.rush.lines.kitchenAsk, { who: setup.host.id, pitch: setup.host.voicePitch });
     set({ kitchen: { open: true, reply: null } });
   });
 }
@@ -338,7 +337,7 @@ export async function askKitchen(text: string, via: "text" | "speech", hinted: b
     const reply = found.length ? rush.lines.kitchenNotHere : rush.lines.kitchenHuh;
     sound.play("wrong");
     emote(host.id, "think", 1400);
-    void speak(reply.t, voice);
+    void speakLine(reply, voice);
     set({ kitchen: { open: true, reply } });
     return;
   }
@@ -347,7 +346,7 @@ export async function askKitchen(text: string, via: "text" | "speech", hinted: b
   const reply = rush.kitchenGive(baked);
   sound.play("correct");
   emote(host.id, "happy", 1400);
-  void speak(reply.t, voice);
+  void speakLine(reply, voice);
   set((s) => ({ tray: [...s.tray, ...handed], kitchen: { open: true, reply } }));
   // Saying a kitchen item is producing the word; saying it the way the host
   // says it back is the whole phrase.
@@ -377,7 +376,7 @@ export function serve(customer: Customer) {
       const line = pick(setup.rush.lines.thanks);
       sound.play("correct");
       emote("player", "happy", 1000);
-      void speak(line.t, { gender: current.gender });
+      void speakLine(line, { gender: current.gender });
       set((s) => ({ tray: [], served: s.served + 1, tips: s.tips + (quick ? 1 : 0) }));
       leave(current, "happy", line);
       if (!current.missed) understood(current, true, !heardOnly);
@@ -394,7 +393,7 @@ export function serve(customer: Customer) {
           : rush.extra(item(result.extra[0]));
     sound.play("wrong");
     if (guest) guest.waited = Math.min(guest.patience - 1, guest.waited + 6);
-    void speak(line.t, { gender: current.gender });
+    void speakLine(line, { gender: current.gender });
     if (!current.missed) understood(current, false, !heardOnly);
     update(current.id, { said: line, missed: true });
   });

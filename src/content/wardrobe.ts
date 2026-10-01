@@ -149,10 +149,82 @@ export const wardrobeWords: Record<ItemId, Words> = {
       vi: { t: "Khăn quàng đẹp quá!", en: "What a nice scarf!" },
     },
   },
+  captain: {
+    en: "captain's cap",
+    name: { sv: "en kaptensmössa", de: "die Kapitänsmütze", vi: "mũ thuyền trưởng", da: "en kaptajnshue" },
+    praise: {
+      sv: { t: "Vilken fin kaptensmössa!", en: "What a nice captain's cap!" },
+      de: { t: "Aye aye, Kapitän! Die Mütze steht dir.", en: "Aye aye, captain! The cap suits you." },
+      vi: { t: "Mũ thuyền trưởng đẹp quá!", en: "What a nice captain's cap!" },
+    },
+  },
+  conductor: {
+    en: "conductor's cap",
+    name: { sv: "en konduktörsmössa", de: "die Schaffnermütze", vi: "mũ người soát vé", da: "en konduktørkasket" },
+    praise: {
+      sv: { t: "En konduktörsmössa! Biljetter, tack!", en: "A conductor's cap! Tickets, please!" },
+      de: { t: "Oh, eine Schaffnermütze! Fahrkarten, bitte!", en: "Oh, a conductor's cap! Tickets, please!" },
+      vi: { t: "Mũ soát vé à? Vé đâu nào!", en: "A conductor's cap? Tickets, please!" },
+    },
+  },
+  labcoat: {
+    en: "doctor's coat",
+    name: { sv: "en läkarrock", de: "der Kittel", vi: "áo blouse trắng", da: "en kittel" },
+    praise: {
+      sv: { t: "En vit rock! Är du läkare nu?", en: "A white coat! Are you a doctor now?" },
+      de: { t: "Ein weißer Kittel! Bist du jetzt Ärztin oder Arzt?", en: "A white coat! Are you a doctor now?" },
+      vi: { t: "Áo blouse trắng! Bạn là bác sĩ à?", en: "A white coat! Are you a doctor?" },
+    },
+  },
+  skirt: {
+    en: "skirt",
+    name: { sv: "en kjol", de: "der Rock", vi: "chân váy", da: "en nederdel" },
+    praise: {
+      sv: { t: "Vilken fin kjol!", en: "What a lovely skirt!" },
+      de: { t: "Was für ein schöner Rock!", en: "What a lovely skirt!" },
+      vi: { t: "Chân váy đẹp quá!", en: "What a lovely skirt!" },
+    },
+  },
+  apron: {
+    en: "apron",
+    name: { sv: "ett förkläde", de: "die Schürze", vi: "tạp dề", da: "et forklæde" },
+    praise: {
+      sv: { t: "Snyggt förkläde!", en: "Nice apron!" },
+      de: { t: "Schicke Schürze! Hilfst du wieder im Café?", en: "Smart apron! Helping in the café again?" },
+      vi: { t: "Tạp dề xinh quá!", en: "What a cute apron!" },
+    },
+  },
+  boots: {
+    en: "wellies",
+    name: { sv: "gummistövlar", de: "die Gummistiefel", vi: "ủng cao su", da: "gummistøvler" },
+    praise: {
+      sv: { t: "Gummistövlar! Bra för leran.", en: "Wellies! Good for the mud." },
+      de: { t: "Gummistiefel! Damit kannst du auf jeden Hof.", en: "Wellies! You can go to any farm in those." },
+      vi: { t: "Ủng cao su! Đi mưa không sợ ướt.", en: "Wellies! No wet feet in the rain." },
+    },
+  },
+  bowtie: {
+    en: "bow tie",
+    name: { sv: "en fluga", de: "die Fliege", vi: "nơ đeo cổ", da: "en butterfly" },
+    praise: {
+      sv: { t: "En fluga! Så elegant.", en: "A bow tie! So elegant." },
+      de: { t: "Eine Fliege! Sehr elegant.", en: "A bow tie! Very elegant." },
+      vi: { t: "Nơ đeo cổ! Lịch sự quá.", en: "A bow tie! Very smart." },
+    },
+  },
+  backpack: {
+    en: "rucksack",
+    name: { sv: "en ryggsäck", de: "der Rucksack", vi: "ba lô", da: "en rygsæk" },
+    praise: {
+      sv: { t: "En ryggsäck! Ska du på vandring?", en: "A rucksack! Going hiking?" },
+      de: { t: "Ein Rucksack! Gehst du wandern?", en: "A rucksack! Are you going hiking?" },
+      vi: { t: "Ba lô! Bạn đi leo núi à?", en: "A rucksack! Going hiking?" },
+    },
+  },
 };
 
 // The notes that pop up on an island when something new arrives.
-export const wardrobeNews: Record<TargetLanguageCode, { newItem: Line; newItems: (n: number) => Line; giftFrom: (name: string) => Line }> = {
+export const wardrobeNews: Record<TargetLanguageCode, { newItem: Line; newItems: (n: number) => Line; giftFrom: (name: string) => Line; forYou?: Line }> = {
   sv: {
     newItem: { t: "Nytt i garderoben", en: "New in your wardrobe" },
     newItems: (n) => ({ t: `${n} nya saker i garderoben`, en: `${n} new things in your wardrobe` }),
@@ -162,6 +234,7 @@ export const wardrobeNews: Record<TargetLanguageCode, { newItem: Line; newItems:
     newItem: { t: "Neu im Kleiderschrank", en: "New in your wardrobe" },
     newItems: (n) => ({ t: `${n} neue Sachen im Kleiderschrank`, en: `${n} new things in your wardrobe` }),
     giftFrom: (name) => ({ t: `Ein Geschenk von ${name}!`, en: `A present from ${name}!` }),
+    forYou: { t: "Das ist für dich!", en: "This is for you!" },
   },
   vi: {
     newItem: { t: "Đồ mới trong tủ quần áo", en: "New in your wardrobe" },

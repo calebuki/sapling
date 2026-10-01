@@ -33,22 +33,29 @@ export type Eyes = (typeof eyeStyles)[number];
 export type Cheeks = (typeof cheekStyles)[number];
 
 export type Slot = "hat" | "top" | "bottom" | "extra";
-export type HatId = "beanie" | "cap" | "sunhat" | "crown" | "bollenhut" | "nonla";
-export type TopId = "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat";
-export type BottomId = "trousers" | "shorts" | "overalls";
-export type ExtraId = "glasses" | "scarf";
+export type HatId = "beanie" | "cap" | "sunhat" | "crown" | "bollenhut" | "nonla" | "captain" | "conductor";
+export type TopId = "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat" | "labcoat";
+export type BottomId = "trousers" | "shorts" | "overalls" | "skirt";
+export type ExtraId = "glasses" | "scarf" | "apron" | "boots" | "bowtie" | "backpack";
 export type ItemId = HatId | TopId | BottomId | ExtraId;
 
 export type Unlock =
   | { kind: "free" }
   // The wardrobe level: 1 plus every level-up on every island.
   | { kind: "level"; level: number }
-  | { kind: "gift"; island: TargetLanguageCode; villager: string; from: string; unit: string };
+  | { kind: "gift"; island: TargetLanguageCode; villager: string; from: string; unit: string }
+  // Work clothes, given by a villager once you do well (two stars or more) on
+  // the third level of their job.
+  | { kind: "job"; island: TargetLanguageCode; villager: string; from: string };
+
+// The job level whose good result brings the work clothes.
+export const JOB_GIFT_LEVEL = 2;
 
 export type Item = { id: ItemId; slot: Slot; unlock: Unlock };
 
 const free = { kind: "free" } as const;
 const level = (n: number) => ({ kind: "level", level: n }) as const;
+const job = (island: TargetLanguageCode, villager: string, from: string) => ({ kind: "job", island, villager, from }) as const;
 
 export const items: readonly Item[] = [
   { id: "beanie", slot: "hat", unlock: free },
@@ -57,6 +64,8 @@ export const items: readonly Item[] = [
   { id: "crown", slot: "hat", unlock: { kind: "gift", island: "sv", villager: "maja", from: "Maja", unit: "klaeder" } },
   { id: "bollenhut", slot: "hat", unlock: { kind: "gift", island: "de", villager: "hilde", from: "Hilde", unit: "familie" } },
   { id: "nonla", slot: "hat", unlock: { kind: "gift", island: "vi", villager: "mai", from: "Mai", unit: "o-cho" } },
+  { id: "captain", slot: "hat", unlock: job("de", "greta", "Greta") },
+  { id: "conductor", slot: "hat", unlock: job("de", "lena", "Lena") },
   { id: "tee", slot: "top", unlock: free },
   { id: "longsleeve", slot: "top", unlock: free },
   { id: "tank", slot: "top", unlock: free },
@@ -66,11 +75,17 @@ export const items: readonly Item[] = [
   { id: "knit", slot: "top", unlock: level(6) },
   { id: "shirt", slot: "top", unlock: level(7) },
   { id: "raincoat", slot: "top", unlock: level(10) },
+  { id: "labcoat", slot: "top", unlock: job("de", "aylin", "Aylin") },
   { id: "trousers", slot: "bottom", unlock: free },
   { id: "shorts", slot: "bottom", unlock: level(4) },
   { id: "overalls", slot: "bottom", unlock: level(8) },
+  { id: "skirt", slot: "bottom", unlock: job("de", "marie", "Marie") },
   { id: "glasses", slot: "extra", unlock: level(5) },
   { id: "scarf", slot: "extra", unlock: level(9) },
+  { id: "apron", slot: "extra", unlock: job("de", "franz", "Franz") },
+  { id: "boots", slot: "extra", unlock: job("de", "hilde", "Hilde") },
+  { id: "bowtie", slot: "extra", unlock: job("de", "jonas", "Jonas") },
+  { id: "backpack", slot: "extra", unlock: job("de", "sepp", "Sepp") },
 ];
 
 const byId = new Map(items.map((item) => [item.id, item]));
@@ -147,7 +162,7 @@ export function isUnlocked(item: Item, record: Pick<WardrobeRecord, "levels" | "
 
 // Every piece open, for developer mode. The real record is left as it is.
 export function withEverything<T extends Pick<WardrobeRecord, "levels" | "gifts">>(record: T): T {
-  const gifts = items.filter((item) => item.unlock.kind === "gift").map((item) => item.id);
+  const gifts = items.filter((item) => item.unlock.kind === "gift" || item.unlock.kind === "job").map((item) => item.id);
   // A level far past the last piece; this is only ever a view, never saved.
   return { ...record, levels: { ...record.levels, de: 1000 }, gifts: [...new Set([...record.gifts, ...gifts])] };
 }
@@ -176,9 +191,21 @@ export function giftsFor(code: TargetLanguageCode, doneUnits: readonly string[])
   );
 }
 
+// The work clothes an island's villagers have given for good jobs, from each host's best stars.
+export function jobGiftsFor(code: TargetLanguageCode, shifts: Record<string, { stars: number[] }>): ItemId[] {
+  return items.flatMap((item) =>
+    item.unlock.kind === "job" && item.unlock.island === code && (shifts[item.unlock.villager]?.stars[JOB_GIFT_LEVEL] ?? 0) >= 2 ? [item.id] : [],
+  );
+}
+
+// The work clothes a host gives, if any.
+export function jobGiftOf(code: TargetLanguageCode, host: string): ItemId | null {
+  return items.find((item) => item.unlock.kind === "job" && item.unlock.island === code && item.unlock.villager === host)?.id ?? null;
+}
+
 export function giverOf(id: ItemId) {
   const unlock = itemById(id).unlock;
-  return unlock.kind === "gift" ? unlock.from : null;
+  return unlock.kind === "gift" || unlock.kind === "job" ? unlock.from : null;
 }
 
 // Swaps anything locked for the free piece in its slot.
@@ -256,7 +283,7 @@ export function readRecord(raw: unknown): WardrobeRecord {
     v: 1,
     outfit: readOutfit(r.outfit),
     levels,
-    gifts: ids(r.gifts).filter((id) => itemById(id).unlock.kind === "gift"),
+    gifts: ids(r.gifts).filter((id) => itemById(id).unlock.kind === "gift" || itemById(id).unlock.kind === "job"),
     seen: ids(r.seen),
   };
 }
@@ -269,15 +296,18 @@ export function shade(hex: string, by: number) {
   return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => c(v).toString(16).padStart(2, "0")).join("")}`;
 }
 
+const labcoatWhite = "#f7f6f0";
+
 export function lookOf(outfit: Outfit): CharacterLook {
   return {
     skin: outfit.skin,
     hair: outfit.hair,
     hairStyle: outfit.hairStyle,
-    shirt: outfit.topColour,
+    // A doctor's coat is always white.
+    shirt: outfit.top === "labcoat" ? labcoatWhite : outfit.topColour,
     pants: outfit.bottomColour,
     accent: outfit.hatColour,
-    collar: shade(outfit.topColour, 0.82),
+    collar: shade(outfit.top === "labcoat" ? labcoatWhite : outfit.topColour, outfit.top === "labcoat" ? 0.9 : 0.82),
     hat: outfit.hat ?? undefined,
     beard: outfit.beard,
     face: { eyes: outfit.eyes, cheeks: outfit.cheeks },
@@ -285,6 +315,11 @@ export function lookOf(outfit: Outfit): CharacterLook {
     bottom: outfit.bottom,
     glasses: outfit.extras.includes("glasses"),
     scarf: outfit.extras.includes("scarf") ? outfit.extraColour : undefined,
+    apron: outfit.extras.includes("apron") ? outfit.extraColour : undefined,
+    boots: outfit.extras.includes("boots") ? outfit.extraColour : undefined,
+    // Over an apron of the same colour the bow tie would vanish, so it goes darker.
+    bowtie: outfit.extras.includes("bowtie") ? (outfit.extras.includes("apron") ? shade(outfit.extraColour, 0.62) : outfit.extraColour) : undefined,
+    backpack: outfit.extras.includes("backpack") ? outfit.extraColour : undefined,
   };
 }
 

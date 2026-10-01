@@ -1,4 +1,5 @@
 import type { ClinicConfig, ClinicPart, HerbColor, Spoons } from "@/lib/game/clinic";
+import { spoken } from "@/lib/game/line";
 
 // Aylin's surgery. Patients say what hurts ("Mein Hals tut weh."), she brews a
 // herbal remedy from a recipe of coloured herbs, and from the third rung you
@@ -78,16 +79,17 @@ export const clinic: ClinicConfig = {
       ? { t: `Au! ${capital(my(part))} tut so weh.`, en: `Ouch! My ${part.name.en} hurts so much.` }
       : { t: `${capital(my(part))} tut weh.`, en: `My ${part.name.en} hurts.` };
   },
+  // Two clips: what you pointed at, then the complaint again.
   wrongPart(want, got) {
-    return { t: `Nein, das ist ${my(got)}! ${capital(my(want))} tut weh.`, en: `No, that's my ${got.name.en}! My ${want.name.en} hurts.` };
+    return spoken([`Nein, das ist ${my(got)}!`, `${capital(my(want))} tut weh.`], `No, that's my ${got.name.en}! My ${want.name.en} hurts.`);
   },
+  // Read out step by step, like a recipe card: each step is its own clip.
   recipe(recipe) {
-    const herbs = recipe.herbs.map((h) => ({ t: `${count[h.spoons].t} ${herb[h.color].t} Kräuter`, en: `${count[h.spoons].en} of ${herb[h.color].en} herbs` }));
+    const herbs = recipe.herbs.map((h) => ({ t: `${capital(count[h.spoons].t)} ${herb[h.color].t} Kräuter.`, en: `${capital(count[h.spoons].en)} of ${herb[h.color].en} herbs.` }));
     const water = recipe.water === "hot" ? { t: "heißes Wasser", en: "hot water" } : { t: "kaltes Wasser", en: "cold water" };
-    const items = [...herbs, water];
-    const join = (key: "t" | "en", and: string) => `${items.slice(0, -1).map((i) => i[key]).join(", ")} ${and} ${items[items.length - 1][key]}`;
     const sugar = recipe.sugar ? { t: ", mit Zucker", en: ", with sugar" } : { t: "", en: "" };
-    return { t: `Für den Trank: ${join("t", "und")}${sugar.t}.`, en: `For the potion: ${join("en", "and")}${sugar.en}.` };
+    const steps = [...herbs, { t: `Dann ${water.t}${sugar.t}.`, en: `Then ${water.en}${sugar.en}.` }];
+    return spoken(steps.map((s) => s.t), steps.map((s) => s.en).join(" "));
   },
   lines: {
     invite: { t: "Kann ich dir helfen?", en: "Can I help you?" },

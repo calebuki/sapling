@@ -6,13 +6,21 @@
 -- Visitors may add a clip that isn't there yet, under the same rules as
 -- players: names must match the clip-path scheme in src/lib/speech/clips.ts,
 -- and nobody but voice reviewers can overwrite or delete one.
-drop policy if exists "Visitors add new speech clips" on storage.objects;
-create policy "Visitors add new speech clips"
-  on storage.objects for insert to anon
-  with check (
-    bucket_id = 'speech'
-    and name ~ '^(sv|de|da|vi)/[A-Za-z]+/(normal|slow)/[0-9a-f]{64}\.mp3$'
-  );
+do $do$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'Visitors add new speech clips'
+  ) then
+    create policy "Visitors add new speech clips"
+      on storage.objects for insert to anon
+      with check (
+        bucket_id = 'speech'
+        and name ~ '^(sv|de|da|vi)/[A-Za-z]+/(normal|slow)/[0-9a-f]{64}\.mp3$'
+      );
+  end if;
+end
+$do$;
 
 -- Recording a clip in voice_lines no longer needs a sign-in, but it does need
 -- the clip: the path must be the hash of exactly these words in this voice,
@@ -51,5 +59,4 @@ begin
 end;
 $$;
 
-revoke all on function public.record_speech_clip(text, text, text, boolean, text, text) from public;
 grant execute on function public.record_speech_clip(text, text, text, boolean, text, text) to anon, authenticated, service_role;

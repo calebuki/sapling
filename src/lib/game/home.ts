@@ -183,10 +183,10 @@ export function allHomeLines(config: HomeConfig): Line[] {
     for (const p of places) lines.push(config.fetch(thing, p.where, 0), config.fetch(thing, p.where, 1), config.notThere(thing, p.where));
   }
   for (const p of places) lines.push(config.found(p.where));
-  const [a, b] = config.things;
+  // Every "that's the wrong one" (lines spoken in parts reuse the pieces above).
   const [x, y] = places;
-  if (a && b && x && y) {
-    lines.push(config.wrong({ id: 1, thing: a, ...x }, { id: 2, thing: a, ...y }), config.wrong({ id: 1, thing: a, ...x }, { id: 2, thing: b, ...y }));
+  if (x && y) {
+    for (const a of config.things) for (const b of config.things) lines.push(config.wrong({ id: 1, thing: a, ...x }, { id: 2, thing: b, ...(a === b ? y : x) }));
   }
   return lines;
 }

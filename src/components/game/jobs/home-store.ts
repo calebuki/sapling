@@ -7,8 +7,10 @@ import type { Villager } from "@/lib/game/villagers";
 import type { Observation } from "@/lib/learning/adaptive";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "../audio/sfx";
-import { speak } from "../audio/speech";
-import { emote, getGame, setGame, updateSave } from "../store";
+import { speak, speakLine } from "../audio/speech";
+import type { ItemId } from "@/lib/game/wardrobe";
+import { emote, setGame } from "../store";
+import { finishJob } from "./progress";
 import { BOUNDS, DOOR_INSIDE, DOOR_OUTSIDE, HAND_OVER, HOST_SPOT, PLAYER_START, route, standFor } from "./home-layout";
 import { jobPlayer, placePlayer, stepWalker, walker, walkTo, type Walker } from "./walk";
 
@@ -40,6 +42,8 @@ export type HomeState = {
   missed: boolean;
   words: Record<string, [number, number]>;
   levelUp: boolean;
+  // Work clothes the host just gave you, if this run earned them.
+  gift: ItemId | null;
   late: boolean;
   timeLeft: number;
 };
@@ -64,7 +68,7 @@ const listeners = new Set<() => void>();
 
 function blank(levelIndex: number): HomeState {
   const level = homeLevel(levelIndex);
-  return { status: "intro", levelIndex, level, room: [], tasks: [], index: 0, carrying: null, revealed: !level.heard, said: null, reminded: false, searching: false, found: 0, missed: false, words: {}, levelUp: false, late: false, timeLeft: 1 };
+  return { status: "intro", levelIndex, level, room: [], tasks: [], index: 0, carrying: null, revealed: !level.heard, said: null, reminded: false, searching: false, found: 0, missed: false, words: {}, levelUp: false, gift: null, late: false, timeLeft: 1 };
 }
 
 function set(patch: Partial<HomeState> | ((s: HomeState) => Partial<HomeState>)) {
@@ -155,14 +159,14 @@ function hostVoice() {
 }
 
 function hostSays(line: Line, reminded = false) {
-  void speak(line.t, hostVoice());
+  void speakLine(line, hostVoice());
   set({ said: line, reminded });
 }
 
 export function sayTask(slow = false) {
   const task = currentTask();
   if (!task || !setup) return;
-  void speak(task.line.t, { ...hostVoice(), slow });
+  void speakLine(task.line, { ...hostVoice(), slow });
 }
 
 // "Pardon?": slowly again, and the words show. Costs a little time.
@@ -193,16 +197,12 @@ function finish(late: boolean) {
   const timeLeft = homeRuntime.seconds / homeRuntime.total;
   const stars = homeStars(state.found, state.tasks.length, timeLeft);
   const host = setup.host.id;
-  const saved = getGame().save.shifts[host] ?? { level: 0, stars: [] };
-  const best = [...saved.stars];
-  best[state.levelIndex] = Math.max(best[state.levelIndex] ?? 0, stars);
-  const levelUp = stars >= 2 && state.levelIndex === saved.level && saved.level < 4;
-  updateSave({ shifts: { ...getGame().save.shifts, [host]: { level: levelUp ? saved.level + 1 : saved.level, stars: best } } });
+  const { levelUp, gift } = finishJob(host, state.levelIndex, stars);
   sound.play(stars >= 2 ? "levelup" : "sparkle");
   emote(host, stars >= 2 ? "happy" : "think", 2000);
   const lines = setup.home.lines;
   void speak((late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]).t, hostVoice());
-  set({ status: "done", levelUp, late, timeLeft, carrying: null, said: null });
+  set({ status: "done", levelUp, gift, late, timeLeft, carrying: null, said: null });
 }
 
 // ---------- Fetching ----------

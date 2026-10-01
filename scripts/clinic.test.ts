@@ -51,7 +51,7 @@ test("lines read naturally", () => {
   assert.equal(de.wrongPart(head, nose).t, "Nein, das ist meine Nase! Mein Kopf tut weh.");
   assert.equal(
     de.recipe({ herbs: [{ color: "red", spoons: 2 }, { color: "green", spoons: 1 }], water: "hot", sugar: true }).t,
-    "Für den Trank: zwei Löffel rote Kräuter, ein Löffel grüne Kräuter und heißes Wasser, mit Zucker.",
+    "Zwei Löffel rote Kräuter. Ein Löffel grüne Kräuter. Dann heißes Wasser, mit Zucker.",
   );
 });
 

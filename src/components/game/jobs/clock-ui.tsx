@@ -273,13 +273,14 @@ function Intro({ setup }: { setup: ClockSetup }) {
 }
 
 function Summary({ setup }: { setup: ClockSetup }) {
-  const { helped, customers, words, levelUp, levelIndex, late, timeLeft } = useClock((s) => s);
+  const { helped, customers, words, levelUp, gift, levelIndex, late, timeLeft } = useClock((s) => s);
   const starter = useClockStarter(setup.host);
   const label = useWordLabel();
   const stars = clockStars(helped, customers.length, timeLeft);
   const { lines } = setup.clock;
   return (
     <JobSummary
+      gift={gift}
       title={lines.title}
       stars={stars}
       line={late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]}

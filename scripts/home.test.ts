@@ -62,7 +62,7 @@ test("places take the dative", () => {
   assert.equal(de.where("under", at("das-bett")).t, "unter dem Bett");
   assert.equal(de.where("next", at("die-tuer")).t, "neben der Tür");
   assert.equal(de.where("in", at("der-schrank")).t, "im Schrank");
-  assert.equal(de.fetch(de.things.find((t) => t.slug === "der-schluessel")!, de.where("on", at("der-tisch")), 0).t, "Bring mir bitte den Schlüssel auf dem Tisch!");
+  assert.equal(de.fetch(de.things.find((t) => t.slug === "der-schluessel")!, de.where("on", at("der-tisch")), 0).t, "Bring mir bitte den Schlüssel! Er ist auf dem Tisch.");
   assert.equal(de.ask(de.things.find((t) => t.slug === "die-tasse")!).t, "Wo ist meine Tasse?");
 });
 

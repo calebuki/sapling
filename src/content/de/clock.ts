@@ -1,4 +1,5 @@
 import { namedHour, numberIn, type ClockConfig, type Time } from "@/lib/game/clock";
+import { spoken } from "@/lib/game/line";
 import { normalizeText } from "@/lib/learning/text";
 
 // Jonas's workshop. German names a time after the coming hour: halb vier is
@@ -73,8 +74,9 @@ export const clock: ClockConfig = {
       ? { t: `Meine Uhr steht. Stell sie bitte auf ${s.t}.`, en: `My clock has stopped. Please set it to ${s.en}.` }
       : { t: `Kannst du die Uhr auf ${s.t} stellen?`, en: `Can you set the clock to ${s.en}?` };
   },
+  // Two clips, so any wrong time can be answered: what it says, what they need.
   wrongTime(want, got) {
-    return { t: `Nein, das ist ${say(got).t}! Ich brauche ${say(want).t}.`, en: `No, that's ${say(got).en}! I need ${say(want).en}.` };
+    return spoken([`Nein, das ist ${say(got).t}!`, `Ich brauche ${say(want).t}.`], `No, that's ${say(got).en}! I need ${say(want).en}.`);
   },
   ask: { t: "Wie spät ist es eigentlich?", en: "What time is it, actually?" },
   told(time) {

@@ -1,5 +1,6 @@
 import type { CafeConfig, CafeItem } from "@/lib/game/cafe";
 import type { OrderPart, RushConfig } from "@/lib/game/rush";
+import { spoken } from "@/lib/game/line";
 
 // Café Kuckuck's counter. Franz teaches here: the menu board, orders that land
 // on your tray, and the odd mix-up for you to sort out. German articles change
@@ -88,8 +89,9 @@ const rush: RushConfig = {
     const t = said.map((p) => p.t).join(" und ");
     return { t: `${capital(t)}? Kommt sofort!`, en: `${capital(said.map((p) => p.en).join(" and "))}? Coming right up!` };
   },
+  // Two clips, so every mix-up is covered by one recording per item and voice.
   wrong(want, got) {
-    return { t: `Nein, ich wollte ${of(want).acc}, ${of(got).neg}.`, en: `No, I wanted ${of(want).en}, not ${of(got).en}.` };
+    return spoken([`${capital(of(got).neg)}!`, `Ich wollte ${of(want).acc}.`], `Not ${of(got).en}! I wanted ${of(want).en}.`);
   },
   missing(want) {
     return { t: `Ich wollte auch ${of(want).acc}.`, en: `I wanted ${of(want).en} too.` };

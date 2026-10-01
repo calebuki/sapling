@@ -1,5 +1,6 @@
 "use client";
 
+import { readShifts } from "@/lib/game/jobs";
 import { useSyncExternalStore } from "react";
 import type { Line } from "@/lib/game/line";
 import type { Experience } from "@/lib/game/placement";
@@ -137,7 +138,7 @@ export function readSave(learnerId: string, code: TargetLanguageCode): SaveData 
       v: 3,
       discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
       grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
-      shifts: parsed.shifts && typeof parsed.shifts === "object" ? parsed.shifts : {},
+      shifts: readShifts(parsed.shifts),
       noticed: Array.isArray(parsed.noticed) ? parsed.noticed.filter((id): id is string => typeof id === "string") : [],
       // Saves from before onboarding existed already met the host; don't quiz them again.
       experience: parsed.experience ?? (parsed.introDone ? "little" : null),

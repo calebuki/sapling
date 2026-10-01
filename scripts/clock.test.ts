@@ -62,6 +62,7 @@ test("customers only use the forms of a rung and the hours the learner knows", (
 
 test("wrong times are named back", () => {
   assert.equal(de.wrongTime({ h: 3, m: 30 }, { h: 4, m: 30 }).t, "Nein, das ist halb fünf! Ich brauche halb vier.");
+  assert.deepEqual(de.wrongTime({ h: 3, m: 30 }, { h: 4, m: 30 }).parts, ["Nein, das ist halb fünf!", "Ich brauche halb vier."]);
   assert.ok(sameTime({ h: 3, m: 30 }, { h: 3, m: 30 }));
 });
 

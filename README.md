@@ -8,7 +8,7 @@ produce, pronounce, and understand across contexts and speakers.
 The current product includes:
 
 - Lilla Ö, an immersive 3D island game where villagers teach Swedish through
-  adaptive dialogue and live spoken conversations (see below)
+  adaptive dialogue, and mini-game jobs where you help them (see below)
 - a Supabase schema for concepts, learner state, multi-concept conversation
   evidence, character continuity, and append-only learning history
 - local demo persistence when Sapling's Supabase project is not configured
@@ -102,9 +102,10 @@ meaning when hovered.
   using the existing scheduler in `src/lib/learning/adaptive.ts` scoped to that
   villager's concepts. Evidence is recorded through the learning repository,
   exactly as before.
-- **Talk for real.** Once you know enough, each villager's capstone is a live
-  spoken conversation through GPT-Live (`/api/voice/*`, persona per villager).
-  Without Live voice it falls back to a typed chat via `/api/practice/respond`.
+- **Jobs.** Villagers whose units you've started ask for a hand: Franz's café
+  rush, Hilde's farmhouse, Aylin's surgery, Jonas's clock workshop and more.
+  Each is a small 3D scene where the language is how you get the work done.
+  (The AI conversation mode with villagers was removed until it works well.)
 - **Progression** is derived from the learning model, not a separate score:
   XP and levels come from concept strength, the next villager unlocks when
   60% of the previous one's phrases have been met, and the tree in the square

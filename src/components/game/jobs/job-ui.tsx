@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlarmClock, ArrowRight, Star, X } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { ItemIcon } from "@/components/wardrobe/icons";
+import { itemName, wardrobeNews } from "@/content/wardrobe";
 import type { Line } from "@/lib/game/line";
 import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
+import type { ItemId } from "@/lib/game/wardrobe";
 import { sound } from "../audio/sfx";
 import { speak } from "../audio/speech";
 import { useIsland } from "../island";
@@ -166,6 +169,7 @@ export function JobSummary({
   back,
   onAgain,
   onBack,
+  gift = null,
 }: {
   title: Line;
   stars: number;
@@ -178,6 +182,8 @@ export function JobSummary({
   back: Line;
   onAgain: () => void;
   onBack: () => void;
+  // Work clothes the host has just given you.
+  gift?: ItemId | null;
 }) {
   return (
     <div className="shift-summary" role="dialog" aria-label={title.en}>
@@ -202,6 +208,7 @@ export function JobSummary({
           ))}
         </ul>
       ) : null}
+      {gift ? <JobGift id={gift} /> : null}
       {harder ? (
         <p className="shift-harder">
           <GlossedLine line={harder} />
@@ -215,6 +222,30 @@ export function JobSummary({
           <GlossedLine line={back} />
         </button>
       </div>
+    </div>
+  );
+}
+
+// "This is for you!": the host's work clothes, now in your wardrobe.
+function JobGift({ id }: { id: ItemId }) {
+  const { code } = useIsland();
+  const name = itemName(id, code);
+  const forYou = wardrobeNews[code].forYou ?? wardrobeNews[code].newItem;
+  useEffect(() => {
+    sound.play("sparkle");
+  }, []);
+  return (
+    <div className="shift-gift">
+      <span className="shift-gift-icon">
+        <ItemIcon id={id} colour="#c0392b" />
+      </span>
+      <span>
+        <GlossedLine line={forYou} />
+        <strong>
+          <Glossed text={name.t} en={name.en} />
+        </strong>
+        <small>{wardrobeNews[code].newItem.en}</small>
+      </span>
     </div>
   );
 }

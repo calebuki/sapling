@@ -342,6 +342,20 @@ export function createSupabaseLearningRepository(): LearningRepository {
         .eq("id", userId);
       if (error) throw error;
     },
+    async loadJobs() {
+      const userId = await getCurrentUserId();
+      const { data, error } = await createClient().from("profiles").select("jobs").eq("id", userId).single();
+      if (error) throw error;
+      return data.jobs;
+    },
+    async saveJobs(record) {
+      const userId = await getCurrentUserId();
+      const { error } = await createClient()
+        .from("profiles")
+        .update({ jobs: record as unknown as Json })
+        .eq("id", userId);
+      if (error) throw error;
+    },
     async startSession(input) {
       const supabase = createClient();
       const userId = await getCurrentUserId();

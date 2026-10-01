@@ -42,3 +42,8 @@ export function discover(id: string) {
   }
   void speak(item.t, { who: "player" });
 }
+
+// Dev-only hook so automated checks can open a villager without walking there.
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+  (window as unknown as { __talk: typeof startDialogue }).__talk = startDialogue;
+}

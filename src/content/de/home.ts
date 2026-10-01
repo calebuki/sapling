@@ -1,4 +1,5 @@
 import type { HomeAnchor, HomeConfig, HomeThing, Spot } from "@/lib/game/home";
+import { spoken, type Line } from "@/lib/game/line";
 
 // Hilde's farmhouse parlour. Her family comes for dinner and she can't find
 // her things. Where something is takes the dative, which the "Wo ist das?"
@@ -49,6 +50,12 @@ const acc = (t: HomeThing) => {
 const nom = (t: HomeThing) => thingOf(t).name.t;
 const my = (t: HomeThing) => `${thingOf(t).gender === "f" ? "meine" : "mein"} ${thingOf(t).noun}`;
 const pronoun = (t: HomeThing) => ({ m: "er", f: "sie", n: "es" })[thingOf(t).gender];
+const itsEn = (t: HomeThing) => (["die-katze", "der-hund"].includes(t.slug) ? (t.slug === "der-hund" ? "He's" : "She's") : "It's");
+
+// Requests are said as two short sentences ("Ich brauche den Hund. Er ist auf
+// dem Tisch."), each recorded once: the thing, then where it (er/sie/es) is.
+const isAt = (thing: HomeThing, where: Line) => ({ t: `${capital(pronoun(thing))} ist ${where.t}.`, en: `${itsEn(thing)} ${where.en}.` });
+const need = (thing: HomeThing) => ({ t: `Ich brauche ${acc(thing)}.`, en: `I need ${thing.name.en}.` });
 
 export const home: HomeConfig = {
   host: "hilde",
@@ -68,9 +75,9 @@ export const home: HomeConfig = {
     return { t, en: `${preposition[spot].en} ${name.en}` };
   },
   fetch(thing, where, variant) {
-    return variant === 0
-      ? { t: `Bring mir bitte ${acc(thing)} ${where.t}!`, en: `Please bring me ${thing.name.en} ${where.en}!` }
-      : { t: `Ich brauche ${acc(thing)} ${where.t}.`, en: `I need ${thing.name.en} ${where.en}.` };
+    const first = variant === 0 ? { t: `Bring mir bitte ${acc(thing)}!`, en: `Please bring me ${thing.name.en}!` } : need(thing);
+    const second = isAt(thing, where);
+    return spoken([first.t, second.t], `${first.en} ${second.en}`);
   },
   ask(thing) {
     return { t: `Wo ist ${my(thing)}?`, en: `Where is my ${thing.name.en.replace(/^the /, "")}?` };
@@ -83,17 +90,13 @@ export const home: HomeConfig = {
   },
   wrong(want, got) {
     const wantWhere = home.where(want.spot, want.anchor);
-    if (want.thing.slug === got.thing.slug) {
-      const gotWhere = home.where(got.spot, got.anchor);
-      return {
-        t: `Nein, das ist ${nom(got.thing)} ${gotWhere.t}. Ich brauche ${acc(want.thing)} ${wantWhere.t}.`,
-        en: `No, that's ${got.thing.name.en} ${gotWhere.en}. I need ${want.thing.name.en} ${wantWhere.en}.`,
-      };
-    }
-    return {
-      t: `Das ist doch ${nom(got.thing)}! Ich brauche ${acc(want.thing)} ${wantWhere.t}.`,
-      en: `But that's ${got.thing.name.en}! I need ${want.thing.name.en} ${wantWhere.en}.`,
-    };
+    const first =
+      want.thing.slug === got.thing.slug
+        ? // The right thing from the wrong place: "Nein, nicht den da!"
+          { t: `Nein, nicht ${acc(got.thing).split(" ")[0]} da!`, en: "No, not that one!" }
+        : { t: `Das ist doch ${nom(got.thing)}!`, en: `But that's ${got.thing.name.en}!` };
+    const rest = [need(want.thing), isAt(want.thing, wantWhere)];
+    return spoken([first.t, ...rest.map((l) => l.t)], [first, ...rest].map((l) => l.en).join(" "));
   },
   lines: {
     invite: { t: "Kann ich dir helfen?", en: "Can I help you?" },

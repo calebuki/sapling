@@ -96,7 +96,8 @@ Everything an island says or shows comes from its pack in
 
 - **course**: units, lessons, listening items and the concept catalog
 - **villagers** and the host's script, **scenes** (short exchanges that play
-  out key phrases), **grammar** tips, **scenarios** for live conversations
+  out key phrases), **grammar** tips, **scenarios** (kept for a future
+  conversation mode; nothing in the game opens them now)
 - **glossary** for hover glosses, **ui** strings, the **café** counter if the
   island has one, **discoveries**, **placement** bands, **world** geometry and
   **signs**
@@ -182,6 +183,21 @@ orders understood by ear count as audio recognition, orders read off the
 bubble as exposure, and kitchen requests as production. A shift with two or
 more stars opens the next, busier rung (`save.shifts`). Everything a guest or
 host can say is in the gloss audit and the voice catalog.
+
+Job progress is kept on the device (the island save) and with the account
+(`profiles.jobs`, per island and host). Both copies only grow, so
+`src/components/game/jobs/progress.ts` merges them by taking the better of
+each when an island loads and after every run. Two or more stars on a job's
+third level earn the host's work clothes (Franz's apron, Aylin's white coat,
+Jonas's bow tie and so on: wardrobe items with a `job` unlock), shown on the
+summary card and added to the wardrobe's gifts.
+
+Lines built from interchangeable pieces are spoken as `parts`
+(`Line.parts`, `speakLine`): Hilde's "Ich brauche den Hund. Er ist auf dem
+Tisch.", Aylin's recipe read step by step, a customer's "Nein, das ist halb
+fünf! Ich brauche halb vier." Each piece is one recording, reused across
+every combination, which keeps the voice catalog small while covering every
+mix-up a player can cause.
 
 ### Speech
 

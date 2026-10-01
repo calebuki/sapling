@@ -173,3 +173,10 @@ export function recordProgress(code: TargetLanguageCode, level: number, gifts: r
   change(record);
   return unlockedIds(record).filter((id) => !before.has(id));
 }
+
+// A villager hands something over (work clothes after a good job). Returns what's new.
+export function receiveGifts(ids: readonly ItemId[]): ItemId[] {
+  const fresh = ids.filter((id) => !state.record.gifts.includes(id));
+  if (fresh.length) change({ ...state.record, gifts: [...state.record.gifts, ...fresh] });
+  return fresh;
+}

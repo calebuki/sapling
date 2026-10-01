@@ -5,6 +5,7 @@ import { getTargetLanguage } from "@/lib/learning/languages";
 import { clipPath, publicClipUrl } from "@/lib/speech/clips";
 import { genderOf, passerVoices, playerVoice, type VoiceGender } from "@/lib/game/voices";
 import type { VillagerId } from "@/lib/game/villagers";
+import type { Line } from "@/lib/game/line";
 import { island } from "../island";
 import { runtime } from "../store";
 import { sound } from "./sfx";
@@ -186,6 +187,27 @@ export function speak(text: string, options: SpeakOptions = {}): Promise<void> {
     }
     if (id === generation && runtime.speaking === who) runtime.speaking = null;
   })();
+}
+
+// A line spoken as several clips in a row (see Line.parts), with a breath
+// between them. Anything else that speaks meanwhile cuts the rest off.
+export async function speakLine(line: Line, options: SpeakOptions = {}): Promise<void> {
+  if (!line.parts) return speak(line.t, options);
+  for (const [i, part] of line.parts.entries()) {
+    const playing = speak(part, options);
+    const id = generation;
+    await playing;
+    if (id !== generation) return;
+    if (i < line.parts.length - 1) {
+      runtime.speaking = options.who ?? null;
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+      if (id !== generation) return;
+    }
+  }
+}
+
+export function prefetchLine(line: Line, options: Omit<SpeakOptions, "clipId"> = {}) {
+  for (const part of line.parts ?? [line.t]) prefetchSpeech(part, options);
 }
 
 // Resolves true once the clip has played (or was interrupted after starting),

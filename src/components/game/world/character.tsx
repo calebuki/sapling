@@ -29,6 +29,10 @@ const g = {
 };
 
 const flat = (color: string) => toon(color, { surface: null });
+const darker = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v * 0.72).toString(16).padStart(2, "0")).join("")}`;
+};
 
 // ---- Faces -----------------------------------------------------------------
 
@@ -261,6 +265,10 @@ export function Character({
       shoe: flat("#4a3a30"),
       apron: flat(look.apron ?? look.accent),
       scarf: flat(look.scarf ?? look.accent),
+      boots: flat(look.boots ?? "#4a3a30"),
+      bowtie: flat(look.bowtie ?? look.accent),
+      backpack: flat(look.backpack ?? look.accent),
+      strap: flat(darker(look.backpack ?? look.accent)),
       frame: flat("#2b2233"),
       button: flat("#f2c230"),
     }),
@@ -353,18 +361,42 @@ export function Character({
                 <mesh geometry={g.box} material={m.pants} position={[0, -0.05, 0]} scale={[0.17, 0.11, 0.19]} castShadow />
                 <mesh geometry={g.box} material={m.skin} position={[0, -0.17, 0]} scale={[0.13, 0.15, 0.14]} castShadow />
               </>
+            ) : look.bottom === "skirt" ? (
+              <mesh geometry={g.box} material={m.skin} position={[0, -0.14, 0]} scale={[0.13, 0.24, 0.14]} castShadow />
             ) : (
               <mesh geometry={g.box} material={m.pants} position={[0, -0.13, 0]} scale={[0.16, 0.26, 0.18]} castShadow />
             )}
-            <mesh geometry={g.round} material={m.shoe} position={[0, -0.29, 0.03]} scale={[0.19, 0.1, 0.27]} castShadow />
+            {look.boots ? (
+              <>
+                <mesh geometry={g.box} material={m.boots} position={[0, -0.21, 0]} scale={[0.18, 0.17, 0.2]} castShadow />
+                <mesh geometry={g.round} material={m.boots} position={[0, -0.29, 0.03]} scale={[0.2, 0.11, 0.28]} castShadow />
+              </>
+            ) : (
+              <mesh geometry={g.round} material={m.shoe} position={[0, -0.29, 0.03]} scale={[0.19, 0.1, 0.27]} castShadow />
+            )}
           </group>
         ))}
         {/* Torso */}
         <mesh geometry={g.round} material={m.shirt} position={[0, 0.55, 0]} scale={[0.52, 0.46, 0.38]} castShadow />
         {look.apron ? <mesh geometry={g.box} material={m.apron} position={[0, 0.5, 0.19]} scale={[0.42, 0.36, 0.02]} /> : null}
         {look.bottom === "overalls" ? <Overalls pants={m.pants} button={m.button} /> : null}
+        {look.bottom === "skirt" ? (
+          <group>
+            <mesh geometry={g.cylinder} material={m.pants} position={[0, 0.27, 0]} scale={[0.33, 0.2, 0.26]} castShadow />
+            <mesh geometry={g.round} material={m.pants} position={[0, 0.37, 0]} scale={[0.53, 0.1, 0.39]} />
+          </group>
+        ) : null}
+        {look.backpack ? <Backpack bag={m.backpack} strap={m.strap} /> : null}
         <mesh geometry={g.round} material={look.top === "tank" ? m.skin : m.collar} position={[0, 0.78, 0]} scale={[0.46, 0.1, 0.36]} />
         <TopDetails top={look.top} shirt={m.shirt} trim={m.collar} />
+        {look.bowtie ? (
+          <group position={[0, 0.76, 0.2]}>
+            {[-1, 1].map((side) => (
+              <mesh key={side} geometry={g.round} material={m.bowtie} position={[side * 0.065, 0, 0]} rotation-z={side * 0.25} scale={[0.11, 0.09, 0.05]} />
+            ))}
+            <mesh geometry={g.box} material={m.bowtie} position={[0, 0, 0.012]} scale={[0.045, 0.05, 0.05]} />
+          </group>
+        ) : null}
         {look.scarf ? (
           <group>
             <mesh geometry={g.round} material={m.scarf} position={[0, 0.8, 0]} scale={[0.5, 0.14, 0.42]} castShadow />
@@ -448,6 +480,19 @@ function TopDetails({ top, shirt, trim }: { top: CharacterLook["top"]; shirt: TH
           ))}
         </group>
       );
+    // The doctor's coat: long, open down the front, with lapels and a pen in the pocket.
+    case "labcoat":
+      return (
+        <group>
+          <mesh geometry={g.cylinder} material={shirt} position={[0, 0.26, 0]} scale={[0.29, 0.26, 0.22]} castShadow />
+          <mesh geometry={g.box} material={trim} position={[0, 0.42, 0.205]} scale={[0.02, 0.62, 0.01]} />
+          {[-1, 1].map((side) => (
+            <mesh key={side} geometry={g.box} material={trim} position={[side * 0.08, 0.72, 0.18]} rotation-z={side * 0.5} scale={[0.12, 0.2, 0.03]} />
+          ))}
+          <mesh geometry={g.box} material={trim} position={[0.13, 0.6, 0.193]} scale={[0.1, 0.08, 0.01]} />
+          <mesh geometry={g.box} material={flat("#3f7fd1")} position={[0.11, 0.65, 0.198]} scale={[0.015, 0.06, 0.01]} />
+        </group>
+      );
     case "raincoat":
       return (
         <group>
@@ -498,6 +543,23 @@ function Overalls({ pants, button }: { pants: THREE.Material; button: THREE.Mate
           <mesh geometry={g.box} material={pants} position={[x, 0.72, 0.17]} scale={[0.06, 0.16, 0.03]} />
           <mesh geometry={g.box} material={pants} position={[x, 0.6, -0.195]} scale={[0.06, 0.4, 0.02]} />
           <mesh geometry={g.box} material={button} position={[x, 0.63, 0.205]} scale={0.035} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// A rucksack on the back, its straps over the shoulders.
+function Backpack({ bag, strap }: { bag: THREE.Material; strap: THREE.Material }) {
+  return (
+    <group>
+      <mesh geometry={g.round} material={bag} position={[0, 0.54, -0.26]} scale={[0.38, 0.42, 0.18]} castShadow />
+      <mesh geometry={g.round} material={strap} position={[0, 0.69, -0.3]} scale={[0.36, 0.12, 0.14]} />
+      <mesh geometry={g.box} material={strap} position={[0, 0.44, -0.355]} scale={[0.2, 0.12, 0.03]} />
+      {[-0.13, 0.13].map((x) => (
+        <group key={x}>
+          <mesh geometry={g.box} material={strap} position={[x, 0.79, -0.02]} scale={[0.06, 0.04, 0.4]} />
+          <mesh geometry={g.box} material={strap} position={[x, 0.62, 0.19]} scale={[0.06, 0.3, 0.02]} />
         </group>
       ))}
     </group>
@@ -673,6 +735,16 @@ function Hat({ look }: { look: CharacterLook }) {
           <mesh geometry={g.round} material={flat("#1c3553")} position={[0, 0.06, -0.02]} scale={[0.86, 0.2, 0.78]} castShadow />
           <mesh geometry={g.box} material={flat("#f2c230")} position={[0, 0, 0]} scale={[0.87, 0.05, 0.79]} />
           <mesh geometry={g.box} material={flat("#101c2c")} position={[0, -0.05, 0.44]} scale={[0.56, 0.04, 0.2]} />
+        </group>
+      );
+    // A skipper's cap: white top, navy band, black peak and a gold badge.
+    case "captain":
+      return (
+        <group position={[0, 0.76, 0]} rotation-x={-0.06}>
+          <mesh geometry={g.round} material={flat("#f7f6f0")} position={[0, 0.1, -0.02]} scale={[0.9, 0.16, 0.82]} castShadow />
+          <mesh geometry={g.cylinder} material={flat("#1c3553")} position={[0, 0, 0]} scale={[0.41, 0.09, 0.37]} />
+          <mesh geometry={g.box} material={flat("#101c2c")} position={[0, -0.05, 0.42]} scale={[0.52, 0.04, 0.2]} />
+          <mesh geometry={g.box} material={flat("#f2c230")} position={[0, 0.03, 0.375]} scale={[0.1, 0.08, 0.02]} />
         </group>
       );
     case "sunhat":

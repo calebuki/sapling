@@ -350,7 +350,14 @@ function SlotTab({
     else if (slot === "bottom") wear({ bottom: id as Outfit["bottom"] });
     else wear({ extras: worn(id) ? outfit.extras.filter((e) => e !== id) : [...outfit.extras, id as ExtraId] });
   };
-  const showColour = slot === "hat" ? Boolean(outfit.hat && tintedHats.has(outfit.hat)) : slot === "extra" ? outfit.extras.includes("scarf") : true;
+  const showColour =
+    slot === "hat"
+      ? Boolean(outfit.hat && tintedHats.has(outfit.hat))
+      : slot === "extra"
+        ? outfit.extras.some((id) => id !== "glasses")
+        : slot === "top"
+          ? outfit.top !== "labcoat"
+          : true;
   return (
     <>
       <div className="wardrobe-tiles">
@@ -379,7 +386,7 @@ function SlotTab({
         })}
       </div>
       {showColour ? (
-        <Group title={slot === "extra" ? "Scarf colour" : "Colour"}>
+        <Group title={slot === "extra" ? "Extras colour" : "Colour"}>
           <Swatches colours={clothColours} value={colour} onPick={(c) => wear({ [colourKey]: c })} label="Colour" />
         </Group>
       ) : null}
@@ -395,6 +402,14 @@ function LockNote({ item }: { item: Item }) {
         <Lock size={12} aria-hidden="true" /> Level {item.unlock.level}
       </span>
     );
+  if (item.unlock.kind === "job") {
+    const island = islandMeta.find((m) => m.code === (item.unlock as { island: TargetLanguageCode }).island)?.island;
+    return (
+      <span className="wardrobe-lock" title={`Two stars on the third level of ${item.unlock.from}'s job`}>
+        <Gift size={12} aria-hidden="true" /> {item.unlock.from}&apos;s job, {island}
+      </span>
+    );
+  }
   if (item.unlock.kind === "gift") {
     const island = islandMeta.find((m) => m.code === (item.unlock as { island: TargetLanguageCode }).island)?.island;
     return (

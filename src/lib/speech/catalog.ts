@@ -4,9 +4,9 @@ import type { Line } from "@/lib/game/line";
 import type { SceneBeat } from "@/lib/game/scenes";
 import type { Villager } from "@/lib/game/villagers";
 import { allRecipeLines } from "@/lib/game/clinic";
-import { allTimes } from "@/lib/game/clock";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
+import { allTimes, customerGender, requestVariant } from "@/lib/game/clock";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -57,7 +57,9 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     byVoice.get(voice)?.name ?? (voice === playerVoice ? "player" : voice === neutral ? "phrase book" : "passer-by");
 
   type Where = { source: string; unit?: string; speaker?: string };
-  const add = (line: { t: string; en?: string } | string | undefined, voice: string, where: Where, slow = false) => {
+  const add = (line: { t: string; en?: string; parts?: readonly string[] } | string | undefined, voice: string, where: Where, slow = false): void => {
+    // A line spoken in pieces is recorded piece by piece.
+    if (typeof line === "object" && line.parts) return line.parts.forEach((part) => add(part, voice, where, slow));
     const raw = typeof line === "string" ? line : line?.t;
     const t = raw ? clipText(raw) : "";
     if (!t || personal(t)) return;
@@ -110,7 +112,7 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
   const host = villagers.get(island.host);
   if (host) addLines(island.script.intro, host.voice, { source: "intro" });
   for (const v of island.villagers) {
-    addLines([...v.greetings, ...v.chatter, v.locked, v.teach, v.talk, ...v.goodbye], v.voice, {
+    addLines([...v.greetings, ...v.chatter, v.locked, v.teach, ...v.goodbye], v.voice, {
       source: `${v.id} dialogue`,
       unit: firstUnitOf(v.id),
     });
@@ -235,7 +237,10 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     addLines([...lines.intro, lines.late, ...lines.done, lines.harder, ...(clock.appointments ? [clock.appointments.wrong] : [])], clockmaker.voice, where);
     const customers = [clock.ask, clock.toldWrong, clock.words, lines.repeat, ...lines.thanks];
     for (const time of allTimes()) {
-      customers.push(clock.setRequest(time, 0), clock.setRequest(time, 1), clock.told(time), clock.wrongTime(time, { h: (time.h % 12) + 1, m: time.m }));
+      customers.push(clock.told(time), { t: clock.wrongTime(time, time).parts?.[0] ?? "", en: `No, that's ${clock.say(time).en}!` });
+      // What the customer bringing this time says, in their own voice; wrongTime(t, t) ends with their "I need …".
+      const own = passerVoices[customerGender(time)];
+      addLines([clock.setRequest(time, requestVariant(time)), clock.wrongTime(time, time)], own, { ...where, speaker: "customer" });
     }
     if (clock.appointments) for (const day of clock.appointments.days) for (const hour of [9, 10, 11, 2, 3, 4]) customers.push(clock.appointments.ask(day, hour));
     for (const voice of [passerVoices.woman, passerVoices.man]) addLines(customers, voice, { ...where, speaker: "customer" });

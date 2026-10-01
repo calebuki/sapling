@@ -124,6 +124,13 @@ export function makeCalendar(config: ClockConfig, seed: number): Calendar {
   return calendar;
 }
 
+// Which way a customer asks for a time is fixed per time, so each time has one
+// recording per voice rather than two.
+export const requestVariant = (time: Time) => (time.h + time.m / 15) % 2;
+// Likewise whether a man or a woman brings in a clock for this time, so their
+// "I need …" is recorded in one voice.
+export const customerGender = (time: Time): "man" | "woman" => ((time.h * 5 + (time.m / 15) * 3) % 2 ? "woman" : "man");
+
 export function makeCustomers(config: ClockConfig, calendar: Calendar, options: CustomerOptions): Customer[] {
   const random = mulberry32(options.seed);
   const weight = options.weight ?? (() => 1);
@@ -155,7 +162,7 @@ export function makeCustomers(config: ClockConfig, calendar: Calendar, options: 
       const hour = [9, 10, 11, 2, 3, 4][Math.floor(random() * 6)];
       appointment = { day, hour, line: config.appointments.ask(day, hour), free: !(calendar[day.slug] ?? []).includes(hour) };
     }
-    customers.push({ set, request: config.setRequest(set, Math.floor(random() * 2)), tell, appointment });
+    customers.push({ set, request: config.setRequest(set, requestVariant(set)), tell, appointment });
   }
   return customers;
 }

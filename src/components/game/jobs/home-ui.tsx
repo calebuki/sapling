@@ -219,13 +219,14 @@ function Intro({ setup }: { setup: HomeSetup }) {
 }
 
 function Summary({ setup }: { setup: HomeSetup }) {
-  const { found, tasks, words, levelUp, levelIndex, late, timeLeft } = useHome((s) => s);
+  const { found, tasks, words, levelUp, gift, levelIndex, late, timeLeft } = useHome((s) => s);
   const starter = useHomeStarter(setup.host);
   const label = useWordLabel();
   const stars = homeStars(found, tasks.length, timeLeft);
   const { lines } = setup.home;
   return (
     <JobSummary
+      gift={gift}
       title={lines.title}
       stars={stars}
       line={late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]}

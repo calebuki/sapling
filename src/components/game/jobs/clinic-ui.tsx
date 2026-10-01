@@ -294,13 +294,14 @@ function Intro({ setup }: { setup: ClinicSetup }) {
 }
 
 function Summary({ setup }: { setup: ClinicSetup }) {
-  const { helped, patients, words, levelUp, levelIndex, late, timeLeft } = useClinic((s) => s);
+  const { helped, patients, words, levelUp, gift, levelIndex, late, timeLeft } = useClinic((s) => s);
   const starter = useClinicStarter(setup.host);
   const label = useWordLabel();
   const stars = clinicStars(helped, patients.length, timeLeft);
   const { lines } = setup.clinic;
   return (
     <JobSummary
+      gift={gift}
       title={lines.title}
       stars={stars}
       line={late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]}

@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChefHat, Clock3, GraduationCap, House, MessageCircle, Phone, Stethoscope, Volume2 } from "lucide-react";
-import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, ChefHat, Clock3, GraduationCap, House, Stethoscope, Volume2 } from "lucide-react";
 import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
 import { praiseFor } from "@/content/wardrobe";
-import { choosePracticeScenario } from "@/lib/practice/planner";
-import { getPracticeScenario } from "@/lib/practice/scenarios";
 import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
 import { pick, type Line } from "@/lib/game/line";
 import { teachableSlugs, type GameProgress } from "@/lib/game/progression";
@@ -23,20 +20,17 @@ import { useClinicStarter } from "../jobs/clinic-ui";
 import { useClockStarter } from "../jobs/clock-ui";
 import { useHomeStarter } from "../jobs/home-ui";
 import { CafeRound } from "./cafe-round";
-import { Chat } from "./chat";
 import { SceneRound } from "./scene-round";
 import { GrammarTipModal } from "./grammar-tip";
 import { RoundSummaryView, type RoundSummary } from "./lesson-round";
-import { LiveCall } from "./live-call";
 import { registerGloss, Glossed, GlossedLine } from "./glossed";
 import { Typewriter } from "./typewriter";
 
-type Mode = "lines" | "name" | "menu" | "tip" | "lesson" | "summary" | "live" | "chat";
+type Mode = "lines" | "name" | "menu" | "tip" | "lesson" | "summary";
 
-export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; progress: GameProgress; liveAvailable: boolean }) {
+export function Dialogue({ id, progress }: { id: VillagerId; progress: GameProgress }) {
   const { code, host, script, ui, grammar } = useIsland();
   const villager = villagerById(id);
-  const model = useLearningModel();
   const save = useGame((s) => s.save);
   const standing = progress.villagers[id];
   // The opening script depends only on who this is and how far along we are.
@@ -105,19 +99,6 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   useEffect(() => {
     if (shownLine) prefetchSpeech(shownLine, { who: id, pitch: villager.voicePitch });
   }, [shownLine, id, villager.voicePitch]);
-
-  const canTalk = useMemo(() => {
-    const scenario = villager.scenarioId ? getPracticeScenario(code, villager.scenarioId) : undefined;
-    if (!scenario) return false;
-    const recommendation = choosePracticeScenario({
-      languageCode: code,
-      concepts: model.concepts,
-      states: model.states,
-      snapshot: model.practiceSnapshot,
-      scenarioIds: [scenario.id],
-    });
-    return recommendation.encounteredConceptSlugs.length >= Math.max(2, scenario.minimumEncountered) && standing.met >= 3;
-  }, [code, model.concepts, model.states, model.practiceSnapshot, villager.scenarioId, standing.met]);
 
   const advanceLine = () => {
     if (!typed) {
@@ -216,17 +197,6 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
                 </span>
               ) : null}
             </button>
-            <button
-              className="btn"
-              disabled={!canTalk}
-              title={canTalk ? undefined : ui.notReadyToTalk.en}
-              onClick={() => {
-                sound.play("click");
-                setMode(liveAvailable ? "live" : "chat");
-              }}
-            >
-              {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <GlossedLine line={villager.talk} />
-            </button>
             {shift ? (
               <button
                 className="btn"
@@ -248,11 +218,6 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
                 <GlossedLine line={shift.notYet} />
               </p>
             ) : null}
-            {!canTalk ? (
-              <p className="dialogue-hint">
-                <GlossedLine line={ui.notReadyToTalk} />
-              </p>
-            ) : null}
           </div>
         ) : null}
 
@@ -271,18 +236,9 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
             villager={villager}
             onAgain={startLesson}
             onBye={() => say([pick(villager.goodbye)], endDialogue)}
-            extra={
-              canTalk ? (
-                <button className="btn" onClick={() => setMode(liveAvailable ? "live" : "chat")}>
-                  {liveAvailable ? <Phone size={18} /> : <MessageCircle size={18} />} <GlossedLine line={villager.talk} />
-                </button>
-              ) : null
-            }
           />
         ) : null}
 
-        {mode === "live" ? <LiveCall villager={villager} onClose={() => setMode("menu")} onFallback={() => setMode("chat")} /> : null}
-        {mode === "chat" ? <Chat villager={villager} onClose={() => setMode("menu")} /> : null}
       </div>
     </div>
   );

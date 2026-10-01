@@ -25,8 +25,10 @@ import type { VoiceGender } from "@/lib/game/voices";
 import type { Observation } from "@/lib/learning/adaptive";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "../audio/sfx";
-import { speak } from "../audio/speech";
-import { emote, getGame, setGame, updateSave } from "../store";
+import { speak, speakLine } from "../audio/speech";
+import type { ItemId } from "@/lib/game/wardrobe";
+import { emote, setGame } from "../store";
+import { finishJob } from "./progress";
 import { AISLE_Z, BOUNDS, BREW_SPOT, counterSpot, DOOR_INSIDE, DOOR_OUTSIDE, HAND_SPOT, JARS, JUG_X, KETTLE_X, PATIENT_SPOT, PLAYER_START, SUGAR_X } from "./clinic-layout";
 import { jobPlayer, placePlayer, stepWalker, walker, walkTo, type Walker } from "./walk";
 
@@ -55,6 +57,8 @@ export type ClinicState = {
   helped: number;
   words: Record<string, [number, number]>;
   levelUp: boolean;
+  // Work clothes the host just gave you, if this run earned them.
+  gift: ItemId | null;
   late: boolean;
   timeLeft: number;
 };
@@ -97,7 +101,7 @@ function blank(levelIndex: number): ClinicState {
   const level = clinicLevel(levelIndex);
   return {
     status: "intro", levelIndex, level, patients: [], index: 0, step: "arriving", look: guestLook(1), gender: "woman",
-    revealed: !level.heard, said: null, pot: emptyPot(), missed: {}, helped: 0, words: {}, levelUp: false, late: false, timeLeft: 1,
+    revealed: !level.heard, said: null, pot: emptyPot(), missed: {}, helped: 0, words: {}, levelUp: false, gift: null, late: false, timeLeft: 1,
   };
 }
 
@@ -190,12 +194,12 @@ function hostVoice() {
 }
 
 function patientSays(line: Line, repeats = false) {
-  void speak(line.t, { gender: state.gender });
+  void speakLine(line, { gender: state.gender });
   set({ said: { line, by: "patient", repeats } });
 }
 
 function hostSays(line: Line) {
-  void speak(line.t, hostVoice());
+  void speakLine(line, hostVoice());
   set({ said: { line, by: "host" } });
 }
 
@@ -219,8 +223,8 @@ export function stepLine(step: ClinicStep = state.step, patient: Patient | null 
 export function sayStep(slow = false) {
   const current = stepLine();
   if (!current) return;
-  if (current.by === "patient") void speak(current.line.t, { gender: state.gender, slow });
-  else void speak(current.line.t, { ...hostVoice(), slow });
+  if (current.by === "patient") void speakLine(current.line, { gender: state.gender, slow });
+  else void speakLine(current.line, { ...hostVoice(), slow });
 }
 
 export function pardon() {
@@ -258,7 +262,7 @@ export function reply(choice: Reply) {
   if (right) {
     sound.play("correct");
     emote("player", "happy", 900);
-    void speak(setup.clinic.replies[choice].line.t, { who: "player" });
+    void speakLine(setup.clinic.replies[choice].line, { who: "player" });
     window.setTimeout(() => goTo("where"), 1300);
     return;
   }
@@ -367,7 +371,7 @@ function handOver() {
   if (!patient || !setup || state.status !== "running") return;
   sound.play("correct");
   emote("player", "happy", 900);
-  void speak(setup.clinic.lines.drink.t, { who: "player" });
+  void speakLine(setup.clinic.lines.drink, { who: "player" });
   set({ said: { line: setup.clinic.lines.drink, by: "host" } });
   window.setTimeout(() => {
     if (state.status !== "running") return;
@@ -427,17 +431,13 @@ function finish(late: boolean) {
   const timeLeft = clinicRuntime.seconds / clinicRuntime.total;
   const stars = clinicStars(state.helped, state.patients.length, timeLeft);
   const host = setup.host.id;
-  const saved = getGame().save.shifts[host] ?? { level: 0, stars: [] };
-  const best = [...saved.stars];
-  best[state.levelIndex] = Math.max(best[state.levelIndex] ?? 0, stars);
-  const levelUp = stars >= 2 && state.levelIndex === saved.level && saved.level < 4;
-  updateSave({ shifts: { ...getGame().save.shifts, [host]: { level: levelUp ? saved.level + 1 : saved.level, stars: best } } });
+  const { levelUp, gift } = finishJob(host, state.levelIndex, stars);
   sound.play(stars >= 2 ? "levelup" : "sparkle");
   emote(host, stars >= 2 ? "happy" : "think", 2000);
   const lines = setup.clinic.lines;
   void speak((late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]).t, hostVoice());
   clinicRuntime.paused = false;
-  set({ status: "done", levelUp, late, timeLeft, said: null });
+  set({ status: "done", levelUp, gift, late, timeLeft, said: null });
 }
 
 // ---------- Evidence ----------

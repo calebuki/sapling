@@ -9,7 +9,7 @@ import { conceptStrength } from "@/lib/game/progression";
 import { RUSH_LEVELS, starsFor } from "@/lib/game/rush";
 import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
-import { speak } from "../audio/speech";
+import { speakLine } from "../audio/speech";
 import { useIsland } from "../island";
 import { getGame, useGame } from "../store";
 import { CafeIconArt } from "../ui/cafe-round";
@@ -289,7 +289,7 @@ function KitchenHatch({ setup }: { setup: ShiftSetup }) {
       <div className="dialogue-body">
         <p className="shift-hatch-line">
           <Glossed text={line.t} en={line.en} />
-          <button className="icon-button" aria-label={aria(rush.lines.repeat)} onClick={() => void speak(line.t, { who: host.id, pitch: host.voicePitch })}>
+          <button className="icon-button" aria-label={aria(rush.lines.repeat)} onClick={() => void speakLine(line, { who: host.id, pitch: host.voicePitch })}>
             <Volume2 size={16} />
           </button>
         </p>
@@ -319,7 +319,7 @@ function Intro({ setup }: { setup: ShiftSetup }) {
 }
 
 function Summary({ setup }: { setup: ShiftSetup }) {
-  const { served, level, tips, words, levelUp, levelIndex } = useShift((s) => s);
+  const { served, level, tips, words, levelUp, gift, levelIndex } = useShift((s) => s);
   const starter = useShiftStarter(setup.host);
   const label = useWordLabel((slug) => {
     const item = cafeItem(setup.cafe, slug);
@@ -329,6 +329,7 @@ function Summary({ setup }: { setup: ShiftSetup }) {
   const { lines } = setup.rush;
   return (
     <JobSummary
+      gift={gift}
       title={lines.title}
       stars={stars}
       line={lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]}

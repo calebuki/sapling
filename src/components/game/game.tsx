@@ -10,11 +10,12 @@ import type { IslandPack } from "@/content/types";
 import { openThrough } from "@/lib/game/placement";
 import { computeProgress } from "@/lib/game/progression";
 import type { VillagerId } from "@/lib/game/villagers";
-import { giftsFor, giverOf } from "@/lib/game/wardrobe";
+import { giftsFor, giverOf, jobGiftsFor } from "@/lib/game/wardrobe";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "./audio/sfx";
 import { island, IslandContext, setIsland, useIsland, villagerById } from "./island";
 import { getGame, loadSave, runtime, setGame, toast, useGame } from "./store";
+import { syncJobs } from "./jobs/progress";
 import { Dialogue } from "./ui/dialogue";
 import { registerGloss, TooltipLayer } from "./ui/glossed";
 import { Hud, Toasts } from "./ui/hud";
@@ -85,13 +86,13 @@ function IslandGame() {
   const introDone = useGame((s) => s.save.introDone);
   const placed = useGame((s) => s.save.placedBand);
   const loaded = useGame((s) => s.loadedFor === `${model.learnerId}:${code}`);
-  const [liveAvailable, setLiveAvailable] = useState(false);
   // Developer mode opens every unit; the learning model itself is untouched.
   const dev = useDevMode();
   useKeyboard();
 
   useEffect(() => {
     loadSave(model.learnerId, code);
+    syncJobs(model.learnerId, code);
     void loadWardrobe(model.learnerId);
     loadDevMode(model.learnerId);
   }, [model.learnerId, code]);
@@ -99,18 +100,6 @@ function IslandGame() {
   useEffect(() => {
     if (name) registerGloss(name, "(your name)");
   }, [name]);
-
-  useEffect(() => {
-    if (model.mode !== "supabase") return;
-    let active = true;
-    fetch("/api/voice/session")
-      .then((r) => r.json())
-      .then((r) => active && setLiveAvailable(Boolean(r.available)))
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [model.mode]);
 
   const progress = useMemo(
     () =>
@@ -157,10 +146,12 @@ function IslandGame() {
   // title screen to go, so the news lands in the world.
   const wardrobeReady = useWardrobe((s) => s.ready);
   const playing = phase !== "title";
+  // Work clothes earned in a job (on this device or another) count too.
+  const shifts = useGame((s) => s.save.shifts);
   useEffect(() => {
     if (!ready || !wardrobeReady || !playing) return;
     const done = progress.units.filter((u) => u.ready).map((u) => u.unit.id);
-    const fresh = recordProgress(code, progress.level, giftsFor(code, done));
+    const fresh = recordProgress(code, progress.level, [...giftsFor(code, done), ...jobGiftsFor(code, shifts)]);
     if (!fresh.length) return;
     const news = wardrobeNews[code];
     const giver = giverOf(fresh[0]);
@@ -170,7 +161,7 @@ function IslandGame() {
       if (fresh.length > 1) toast("gift", news.newItems(fresh.length), undefined, 5200);
       else toast("gift", giver ? news.giftFrom(giver) : news.newItem, itemName(fresh[0], code), 5200);
     }, 2200);
-  }, [progress, ready, wardrobeReady, playing, code]);
+  }, [progress, ready, wardrobeReady, playing, code, shifts]);
 
   const unlocked = useMemo(
     () => Object.fromEntries(villagers.map((v) => [v.id, progress.villagers[v.id].unlocked])) as Record<VillagerId, boolean>,
@@ -188,7 +179,7 @@ function IslandGame() {
       />
       {phase !== "job" ? <WorldLabels unlocked={unlocked} /> : job === "cafe" ? <ShiftUI /> : job === "home" ? <HomeUI /> : job === "clinic" ? <ClinicUI /> : job === "clock" ? <ClockUI /> : null}
       <Hud progress={progress} />
-      {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} liveAvailable={liveAvailable} /> : null}
+      {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} /> : null}
       <Toasts />
       {ready ? <Onboarding /> : null}
       <Overlays progress={progress} />
