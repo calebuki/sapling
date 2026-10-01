@@ -8,7 +8,7 @@ export type VillagerId = string;
 export type CharacterLook = {
   skin: string;
   hair: string;
-  hairStyle: "bob" | "braid" | "short" | "bun" | "beanie";
+  hairStyle: "bob" | "braid" | "short" | "bun" | "beanie" | "long" | "ponytail" | "spacebuns" | "curly" | "spiky" | "buzz";
   shirt: string;
   pants: string;
   accent: string;
@@ -18,7 +18,7 @@ export type CharacterLook = {
   scale?: number;
   // Wardrobe pieces; villagers leave these out and get the defaults.
   face?: { eyes: "round" | "lashes" | "sleepy"; cheeks: "blush" | "freckles" | "none" };
-  top?: "tee" | "stripes" | "knit";
+  top?: "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat";
   bottom?: "trousers" | "shorts" | "overalls";
   glasses?: boolean;
   scarf?: string;

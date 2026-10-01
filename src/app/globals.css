@@ -3909,6 +3909,12 @@ button:disabled {
   animation: fade-in 200ms ease;
 }
 
+/* The hub centres its children in a column; the wardrobe covers the screen. */
+.hub > .wardrobe {
+  width: auto;
+  margin: 0;
+}
+
 .wardrobe-stage {
   position: relative;
   min-height: 0;

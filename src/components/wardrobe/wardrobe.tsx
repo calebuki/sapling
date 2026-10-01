@@ -50,7 +50,18 @@ const tintedHats = new Set<ItemId>(["beanie", "cap", "sunhat"]);
 
 const eyeNames = { round: "Round", lashes: "Lashes", sleepy: "Sleepy" };
 const cheekNames = { blush: "Rosy", freckles: "Freckles", none: "Plain" };
-const hairNames = { short: "Short", bob: "Bob", bun: "Bun", braid: "Braid" };
+const hairNames = {
+  short: "Short",
+  buzz: "Buzz cut",
+  spiky: "Spiky",
+  curly: "Curly",
+  bob: "Bob",
+  long: "Long",
+  ponytail: "Ponytail",
+  bun: "Bun",
+  spacebuns: "Two buns",
+  braid: "Braid",
+};
 
 export function Wardrobe({ learnerId, language, onClose }: { learnerId: string; language: TargetLanguageCode; onClose: () => void }) {
   const record = useWardrobe((s) => s.record);

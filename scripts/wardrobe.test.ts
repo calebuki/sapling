@@ -39,6 +39,10 @@ test("level items open at their level and gifts only once given", () => {
   assert.equal(isUnlocked(bollenhut, record({ levels: { de: 40 } })), false);
   assert.equal(isUnlocked(bollenhut, record({ gifts: ["bollenhut"] })), true);
   assert.equal(nextLevelItem(record({ levels: { sv: 2 } }))?.id, "stripes");
+  // Some levels bring a top and something else at once.
+  const atTwo = items.filter((item) => item.unlock.kind === "level" && item.unlock.level === 2).map((item) => item.id);
+  assert.deepEqual(atTwo.sort(), ["cap", "print"]);
+  assert.equal(isUnlocked(itemById("raincoat"), record({ levels: { sv: 6, de: 5 } })), true);
 });
 
 test("finishing a gift unit on its own island earns that gift", () => {

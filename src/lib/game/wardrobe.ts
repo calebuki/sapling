@@ -24,7 +24,7 @@ export const clothColours = [
   "#2c3e50",
 ] as const;
 
-export const hairStyles = ["short", "bob", "bun", "braid"] as const;
+export const hairStyles = ["short", "buzz", "spiky", "curly", "bob", "long", "ponytail", "bun", "spacebuns", "braid"] as const;
 export const eyeStyles = ["round", "lashes", "sleepy"] as const;
 export const cheekStyles = ["blush", "freckles", "none"] as const;
 
@@ -34,7 +34,7 @@ export type Cheeks = (typeof cheekStyles)[number];
 
 export type Slot = "hat" | "top" | "bottom" | "extra";
 export type HatId = "beanie" | "cap" | "sunhat" | "crown" | "bollenhut" | "nonla";
-export type TopId = "tee" | "stripes" | "knit";
+export type TopId = "tee" | "longsleeve" | "tank" | "print" | "stripes" | "hoodie" | "knit" | "shirt" | "raincoat";
 export type BottomId = "trousers" | "shorts" | "overalls";
 export type ExtraId = "glasses" | "scarf";
 export type ItemId = HatId | TopId | BottomId | ExtraId;
@@ -58,8 +58,14 @@ export const items: readonly Item[] = [
   { id: "bollenhut", slot: "hat", unlock: { kind: "gift", island: "de", villager: "hilde", from: "Hilde", unit: "familie" } },
   { id: "nonla", slot: "hat", unlock: { kind: "gift", island: "vi", villager: "mai", from: "Mai", unit: "o-cho" } },
   { id: "tee", slot: "top", unlock: free },
+  { id: "longsleeve", slot: "top", unlock: free },
+  { id: "tank", slot: "top", unlock: free },
+  { id: "print", slot: "top", unlock: level(2) },
   { id: "stripes", slot: "top", unlock: level(3) },
+  { id: "hoodie", slot: "top", unlock: level(4) },
   { id: "knit", slot: "top", unlock: level(6) },
+  { id: "shirt", slot: "top", unlock: level(7) },
+  { id: "raincoat", slot: "top", unlock: level(10) },
   { id: "trousers", slot: "bottom", unlock: free },
   { id: "shorts", slot: "bottom", unlock: level(4) },
   { id: "overalls", slot: "bottom", unlock: level(8) },

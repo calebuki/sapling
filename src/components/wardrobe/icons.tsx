@@ -22,7 +22,28 @@ const tee: Map = [
   "............",
 ];
 
+const longsleeve: Map = [
+  "............",
+  "...aabbaa...",
+  ".aaaaaaaaaa.",
+  "aaaaaaaaaaaa",
+  "aa.aaaaaa.aa",
+  "aa.aaaaaa.aa",
+  "aa.aaaaaa.aa",
+  "aa.aaaaaa.aa",
+  "bb.aaaaaa.bb",
+  "...aaaaaa...",
+  "............",
+  "............",
+];
+
 // Stripes and knits are the T-shirt with rows swapped for the second colour.
+const set = (map: Map, cells: [number, number, string][]): Map => {
+  const rows = map.map((row) => [...row]);
+  for (const [x, y, c] of cells) rows[y][x] = c;
+  return rows.map((row) => row.join(""));
+};
+
 const swap = (map: Map, rows: Record<number, string>): Map =>
   map.map((row, y) => (rows[y] ? [...row].map((c, x) => (c === "a" && rows[y][x] === "s" ? "s" : c)).join("") : row));
 
@@ -112,6 +133,25 @@ const maps: Record<ItemId, Map> = {
     "............",
   ],
   tee,
+  longsleeve,
+  tank: [
+    "............",
+    "...a....a...",
+    "...a....a...",
+    "...aa..aa...",
+    "...aaaaaa...",
+    "...aaaaaa...",
+    "...aaaaaa...",
+    "...aaaaaa...",
+    "...aaaaaa...",
+    "...aaaaaa...",
+    "............",
+    "............",
+  ],
+  print: set(tee, [[4, 4, "l"], [7, 4, "l"], [5, 5, "l"], [6, 5, "l"], [5, 6, "e"], [6, 6, "e"], [4, 5, "w"], [7, 5, "w"], [4, 6, "w"], [7, 6, "w"], [5, 7, "w"], [6, 7, "w"]]),
+  hoodie: set(longsleeve, [[3, 0, "a"], [4, 0, "a"], [5, 0, "a"], [6, 0, "a"], [7, 0, "a"], [8, 0, "a"], [5, 2, "w"], [6, 2, "w"], [5, 3, "w"], [6, 3, "w"], [4, 7, "b"], [5, 7, "b"], [6, 7, "b"], [7, 7, "b"]]),
+  shirt: set(longsleeve, [[4, 1, "w"], [7, 1, "w"], [5, 1, "b"], [6, 1, "b"], [5, 3, "w"], [5, 5, "w"], [5, 7, "w"]]),
+  raincoat: set(longsleeve, [[3, 0, "a"], [4, 0, "a"], [5, 0, "a"], [6, 0, "a"], [7, 0, "a"], [8, 0, "a"], [5, 3, "k"], [5, 5, "k"], [5, 7, "k"], [3, 9, "b"], [4, 9, "b"], [5, 9, "b"], [6, 9, "b"], [7, 9, "b"], [8, 9, "b"]]),
   stripes: swap(tee, { 3: "ssssssssssss", 5: "ssssssssssss", 7: "ssssssssssss", 9: "ssssssssssss" }),
   knit: swap(tee, { 4: "....s..s....", 5: "...s.ss.s...", 6: "....s..s....", 8: "...s.s.s.s.." }),
   trousers: [
@@ -195,6 +235,8 @@ const fixed: Record<string, string> = {
   r: "#d42a2a",
   c: "#ead9a2",
   d: "#c9b26e",
+  l: "#4fbf7d",
+  e: "#2f7d4f",
 };
 
 // The bollenhut's straw is paler than the sun hat and nón lá.
@@ -233,7 +275,7 @@ const silhouette = "rgba(44, 42, 61, 0.22)";
 export function ItemIcon({ id, colour, locked = false }: { id: ItemId; colour: string; locked?: boolean }) {
   const map = maps[id];
   const colours: Record<string, string> = locked
-    ? Object.fromEntries([..."abskwyprgcd"].map((c) => [c, silhouette]))
+    ? Object.fromEntries([..."abskwyprgcdle"].map((c) => [c, silhouette]))
     : {
         ...fixed,
         ...overrides[id],
@@ -261,11 +303,12 @@ const head: Map = [
   "............",
 ];
 
-const set = (map: Map, cells: [number, number, string][]): Map => {
-  const rows = map.map((row) => [...row]);
-  for (const [x, y, c] of cells) rows[y][x] = c;
-  return rows.map((row) => row.join(""));
-};
+// Six rows of hair on top, then the shared face, with any rows given in
+// place of the face's own (for hair that falls beside it).
+function withFace(top: string[], face: string[] = []): Map {
+  const rest = head.slice(6);
+  return [...top, ...face, ...rest.slice(face.length)];
+}
 
 const heads: Record<HairStyle, Map> = {
   short: head,
@@ -276,6 +319,13 @@ const heads: Record<HairStyle, Map> = {
   ]),
   bun: set(head, [[5, 0, "h"], [6, 0, "h"], [4, 1, "h"], [5, 1, "h"], [6, 1, "h"], [7, 1, "h"]]),
   braid: set(head, [[10, 6, "h"], [10, 7, "d"], [10, 8, "h"], [10, 9, "d"], [10, 10, "h"], [10, 11, "a"]]),
+  // The rest share the face (rows 6-9) and differ above and around it.
+  long: withFace(["............", "............", "...hhhhhh...", "..hhhhhhhh..", ".hhhhhhhhhh.", ".hhsssssshh."], [".hssksskssh.", ".hssksskssh.", ".hssssssssh.", ".hhsssssshh.", ".hh......hh.", ".h........h."]),
+  buzz: withFace(["............", "............", "............", "...hhhhhh...", "..hhhhhhhh..", "..ssssssss.."]),
+  spiky: withFace(["..h..hh..h..", "..hh.hh.hh..", "..hhhhhhhh..", "..hhhhhhhh..", "..hhhhhhhh..", "..hssssssh.."]),
+  curly: withFace(["............", "...hh..hh...", "..hhhhhhhh..", ".hhhhhhhhhh.", "hhhhhhhhhhhh", "hhhsssssshhh"], ["hhsskssksshh", ".hssksskssh.", "..ssssssss..", "...ssssss..."]),
+  ponytail: withFace(["............", "..........h.", "...hhhhhhah.", "..hhhhhhhh.h", "..hhhhhhhh.h", "..hssssssh.h"], ["..ssksskss.h"]),
+  spacebuns: withFace([".hh......hh.", ".hhhhhhhhhh.", "..hhhhhhhh..", "..hhhhhhhh..", "..hhhhhhhh..", "..hssssssh.."]),
 };
 
 export function HairIcon({ style, hair, skin }: { style: HairStyle; hair: string; skin: string }) {

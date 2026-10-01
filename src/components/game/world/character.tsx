@@ -188,7 +188,8 @@ const masks = new Map<Pattern, THREE.DataTexture>();
 const cloths = new Map<string, THREE.Material>();
 
 function cloth(color: string, kind: CharacterLook["top"]) {
-  if (!kind || kind === "tee") return flat(color);
+  // Everything else is plain cloth.
+  if (kind !== "stripes" && kind !== "knit") return flat(color);
   const key = `${kind}|${color}`;
   const cached = cloths.get(key);
   if (cached) return cached;
@@ -337,6 +338,7 @@ export function Character({
   });
 
   const scale = look.scale ?? 1;
+  const sleeves = sleevesOf(look.top);
   return (
     <group ref={root} scale={scale}>
       <group ref={body}>
@@ -361,7 +363,8 @@ export function Character({
         <mesh geometry={g.round} material={m.shirt} position={[0, 0.55, 0]} scale={[0.52, 0.46, 0.38]} castShadow />
         {look.apron ? <mesh geometry={g.box} material={m.apron} position={[0, 0.5, 0.19]} scale={[0.42, 0.36, 0.02]} /> : null}
         {look.bottom === "overalls" ? <Overalls pants={m.pants} button={m.button} /> : null}
-        <mesh geometry={g.round} material={m.collar} position={[0, 0.78, 0]} scale={[0.46, 0.1, 0.36]} />
+        <mesh geometry={g.round} material={look.top === "tank" ? m.skin : m.collar} position={[0, 0.78, 0]} scale={[0.46, 0.1, 0.36]} />
+        <TopDetails top={look.top} shirt={m.shirt} trim={m.collar} />
         {look.scarf ? (
           <group>
             <mesh geometry={g.round} material={m.scarf} position={[0, 0.8, 0]} scale={[0.5, 0.14, 0.42]} castShadow />
@@ -374,7 +377,16 @@ export function Character({
           [armR, 0.32],
         ].map(([ref, x], i) => (
           <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 0.72, 0]}>
-            <mesh geometry={g.round} material={m.shirt} position={[0, -0.12, 0]} scale={[0.14, 0.3, 0.15]} castShadow />
+            {sleeves === "long" ? (
+              <mesh geometry={g.round} material={m.shirt} position={[0, -0.12, 0]} scale={[0.14, 0.3, 0.15]} castShadow />
+            ) : sleeves === "short" ? (
+              <>
+                <mesh geometry={g.round} material={m.shirt} position={[0, -0.04, 0]} scale={[0.15, 0.15, 0.16]} castShadow />
+                <mesh geometry={g.round} material={m.skin} position={[0, -0.17, 0]} scale={[0.12, 0.18, 0.13]} castShadow />
+              </>
+            ) : (
+              <mesh geometry={g.round} material={m.skin} position={[0, -0.12, 0]} scale={[0.12, 0.3, 0.13]} castShadow />
+            )}
             <mesh geometry={g.round} material={m.skin} position={[0, -0.3, 0]} scale={[0.13, 0.11, 0.13]} castShadow />
           </group>
         ))}
@@ -392,6 +404,87 @@ export function Character({
       </group>
     </group>
   );
+}
+
+// Villagers (no top given) keep the long sleeves they always had.
+function sleevesOf(top: CharacterLook["top"]) {
+  if (top === "tee" || top === "print") return "short";
+  if (top === "tank") return "none";
+  return "long";
+}
+
+// What makes each top more than a coloured box: hoods, collars, pockets, prints.
+function TopDetails({ top, shirt, trim }: { top: CharacterLook["top"]; shirt: THREE.Material; trim: THREE.Material }) {
+  switch (top) {
+    case "tank":
+      return (
+        <group>
+          {[-0.15, 0.15].map((x) => (
+            <mesh key={x} geometry={g.box} material={shirt} position={[x, 0.795, 0]} scale={[0.08, 0.08, 0.37]} />
+          ))}
+        </group>
+      );
+    case "hoodie":
+      return (
+        <group>
+          <mesh geometry={g.round} material={shirt} position={[0, 0.84, -0.17]} scale={[0.48, 0.22, 0.18]} castShadow />
+          <mesh geometry={g.box} material={trim} position={[0, 0.45, 0.19]} scale={[0.3, 0.13, 0.02]} />
+          {[-0.06, 0.06].map((x) => (
+            <mesh key={x} geometry={g.box} material={flat("#f4efe6")} position={[x, 0.67, 0.195]} scale={[0.018, 0.12, 0.018]} />
+          ))}
+        </group>
+      );
+    case "print":
+      return <mesh geometry={g.face} material={printMaterial()} position={[0, 0.58, 0.192]} scale={[0.2, 0.2, 1]} />;
+    case "shirt":
+      return (
+        <group>
+          <mesh geometry={g.box} material={trim} position={[0, 0.55, 0.191]} scale={[0.035, 0.4, 0.01]} />
+          {[0.68, 0.57, 0.46].map((y) => (
+            <mesh key={y} geometry={g.box} material={flat("#f4efe6")} position={[0, y, 0.197]} scale={0.026} />
+          ))}
+          {[-1, 1].map((side) => (
+            <mesh key={side} geometry={g.box} material={trim} position={[side * 0.085, 0.77, 0.17]} rotation-z={side * 0.55} scale={[0.13, 0.055, 0.04]} />
+          ))}
+        </group>
+      );
+    case "raincoat":
+      return (
+        <group>
+          <mesh geometry={g.round} material={shirt} position={[0, 0.86, -0.18]} scale={[0.52, 0.26, 0.22]} castShadow />
+          <mesh geometry={g.round} material={trim} position={[0, 0.34, 0]} scale={[0.55, 0.07, 0.41]} />
+          <mesh geometry={g.box} material={trim} position={[0, 0.54, 0.191]} scale={[0.02, 0.4, 0.01]} />
+          {[0.66, 0.54, 0.42].map((y) => (
+            <mesh key={y} geometry={g.box} material={flat("#2b2233")} position={[0.05, y, 0.196]} scale={[0.06, 0.03, 0.02]} />
+          ))}
+        </group>
+      );
+    default:
+      return null;
+  }
+}
+
+// A little sprout printed on the chest, on a cream patch so it shows on any colour.
+let print: THREE.Material | null = null;
+function printMaterial() {
+  if (print) return print;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 12;
+  const ctx = canvas.getContext("2d")!;
+  const px = (x: number, y: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, 1, 1);
+  };
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) if ((x - 5.5) ** 2 + (y - 5.5) ** 2 <= 30) px(x, y, "#f4efe6");
+  for (const [x, y] of [[2, 4], [3, 3], [3, 4], [4, 4], [4, 5], [5, 5]]) px(x, y, "#4fbf7d");
+  for (const [x, y] of [[9, 3], [8, 2], [8, 3], [7, 3], [7, 4], [6, 4]]) px(x, y, "#3aa56b");
+  for (const [x, y] of [[6, 5], [6, 6], [6, 7], [5, 8], [5, 9]]) px(x, y, "#2f7d4f");
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  print = new THREE.MeshToonMaterial({ map: texture, gradientMap: toonRamp(), alphaTest: 0.5 });
+  return print;
 }
 
 // Bib, straps and a waistband over whatever top is on.
@@ -463,6 +556,77 @@ function Hair({ look, hair, accent }: { look: CharacterLook; hair: THREE.Materia
           {[-0.43, 0.43].map((x) => (
             <mesh key={x} geometry={g.round} material={hair} position={[x, 0.36, 0.08]} scale={[0.1, 0.6, 0.46]} />
           ))}
+        </group>
+      );
+    case "long":
+      return (
+        <group>
+          {top}
+          <mesh geometry={g.round} material={hair} position={[0, 0.2, -0.22]} scale={[0.88, 1.0, 0.3]} castShadow />
+          {[-0.42, 0.42].map((x) => (
+            <mesh key={x} geometry={g.round} material={hair} position={[x, 0.26, 0.02]} scale={[0.08, 0.72, 0.5]} />
+          ))}
+        </group>
+      );
+    case "ponytail":
+      return (
+        <group>
+          {top}
+          {back}
+          {sides}
+          <mesh geometry={g.box} material={accent} position={[0, 0.64, -0.43]} scale={[0.14, 0.1, 0.1]} />
+          <mesh geometry={g.round} material={hair} position={[0, 0.42, -0.55]} rotation-x={0.4} scale={[0.2, 0.52, 0.17]} castShadow />
+        </group>
+      );
+    case "spacebuns":
+      return (
+        <group>
+          {top}
+          {back}
+          {sides}
+          {covered
+            ? null
+            : [-0.3, 0.3].map((x) => <mesh key={x} geometry={g.round} material={hair} position={[x, 0.84, -0.06]} scale={0.26} castShadow />)}
+        </group>
+      );
+    // A big soft cloud of curls, bumpy on top.
+    case "curly":
+      return (
+        <group>
+          {covered ? null : (
+            <>
+              <mesh geometry={g.round} material={hair} position={[0, 0.72, -0.05]} scale={[0.98, 0.34, 0.88]} castShadow />
+              {Array.from({ length: 9 }, (_, i) => {
+                const a = (i / 9) * Math.PI * 2;
+                return <mesh key={i} geometry={g.round} material={hair} position={[Math.sin(a) * 0.34, 0.86, Math.cos(a) * 0.3 - 0.05]} scale={0.16} castShadow />;
+              })}
+            </>
+          )}
+          <mesh geometry={g.round} material={hair} position={[0, 0.42, -0.3]} scale={[0.98, 0.72, 0.34]} castShadow />
+          {[-0.46, 0.46].map((x) => (
+            <mesh key={x} geometry={g.round} material={hair} position={[x, 0.5, -0.02]} scale={[0.12, 0.44, 0.56]} />
+          ))}
+        </group>
+      );
+    case "spiky":
+      return (
+        <group>
+          {top}
+          {back}
+          {sides}
+          {covered
+            ? null
+            : [-0.24, -0.08, 0.08, 0.24].map((x) => (
+                <mesh key={x} geometry={g.cone} material={hair} position={[x, 0.88, -0.02]} rotation-z={-x * 1.4} scale={[0.1, 0.22, 0.1]} castShadow />
+              ))}
+        </group>
+      );
+    // Cropped close: just a thin layer over the top and back.
+    case "buzz":
+      return covered ? null : (
+        <group>
+          <mesh geometry={g.round} material={hair} position={[0, 0.7, -0.04]} scale={[0.8, 0.12, 0.68]} />
+          <mesh geometry={g.round} material={hair} position={[0, 0.46, -0.3]} scale={[0.8, 0.42, 0.1]} />
         </group>
       );
     case "bun":

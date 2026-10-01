@@ -56,6 +56,44 @@ export const wardrobeWords: Record<ItemId, Words> = {
     },
   },
   tee: { en: "T-shirt", name: { sv: "en t-shirt", de: "das T-Shirt", vi: "áo phông", da: "en T-shirt" } },
+  longsleeve: { en: "long-sleeved top", name: { sv: "en långärmad tröja", de: "das Langarmshirt", vi: "áo dài tay", da: "en langærmet trøje" } },
+  tank: { en: "vest top", name: { sv: "ett linne", de: "das Tanktop", vi: "áo ba lỗ", da: "en tanktop" } },
+  print: {
+    en: "printed T-shirt",
+    name: { sv: "en t-shirt med tryck", de: "das T-Shirt mit Aufdruck", vi: "áo phông in hình", da: "en T-shirt med tryk" },
+    praise: {
+      sv: { t: "Vilket fint tryck!", en: "What a nice print!" },
+      de: { t: "Schöner Aufdruck!", en: "Nice print!" },
+      vi: { t: "Hình in dễ thương quá!", en: "Such a cute print!" },
+    },
+  },
+  hoodie: {
+    en: "hoodie",
+    name: { sv: "en luvtröja", de: "der Kapuzenpulli", vi: "áo nỉ có mũ", da: "en hættetrøje" },
+    praise: {
+      sv: { t: "Snygg luvtröja!", en: "Nice hoodie!" },
+      de: { t: "Cooler Kapuzenpulli!", en: "Cool hoodie!" },
+      vi: { t: "Áo nỉ có mũ đẹp quá!", en: "What a nice hoodie!" },
+    },
+  },
+  shirt: {
+    en: "shirt",
+    name: { sv: "en skjorta", de: "das Hemd", vi: "áo sơ mi", da: "en skjorte" },
+    praise: {
+      sv: { t: "Snygg skjorta!", en: "Nice shirt!" },
+      de: { t: "Schickes Hemd!", en: "Smart shirt!" },
+      vi: { t: "Áo sơ mi đẹp quá!", en: "What a nice shirt!" },
+    },
+  },
+  raincoat: {
+    en: "raincoat",
+    name: { sv: "en regnjacka", de: "die Regenjacke", vi: "áo mưa", da: "en regnjakke" },
+    praise: {
+      sv: { t: "Bra regnjacka! Nu får det regna.", en: "Good raincoat! Now it can rain." },
+      de: { t: "Schöne Regenjacke! Jetzt kann es regnen.", en: "Nice raincoat! Now it can rain." },
+      vi: { t: "Có áo mưa rồi, mưa cũng không sợ!", en: "You've got a raincoat, so who's afraid of rain!" },
+    },
+  },
   stripes: {
     en: "striped top",
     name: { sv: "en randig tröja", de: "das Ringelshirt", vi: "áo kẻ sọc", da: "en stribet trøje" },
