@@ -4,6 +4,7 @@ import { allClockLines } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
 import { allMarketLines } from "@/lib/game/market";
 import { allForestLines } from "@/lib/game/forest";
+import { allStationLines } from "@/lib/game/station";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
@@ -90,6 +91,11 @@ export function coreText(pack: IslandPack) {
     const { forest } = pack;
     for (const value of Object.values(forest.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
     texts.push(...allForestLines(forest).map((l) => l.t), ...forest.animals.map((a) => a.name.t), ...forest.places.map((p) => p.at.t));
+  }
+  if (pack.station) {
+    const { station } = pack;
+    for (const value of Object.values(station.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
+    texts.push(...allStationLines(station).map((l) => l.t), ...station.destinations.map((d) => d.name.t), ...station.landmarks.map((l) => l.name.t));
   }
   return texts;
 }

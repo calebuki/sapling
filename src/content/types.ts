@@ -4,6 +4,7 @@ import type { ClockConfig } from "@/lib/game/clock";
 import type { Discovery } from "@/lib/game/discoveries";
 import type { FerryConfig } from "@/lib/game/ferry";
 import type { ForestConfig } from "@/lib/game/forest";
+import type { StationConfig } from "@/lib/game/station";
 import type { MarketConfig } from "@/lib/game/market";
 import type { Glossary } from "@/lib/game/glossary";
 import type { HomeConfig } from "@/lib/game/home";
@@ -68,6 +69,8 @@ export type IslandPack = {
   market?: MarketConfig;
   // The forester's wildlife survey, if the island has it.
   forest?: ForestConfig;
+  // Tickets and directions at the station, if the island has it.
+  station?: StationConfig;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

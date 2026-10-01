@@ -10,6 +10,7 @@ import { allTimes, customerGender, requestVariant } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
 import { allPrices, clothesGender, type Payment } from "@/lib/game/market";
 import { allForestLines } from "@/lib/game/forest";
+import { START, type TicketKind } from "@/lib/game/station";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -294,6 +295,31 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     addLines(allForestLines(forest).filter((l) => !forest.weathers.some((w) => w.say.t === l.t)), forester.voice, where);
     addLines([lines.hikerHello, lines.hikerAsk, lines.hikerReply, lines.hikerHuh], passerVoices.man, { ...where, speaker: "hiker" });
     addLines(forest.weathers.map((w) => w.say), playerVoice, { ...where, speaker: "player" });
+  }
+
+  // The station: travellers ask (either voice), the station master gives
+  // directions piece by piece, you ask "one way or return?" and say the platform.
+  const station = island.station;
+  const master = station ? villagers.get(station.host) : undefined;
+  if (station && master) {
+    const where = { source: "station job", unit: firstUnitOf(master.id) };
+    const { lines } = station;
+    addLines([...lines.intro, lines.townIntro, lines.platformWrong, lines.words, lines.carry, lines.lost, lines.late, ...lines.done, lines.harder], master.voice, where);
+    const directions: Line[] = [station.instruction({ kind: "straight" })];
+    for (const way of ["left", "right"] as const) {
+      directions.push(station.instruction({ kind: "turn", way, at: START, ref: { type: "light" } }));
+      for (let n = 1; n <= 3; n++) directions.push(station.instruction({ kind: "turn", way, at: START, ref: { type: "ordinal", n } }));
+      for (const landmark of station.landmarks) {
+        directions.push(station.instruction({ kind: "turn", way, at: landmark.node, ref: { type: "landmark", landmark } }), station.instruction({ kind: "arrive", landmark, side: way }));
+      }
+    }
+    addLines(directions, master.voice, where);
+    const travellers: Line[] = [...lines.hello, lines.askPlatform, ...lines.thanks, lines.arrived, lines.repeat];
+    for (const d of station.destinations) for (const kind of ["single", "return"] as TicketKind[]) travellers.push(station.wrongTicket(d, kind));
+    for (const kind of ["single", "return"] as TicketKind[]) travellers.push(station.kindAnswer(kind));
+    for (const l of station.landmarks) travellers.push(station.askWay(l), station.wrongBuilding(l));
+    for (const voice of [passerVoices.woman, passerVoices.man]) addLines(travellers, voice, { ...where, speaker: "traveller" });
+    addLines([lines.whichKind, ...[1, 2, 3, 4].map((n) => station.platform(n))], playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

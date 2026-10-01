@@ -191,7 +191,17 @@ are out), asks how many of a herd there are (written in words), and as the
 weather turns (rain, snow, fog, wind, a storm) has you write it in the
 logbook ("Es regnet."). Later a hiker stops to ask "Was machst du gern?".
 
-Outdoor jobs (ferry, market, forest) bring their own sky and sun
+The eighth is **Lena's station** (German only): travellers at the kiosk ask
+for a ticket ("Eine Fahrkarte nach Titisee, bitte."); you ask "Einfach oder
+hin und zurück?", make the ticket up, and say which platform from the
+timetable, in words. From the third level some ask the way ("Wie komme ich
+zur Post?"); Lena gives directions one sentence per step ("Geh geradeaus.
+An der Ampel rechts. Die Post ist rechts."), and you carry the suitcase
+through a small grid of streets with the arrow buttons. Every turn you take
+counts as evidence for the words of that step (links, rechts, the landmark,
+die erste Straße).
+
+Outdoor jobs (ferry, market, forest, station) bring their own sky and sun
 (`OutdoorSun`), so the island's daylight cycle is left out while they're open.
 
 Jobs share their walking, camera, player, top bar, intro and summary

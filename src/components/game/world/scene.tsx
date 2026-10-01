@@ -13,6 +13,7 @@ import { ClockRoom } from "../jobs/clock-room";
 import { FerryRoom } from "../jobs/ferry-room";
 import { MarketRoom } from "../jobs/market-room";
 import { ForestRoom } from "../jobs/forest-room";
+import { StationRoom } from "../jobs/station-room";
 import { HomeRoom } from "../jobs/home-room";
 import type { JobId } from "../store";
 import { LabelProjector } from "../world-labels";
@@ -137,8 +138,8 @@ export function Scene({ treeStage, goal, unlocked, quality, job = null }: SceneP
       <fog attach="fog" args={[fog, FOG.near, FOG.far]} />
       <Suspense fallback={null}>
         {/* Outdoor jobs bring their own sky and sun (a crossing's time of day, the weather). */}
-        {job === "ferry" || job === "market" || job === "forest" ? null : <Lights />}
-        {job === "cafe" ? <CafeRoom /> : job === "home" ? <HomeRoom /> : job === "clinic" ? <ClinicRoom /> : job === "clock" ? <ClockRoom /> : job === "ferry" ? <FerryRoom /> : job === "market" ? <MarketRoom /> : job === "forest" ? <ForestRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
+        {job === "ferry" || job === "market" || job === "forest" || job === "station" ? null : <Lights />}
+        {job === "cafe" ? <CafeRoom /> : job === "home" ? <HomeRoom /> : job === "clinic" ? <ClinicRoom /> : job === "clock" ? <ClockRoom /> : job === "ferry" ? <FerryRoom /> : job === "market" ? <MarketRoom /> : job === "forest" ? <ForestRoom /> : job === "station" ? <StationRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
       </Suspense>
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <PixelOutline />

@@ -4764,6 +4764,65 @@ button:disabled {
   }
 }
 
+/* ---------- Lena's station ---------- */
+
+.station-board {
+  position: absolute;
+  right: 16px;
+  top: 84px;
+  min-width: 220px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #1c3553;
+  color: #f2c230;
+  box-shadow: 0 4px 0 var(--edge), var(--shadow);
+}
+
+.station-board-title {
+  display: block;
+  margin-bottom: 6px;
+  color: #dfe6e9;
+  font-size: 0.85rem;
+}
+
+.station-board ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, monospace;
+}
+
+.station-board li {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 3px 0;
+  border-top: 1px dashed rgba(242, 194, 48, 0.3);
+}
+
+.station-ticket {
+  flex-wrap: wrap;
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+.station-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+}
+
+.station-walk {
+  left: auto;
+  right: 16px;
+}
+
+.station-arrow {
+  width: 60px;
+  height: 52px;
+  justify-content: center;
+}
+
 /* ---------- Marie's market stall ---------- */
 
 .market-chip {

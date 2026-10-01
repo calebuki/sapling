@@ -6,6 +6,7 @@ import { clock } from "./clock";
 import { ferry } from "./ferry";
 import { market } from "./market";
 import { forest } from "./forest";
+import { station } from "./station";
 import { course, courseGlosses } from "./course";
 import { discoveries } from "./discoveries";
 import { entries } from "./glossary";
@@ -52,6 +53,7 @@ export const island: IslandPack = {
   ferry,
   market,
   forest,
+  station,
   discoveries,
   world,
   scenery: "tannenau",
