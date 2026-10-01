@@ -32,4 +32,5 @@ hätte=would have (ich hätte gern = I'd like)|spazieren=to stroll (spazieren ge
 schicht=shift (at work)|gast=guest|gäste=guests|sachen=things|theke=counter|paar=few (ein paar = a few)|kasse=till / checkout|trinkgeld=tip(s)|profi=pro|puh=phew|geschafft=done it / made it|sofort=right away|lieber=rather (doch lieber = … instead)
 wunderbar=wonderful|schatz=treasure / darling
 kräuter=herbs|kräutern=herbs|trank=potion|sprechstunde=surgery hours|kessel=cauldron / kettle|trink=drink|patient=patient|patienten=patients|kopfschmerzen=headache|halsschmerzen=sore throat
+stell=set / put|stellen=to set / to put|dreh=turn|drehen=to turn|zeiger=(clock) hand|feierabend=closing time
 `;

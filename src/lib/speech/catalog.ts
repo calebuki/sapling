@@ -4,6 +4,7 @@ import type { Line } from "@/lib/game/line";
 import type { SceneBeat } from "@/lib/game/scenes";
 import type { Villager } from "@/lib/game/villagers";
 import { allRecipeLines } from "@/lib/game/clinic";
+import { allTimes } from "@/lib/game/clock";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
@@ -223,6 +224,22 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     for (const voice of [passerVoices.woman, passerVoices.man]) addLines(patients, voice, { ...where, speaker: "patient" });
     addLines(allRecipeLines(clinic), doctor.voice, where);
     addLines([lines.drink, ...Object.values(clinic.replies).map((r) => r.line), ...Object.values(clinic.advice).map((a) => a!.say)], playerVoice, { ...where, speaker: "player" });
+  }
+
+  // The clockmaker's: customers ask for times, the host greets and wraps up.
+  const clock = island.clock;
+  const clockmaker = clock ? villagers.get(clock.host) : undefined;
+  if (clock && clockmaker) {
+    const where = { source: "clock job", unit: firstUnitOf(clockmaker.id) };
+    const { lines } = clock;
+    addLines([...lines.intro, lines.late, ...lines.done, lines.harder, ...(clock.appointments ? [clock.appointments.wrong] : [])], clockmaker.voice, where);
+    const customers = [clock.ask, clock.toldWrong, clock.words, lines.repeat, ...lines.thanks];
+    for (const time of allTimes()) {
+      customers.push(clock.setRequest(time, 0), clock.setRequest(time, 1), clock.told(time), clock.wrongTime(time, { h: (time.h % 12) + 1, m: time.m }));
+    }
+    if (clock.appointments) for (const day of clock.appointments.days) for (const hour of [9, 10, 11, 2, 3, 4]) customers.push(clock.appointments.ask(day, hour));
+    for (const voice of [passerVoices.woman, passerVoices.man]) addLines(customers, voice, { ...where, speaker: "customer" });
+    if (clock.appointments) addLines([clock.appointments.yes.line, clock.appointments.no.line], playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

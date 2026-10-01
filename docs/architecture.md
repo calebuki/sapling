@@ -159,15 +159,23 @@ herbs, hot or cold water, sugar or not); later you also answer how they feel
 ("Keine Sorge!") and tell them what to do from a picture ("Du musst im Bett
 bleiben."). "Du musst …" is only credited when the learner used it.
 
+The fourth is **Jonas's workshop** (Stina's on Lilla Ö): customers ask for
+their stopped clock to be set ("Stell sie bitte auf halb vier.") and you
+drag the hands, with the camera on the clock; some ask the time by the wall
+clock and you say it in words (digits get "Sag es mit Wörtern!"); later
+some ask when they can collect it ("Passt es dir am Freitag um zwei Uhr?")
+and you answer from the week in the calendar.
+
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
 which room is open.
 
 A job splits like the rest of the game. The rules live in `src/lib/game`
 (`rush.ts` for the café, `home.ts` for the farmhouse, `clinic.ts` for the
-surgery) and are tested without
+surgery, `clock.ts` for the workshop) and are tested without
 a browser. Each language pack supplies the words (`cafe.rush` in
-`src/content/<code>/cafe.ts`, `home` and `clinic` in their own files). Orders only use menu
+`src/content/<code>/cafe.ts`, `home`, `clinic` and `clock` in their own
+files). Orders only use menu
 words the learner has met, weak words come up more often, and every shift
 records evidence through the same `recordObservation` path as lessons:
 orders understood by ear count as audio recognition, orders read off the

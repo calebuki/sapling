@@ -90,4 +90,5 @@ boj=buoy
 förresten=by the way (nej förresten = no wait)|stället=place (i stället = instead)|ville=wanted|disk=counter|disken=the counter|folk=people|gäst=guest|gäster=guests|gästen=the guest|gästerna=the guests|bakar=bake(s)|wow=wow|proffs=pro|fler=more|by=village|byn=the village|töm=empty
 pärla=pearl / gem|ändå=anyway
 örter=herbs|ört=herb|sked=spoon|skedar=spoons|dryck=drink / potion|drycken=the potion|kittel=cauldron|kitteln=the cauldron|mottagning=surgery|mottagningen=the surgery|kropp=body|kroppen=the body|drick=drink|frisk=well / healthy|friska=well / healthy|toppenläkare=great doctor|patient=patient|patienter=patients
+ställa=set / put|vrid=turn|visare=(clock) hand|visaren=the hand|visarna=the hands|sina=their (own)|klockverkstad=clock workshop|klockverkstaden=the clock workshop|kalender=calendar|kalendern=the calendar|tick=tick|riktig=real|urmakare=clockmaker|fort=fast|stängning=closing|egentligen=actually
 `;

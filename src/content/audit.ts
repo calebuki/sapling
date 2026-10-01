@@ -1,5 +1,6 @@
 import { wordParts } from "@/lib/game/glossary";
 import { allClinicLines } from "@/lib/game/clinic";
+import { allClockLines } from "@/lib/game/clock";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
@@ -60,6 +61,11 @@ export function coreText(pack: IslandPack) {
     const { clinic } = pack;
     for (const value of Object.values(clinic.lines)) texts.push(...(Array.isArray(value) ? value : [value]).map((l: { t: string }) => l.t));
     texts.push(...allClinicLines(clinic).map((l) => l.t));
+  }
+  if (pack.clock) {
+    const { clock } = pack;
+    for (const value of Object.values(clock.lines)) texts.push(...(Array.isArray(value) ? value : [value]).map((l: { t: string }) => l.t));
+    texts.push(...allClockLines(clock).map((l) => l.t));
   }
   return texts;
 }

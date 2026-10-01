@@ -49,6 +49,11 @@ export function ShiftProjector() {
         continue;
       }
       point.set(at[0], at[1], at[2]).project(camera);
+      // Behind the camera: nothing to show.
+      if (point.z > 1) {
+        style.opacity = "0";
+        continue;
+      }
       const x = (point.x * 0.5 + 0.5) * size.width;
       const y = (-point.y * 0.5 + 0.5) * size.height;
       const shift = anchor.align === "side" ? "translate(-22px, -100%)" : "translate(-50%, -100%)";
