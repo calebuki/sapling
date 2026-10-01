@@ -144,10 +144,22 @@ saying them. The language is load-bearing: station names only show on the
 first rungs, later orders are heard and only shown after "Wie bitte?", and
 the kitchen bakes exactly what was asked for, saying it back correctly.
 
+The second is **Hilde's farmhouse** (Maja's house on Lilla Ö): her family
+comes for dinner and she can't find her things. Things lie on, under, next
+to and in the furniture, often several of the same, so the place in her
+request decides which one she means; later she asks "Wo ist …?" and the
+learner says where, and she looks exactly there. It uses the dative the
+course teaches for *where* something is, not the accusative of putting it
+somewhere.
+
+Jobs share their walking, camera, player, top bar, intro and summary
+(`src/components/game/jobs`); the game phase is `job`, with `job` naming
+which room is open.
+
 A job splits like the rest of the game. The rules live in `src/lib/game`
-(`rush.ts`: difficulty rungs, order generation, tray checks, parsing a kitchen
-request) and are tested without a browser. Each language pack supplies the
-words (`cafe.rush` in `src/content/<code>/cafe.ts`). Orders only use menu
+(`rush.ts` for the café, `home.ts` for the farmhouse) and are tested without
+a browser. Each language pack supplies the words (`cafe.rush` in
+`src/content/<code>/cafe.ts`, `home` in `src/content/<code>/home.ts`). Orders only use menu
 words the learner has met, weak words come up more often, and every shift
 records evidence through the same `recordObservation` path as lessons:
 orders understood by ear count as audio recognition, orders read off the
