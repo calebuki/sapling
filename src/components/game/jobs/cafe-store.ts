@@ -12,7 +12,8 @@ import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "../audio/sfx";
 import { speak } from "../audio/speech";
 import { emote, getGame, setGame, updateSave } from "../store";
-import { COUNTER_SPOTS, DOOR, KITCHEN_SPOT, serveSpot, STAFF_DOOR, STAFF_ENTRY, STAFF_START, stationSlugs, stationSpot, TRASH_SPOT } from "./layout";
+import { COUNTER_SPOTS, DOOR, KITCHEN_SPOT, serveSpot, STAFF, STAFF_DOOR, STAFF_ENTRY, STAFF_START, stationSlugs, stationSpot, TRASH_SPOT } from "./cafe-layout";
+import { jobPlayer, placePlayer, stepWalker, walkTo, type Walker } from "./walk";
 
 // One shift behind the café counter. React sees the coarse state (who is
 // waiting, what's on the tray, the score); positions and patience tick in
@@ -68,8 +69,6 @@ export type ShiftSetup = {
 };
 
 export const TRAY_LIMIT = 6;
-// The same pace as walking around the island, so the steps read.
-const WALK = 4.6;
 const GUEST_WALK = 2.6;
 
 let setup: ShiftSetup | null = null;
@@ -119,13 +118,7 @@ export function shiftSetup() {
 
 // ---------- Per-frame state ----------
 
-type Point = { x: number; z: number };
-type Walker = Point & { rot: number; speed: number; path: Point[] };
-
 export const shiftRuntime = {
-  player: { x: 0, z: -2.4, rot: Math.PI, speed: 0, path: [] as Point[] } as Walker,
-  // What happens when the player gets where they were going.
-  arrive: null as null | (() => void),
   guests: new Map<number, Walker & { waited: number; patience: number; leftAt: number | null }>(),
   nextGuestIn: 0,
   // The clock stops while the kitchen hatch is open.
@@ -138,12 +131,11 @@ export function startShift(next: ShiftSetup, levelIndex: number) {
   setup = next;
   state = blank(levelIndex);
   // You come in through the staff door and walk up to the counter while the host explains.
-  shiftRuntime.player = { x: STAFF_ENTRY.x + 0.9, z: STAFF_ENTRY.z, rot: -Math.PI / 2, speed: 0, path: [STAFF_ENTRY, STAFF_START] };
-  shiftRuntime.arrive = null;
+  placePlayer({ x: STAFF_ENTRY.x + 0.9, z: STAFF_ENTRY.z }, -Math.PI / 2, [STAFF_ENTRY, STAFF_START], STAFF);
   shiftRuntime.guests.clear();
   shiftRuntime.nextGuestIn = 0.6;
   shiftRuntime.paused = false;
-  setGame({ phase: "shift", talkingTo: null, nearby: null });
+  setGame({ phase: "job", job: "cafe", talkingTo: null, nearby: null });
   listeners.forEach((l) => l());
 }
 
@@ -156,43 +148,13 @@ export function beginRush() {
 export function leaveShift() {
   if (state.status === "leaving") return;
   shiftRuntime.paused = true;
+  jobPlayer.locked = true;
   set({ status: "leaving", kitchen: { open: false, reply: null } });
-  shiftRuntime.player.path = [{ x: STAFF_ENTRY.x, z: STAFF_DOOR.z }, { x: STAFF_DOOR.x + 0.4, z: STAFF_DOOR.z }];
-  shiftRuntime.arrive = () => {
+  walkTo([{ x: STAFF_ENTRY.x, z: STAFF_DOOR.z }, { x: STAFF_DOOR.x + 0.4, z: STAFF_DOOR.z }], () => {
     sound.play("close");
     shiftRuntime.guests.clear();
-    setGame({ phase: "explore" });
-  };
-}
-
-// ---------- Walking ----------
-
-function walkTo(target: Point, then: () => void) {
-  shiftRuntime.player.path = [target];
-  shiftRuntime.arrive = then;
-}
-
-export function stepWalker(walker: Walker, delta: number, speed: number) {
-  const target = walker.path[0];
-  if (!target) {
-    walker.speed = 0;
-    return true;
-  }
-  const dx = target.x - walker.x;
-  const dz = target.z - walker.z;
-  const d = Math.hypot(dx, dz);
-  const step = speed * delta;
-  if (d <= step) {
-    walker.x = target.x;
-    walker.z = target.z;
-    walker.path.shift();
-  } else {
-    walker.x += (dx / d) * step;
-    walker.z += (dz / d) * step;
-    walker.rot = Math.atan2(dx, dz);
-  }
-  walker.speed = speed;
-  return walker.path.length === 0;
+    setGame({ phase: "explore", job: null });
+  });
 }
 
 // ---------- The loop ----------
@@ -227,12 +189,6 @@ function spawn() {
 
 export function tickShift(delta: number) {
   const run = shiftRuntime;
-  // The player.
-  if (stepWalker(run.player, delta, WALK) && run.arrive) {
-    const then = run.arrive;
-    run.arrive = null;
-    then();
-  }
   if (state.status !== "running") return;
   const clock = run.paused ? 0 : delta;
   for (const customer of state.customers) {
@@ -346,6 +302,7 @@ export function goToKitchen() {
   walkTo(KITCHEN_SPOT, () => {
     if (!setup) return;
     shiftRuntime.paused = true;
+    jobPlayer.locked = true;
     sound.play("open");
     emote(setup.host.id, "wave", 1000);
     void speak(setup.rush.lines.kitchenAsk.t, { who: setup.host.id, pitch: setup.host.voicePitch });
@@ -355,6 +312,7 @@ export function goToKitchen() {
 
 export function closeKitchen() {
   shiftRuntime.paused = false;
+  jobPlayer.locked = false;
   set({ kitchen: { open: false, reply: null } });
 }
 

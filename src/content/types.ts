@@ -1,6 +1,7 @@
 import type { CafeConfig } from "@/lib/game/cafe";
 import type { Discovery } from "@/lib/game/discoveries";
 import type { Glossary } from "@/lib/game/glossary";
+import type { HomeConfig } from "@/lib/game/home";
 import type { GrammarTip } from "@/lib/game/grammar";
 import type { Line } from "@/lib/game/line";
 import type { PlacementConfig } from "@/lib/game/placement";
@@ -50,6 +51,8 @@ export type IslandPack = {
   grammar: GrammarTip[];
   glossary: Glossary;
   cafe: CafeConfig | null;
+  // Helping a villager find their things at home, if the island has it.
+  home?: HomeConfig;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

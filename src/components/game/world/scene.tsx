@@ -7,7 +7,9 @@ import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postp
 import { ToneMappingMode } from "postprocessing";
 import type { VillagerId } from "@/lib/game/villagers";
 import { island } from "../island";
-import { CafeRoom } from "../shift/cafe-room";
+import { CafeRoom } from "../jobs/cafe-room";
+import { HomeRoom } from "../jobs/home-room";
+import type { JobId } from "../store";
 import { LabelProjector } from "../world-labels";
 import { CameraRig, Player, Villagers, Wildlife } from "./actors";
 import { Discoverables } from "./discoverables";
@@ -30,8 +32,8 @@ export type SceneProps = {
   goal: VillagerId | null;
   unlocked: Record<VillagerId, boolean>;
   quality: "high" | "low";
-  // A café shift swaps the island for the café's back room.
-  shift?: boolean;
+  // A job swaps the island for that job's room.
+  job?: JobId | null;
 };
 
 // Lights, fog and the sky colour follow the player's time of day (see ./daylight).
@@ -115,7 +117,7 @@ function Island({ treeStage, goal, unlocked }: Pick<SceneProps, "treeStage" | "g
   );
 }
 
-export function Scene({ treeStage, goal, unlocked, quality, shift = false }: SceneProps) {
+export function Scene({ treeStage, goal, unlocked, quality, job = null }: SceneProps) {
   const fog = daylight(fogColor()).fog.getStyle();
   const dpr = usePixelDpr();
   return (
@@ -130,7 +132,7 @@ export function Scene({ treeStage, goal, unlocked, quality, shift = false }: Sce
       <fog attach="fog" args={[fog, FOG.near, FOG.far]} />
       <Suspense fallback={null}>
         <Lights />
-        {shift ? <CafeRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
+        {job === "cafe" ? <CafeRoom /> : job === "home" ? <HomeRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
       </Suspense>
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <PixelOutline />

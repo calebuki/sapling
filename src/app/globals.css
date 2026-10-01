@@ -4729,3 +4729,37 @@ button:disabled {
   font-family: var(--font-display);
   color: var(--green-edge);
 }
+
+/* ---------- Hilde's farmhouse ---------- */
+
+.home-clock {
+  min-width: 220px;
+}
+
+.home-clock-track {
+  flex: 1;
+  height: 9px;
+  min-width: 80px;
+  border-radius: 999px;
+  background: #eee3cc;
+  overflow: hidden;
+}
+
+.home-clock-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--yellow);
+}
+
+.home-clock-fill[data-low="1"] {
+  background: var(--red);
+}
+
+.home-bubble-name {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}

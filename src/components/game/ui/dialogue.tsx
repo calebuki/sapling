@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChefHat, GraduationCap, MessageCircle, Phone, Volume2 } from "lucide-react";
+import { BookOpen, ChefHat, GraduationCap, House, MessageCircle, Phone, Volume2 } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
 import { praiseFor } from "@/content/wardrobe";
@@ -18,7 +18,8 @@ import { sound } from "../audio/sfx";
 import { prefetchSpeech, speak, stopSpeaking } from "../audio/speech";
 import { island, villagerById, useIsland } from "../island";
 import { emote, getGame, updateSave, useGame } from "../store";
-import { useShiftStarter } from "../shift/shift-ui";
+import { useShiftStarter } from "../jobs/cafe-ui";
+import { useHomeStarter } from "../jobs/home-ui";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
 import { SceneRound } from "./scene-round";
@@ -60,7 +61,9 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   const [slugs] = useState(() => teachableSlugs(progress, id));
   const showEnglish = save.english === "on" || (save.english === "auto" && save.experience === "new" && progress.level < 5);
   // Café hosts can use a hand behind the counter once you know a few things on the menu.
-  const shift = useShiftStarter(villager);
+  const cafeJob = useShiftStarter(villager);
+  const homeJob = useHomeStarter(villager);
+  const shift = cafeJob ?? homeJob;
 
   const finishRound = (result: RoundSummary) => {
     setSummary(result);
@@ -230,7 +233,7 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
                   shift.start();
                 }}
               >
-                <ChefHat size={18} /> <GlossedLine line={shift.invite} />
+                {homeJob ? <House size={18} /> : <ChefHat size={18} />} <GlossedLine line={shift.invite} />
               </button>
             ) : null}
             <button className="btn btn-quiet" onClick={() => say([pick(villager.goodbye)], endDialogue)}>

@@ -1,18 +1,18 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { outfitOf, useWardrobe } from "@/components/wardrobe/store";
+import { useFrame } from "@react-three/fiber";
 import { cafeItem, type CafeIcon } from "@/lib/game/cafe";
-import { lookOf } from "@/lib/game/wardrobe";
 import { runtime } from "../store";
 import { Character, type CharacterAnim } from "../world/character";
 import { glow, palette, toon } from "../world/materials";
 import { box, Box, cone, cyl, FlowerBox, sphere, torus, type V3 } from "../world/parts";
 import { ShiftProjector } from "./anchors";
-import { COUNTER, HOST, ROOM, STAFF, STAFF_DOOR, STATION_Z, stationSlugs, stationX, TRASH } from "./layout";
-import { emptyTray, getShift, goToKitchen, grab, serve, shiftRuntime, shiftSetup, tickShift, useShift, type Customer, type ShiftSetup } from "./store";
+import { COUNTER, HOST, ROOM, STAFF_DOOR, STATION_Z, stationSlugs, stationX, TRASH } from "./cafe-layout";
+import { emptyTray, getShift, goToKitchen, grab, serve, shiftRuntime, shiftSetup, tickShift, useShift, type Customer, type ShiftSetup } from "./cafe-store";
+import { click, emoteOf, JobCamera, JobPlayer, pointer, useHover } from "./job-scene";
+import { jobPlayer } from "./walk";
 
 // Café Kuckuck from the inside, as a cutaway diorama: no front wall and no
 // ceiling, so the camera looks down over the guests at the counter, you behind
@@ -25,22 +25,6 @@ const wood = {
   top: "#e9dcc4",
   wall: "#f6efe2",
   panel: "#8a5a36",
-};
-
-const click = (action: () => void) => (e: ThreeEvent<MouseEvent>) => {
-  if (e.delta > 6) return;
-  e.stopPropagation();
-  action();
-};
-
-const pointer = {
-  onPointerOver: (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
-    document.body.style.cursor = "pointer";
-  },
-  onPointerOut: () => {
-    document.body.style.cursor = "";
-  },
 };
 
 export function CafeRoom() {
@@ -59,9 +43,11 @@ export function CafeRoom() {
       ))}
       <Kitchen setup={setup} />
       <Trash />
-      <Barista />
+      <JobPlayer>
+        <Tray />
+      </JobPlayer>
       <Guests />
-      <ShiftCamera />
+      <JobCamera position={VIEW.position} target={VIEW.target} />
       <ShiftProjector />
     </group>
   );
@@ -187,23 +173,6 @@ function Counter() {
 
 // ---------- Stations ----------
 
-function useHover() {
-  const [hover, setHover] = useState(false);
-  return {
-    hover,
-    handlers: {
-      onPointerOver: (e: ThreeEvent<PointerEvent>) => {
-        pointer.onPointerOver(e);
-        setHover(true);
-      },
-      onPointerOut: () => {
-        pointer.onPointerOut();
-        setHover(false);
-      },
-    },
-  };
-}
-
 function Station({ slug, x }: { slug: string; x: number }) {
   const item = cafeItem(shiftSetup()!.cafe, slug)!;
   const { hover, handlers } = useHover();
@@ -297,7 +266,7 @@ function Kitchen({ setup }: { setup: ShiftSetup }) {
   const rot = useRef<THREE.Group>(null);
   useFrame((_, delta) => {
     // The host turns to you while you're at the hatch, back to the oven otherwise.
-    const p = shiftRuntime.player;
+    const p = jobPlayer.walker;
     const near = Math.hypot(p.x - HOST.x, p.z - HOST.z) < 3;
     const desired = near ? Math.atan2(p.x - HOST.x, p.z - HOST.z) : 0.5;
     if (rot.current) rot.current.rotation.y = THREE.MathUtils.damp(rot.current.rotation.y, desired, 6, delta);
@@ -340,56 +309,17 @@ function Trash() {
 
 // ---------- People ----------
 
-function emoteOf(who: string) {
-  const e = runtime.emote[who];
-  return e && e.until > performance.now() ? e.kind : undefined;
-}
-
 // You, behind the counter, carrying the tray.
-function Barista() {
-  const wardrobe = useWardrobe((s) => s.record);
-  const look = useMemo(() => lookOf(outfitOf(wardrobe)), [wardrobe]);
+function Tray() {
   const tray = useShift((s) => s.tray);
-  const group = useRef<THREE.Group>(null);
-  const anim = useMemo(() => (): CharacterAnim => ({ speed: shiftRuntime.player.speed, talking: false, emote: emoteOf("player") }), []);
-  useFrame((_, rawDelta) => {
-    const delta = Math.min(rawDelta, 0.05);
-    const p = shiftRuntime.player;
-    // Arrow keys and WASD work too; the camera looks straight in, so up is away.
-    const k = runtime.keys;
-    const ix = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
-    const iz = (k.has("s") || k.has("arrowdown") ? 1 : 0) - (k.has("w") || k.has("arrowup") ? 1 : 0);
-    if ((ix || iz) && !getShift().kitchen.open) {
-      p.path = [];
-      shiftRuntime.arrive = null;
-      const len = Math.hypot(ix, iz);
-      p.x = THREE.MathUtils.clamp(p.x + (ix / len) * 5.5 * delta, STAFF.minX, STAFF.maxX);
-      p.z = THREE.MathUtils.clamp(p.z + (iz / len) * 5.5 * delta, STAFF.minZ, STAFF.maxZ);
-      p.rot = Math.atan2(ix, iz);
-      p.speed = 5.5;
-    } else if (!p.path.length) p.speed = THREE.MathUtils.damp(p.speed, 0, 12, delta);
-    if (group.current) {
-      group.current.position.set(p.x, 0, p.z);
-      const diff = THREE.MathUtils.euclideanModulo(p.rot - group.current.rotation.y + Math.PI, Math.PI * 2) - Math.PI;
-      group.current.rotation.y += diff * Math.min(1, delta * 12);
-    }
-  });
+  if (!tray.length) return null;
   return (
-    <group ref={group}>
-      <Character look={look} getAnim={anim} seed={0.3} />
-      <mesh rotation-x={-Math.PI / 2} position-y={0.03}>
-        <circleGeometry args={[0.45, 20]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.16} depthWrite={false} />
-      </mesh>
-      {tray.length ? (
-        <group position={[0, 1.02, 0.55]}>
-          <Box p={[0, 0, 0]} s={[0.95, 0.05, 0.6]} c="#c79a45" t="planks" />
-          {tray.map((slug, i) => {
-            const item = cafeItem(shiftSetup()!.cafe, slug);
-            return item ? <HeldItem key={`${slug}-${i}`} icon={item.icon} position={[-0.3 + (i % 3) * 0.3, 0.03 + Math.floor(i / 3) * 0.02, -0.12 + Math.floor(i / 3) * 0.24]} small /> : null;
-          })}
-        </group>
-      ) : null}
+    <group>
+      <Box p={[0, 0, 0]} s={[0.95, 0.05, 0.6]} c="#c79a45" t="planks" />
+      {tray.map((slug, i) => {
+        const item = cafeItem(shiftSetup()!.cafe, slug);
+        return item ? <HeldItem key={`${slug}-${i}`} icon={item.icon} position={[-0.3 + (i % 3) * 0.3, 0.03 + Math.floor(i / 3) * 0.02, -0.12 + Math.floor(i / 3) * 0.24]} small /> : null;
+      })}
     </group>
   );
 }
@@ -466,21 +396,6 @@ function Guest({ customer }: { customer: Customer }) {
 // ---------- Camera ----------
 
 const VIEW = { position: new THREE.Vector3(0.3, 8.3, 7.9), target: new THREE.Vector3(0, 0.6, -1) };
-
-function ShiftCamera() {
-  const { camera } = useThree();
-  const look = useRef(new THREE.Vector3().copy(VIEW.target).add(new THREE.Vector3(0, 2, 0)));
-  const at = useRef(new THREE.Vector3(0, 16, 16));
-  useFrame((_, rawDelta) => {
-    const delta = Math.min(rawDelta, 0.05);
-    at.current.lerp(VIEW.position, 1 - Math.exp(-3 * delta));
-    look.current.lerp(VIEW.target, 1 - Math.exp(-3 * delta));
-    camera.position.copy(at.current);
-    camera.lookAt(look.current);
-    if (camera instanceof THREE.PerspectiveCamera && camera.view?.enabled) camera.clearViewOffset();
-  });
-  return null;
-}
 
 // Just beside a guest's head, for their speech bubble.
 export function guestHead(id: number): [number, number, number] | null {

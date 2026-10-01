@@ -88,4 +88,5 @@ bort=away|rosor=roses|haltar=limp(s)|sent=late|fyller=fill(s) (fyller år = has 
 fastlandet=the mainland|segla=sail|nitton=nineteen|sexton=sixteen|sjutton=seventeen|arton=eighteen|hundrafemtio=a hundred and fifty|trettiofem=thirty-five|femtrettio=(not a number)|egna=own|former=forms|varmare=warmer|varmast=warmest|störst=biggest|sämst=worst|dom=they / them (how de and dem are said)|räkna=count|flera=several / more than one|it=it (English)|verb=verb|ade=-ade (past ending)|or=-or (plural ending)|ar=-ar (plural / present ending)|are=-are (comparing ending: more)|ast=-ast (comparing ending: most)|hjälpverb=helper verb|fordon=vehicle|vändning=turn / flip|förutsägelser=predictions
 boj=buoy
 förresten=by the way (nej förresten = no wait)|stället=place (i stället = instead)|ville=wanted|disk=counter|disken=the counter|folk=people|gäst=guest|gäster=guests|gästen=the guest|gästerna=the guests|bakar=bake(s)|wow=wow|proffs=pro|fler=more|by=village|byn=the village|töm=empty
+pärla=pearl / gem|ändå=anyway
 `;

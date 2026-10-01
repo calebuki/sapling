@@ -7,7 +7,9 @@ import type { VillagerId } from "@/lib/game/villagers";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
-export type Phase = "title" | "arrival" | "explore" | "dialogue" | "shift";
+export type Phase = "title" | "arrival" | "explore" | "dialogue" | "job";
+// Mini-games played indoors with your own character: the café rush, Hilde's farmhouse.
+export type JobId = "cafe" | "home";
 export type Overlay = null | "ordbok" | "menu" | "wardrobe";
 export type Toast = { id: number; kind: "word" | "level" | "info" | "friend" | "gift"; line: Line; detail?: Line };
 
@@ -26,7 +28,7 @@ export type SaveData = {
   grammarSeen: string[];
   // English under target-language lines: "auto" shows it to brand-new learners early on.
   english: "auto" | "on" | "off";
-  // Café shifts per host: the busiest shift opened so far, and the best stars on each.
+  // Jobs per host (café shifts, Hilde's farmhouse): the hardest rung opened so far, and the best stars on each.
   shifts: Record<string, { level: number; stars: number[] }>;
 };
 
@@ -35,6 +37,8 @@ export type GameState = {
   overlay: Overlay;
   nearby: Interactable | null;
   talkingTo: VillagerId | null;
+  // Which job's room is open while the phase is "job".
+  job: JobId | null;
   toasts: Toast[];
   save: SaveData;
   muted: boolean;
@@ -62,6 +66,7 @@ let state: GameState = {
   overlay: null,
   nearby: null,
   talkingTo: null,
+  job: null,
   toasts: [],
   save: emptySave,
   muted: false,

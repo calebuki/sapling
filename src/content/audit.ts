@@ -1,4 +1,5 @@
 import { wordParts } from "@/lib/game/glossary";
+import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
 
@@ -48,6 +49,11 @@ export function coreText(pack: IslandPack) {
         texts.push(rush.kitchenGive([{ item: item.slug, count: 1 }, { item: item.slug, count: 2 }]).t, rush.missing(item).t, rush.extra(item).t, rush.wrong(item, a === item ? b : a).t);
       }
     }
+  }
+  if (pack.home) {
+    const { home } = pack;
+    for (const value of Object.values(home.lines)) texts.push(...(Array.isArray(value) ? value : [value]).map((l: { t: string }) => l.t));
+    texts.push(...allHomeLines(home).map((l) => l.t));
   }
   return texts;
 }

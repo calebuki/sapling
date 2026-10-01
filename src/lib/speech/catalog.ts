@@ -3,6 +3,7 @@ import { expectedFor } from "@/lib/game/lesson";
 import type { Line } from "@/lib/game/line";
 import type { SceneBeat } from "@/lib/game/scenes";
 import type { Villager } from "@/lib/game/villagers";
+import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
@@ -197,6 +198,16 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
       }
       for (const voice of [passerVoices.woman, passerVoices.man]) guestLines.forEach((line) => add(line, voice, { source: "café shift guest", unit, speaker: "customer" }));
     }
+  }
+
+  // Helping at the host's home: everything they ask and say back.
+  const home = island.home;
+  const homeHost = home ? villagers.get(home.host) : undefined;
+  if (home && homeHost) {
+    const where = { source: "home job", unit: firstUnitOf(homeHost.id) };
+    const { lines } = home;
+    addLines([...lines.intro, lines.tellIntro, lines.tell, lines.repeat, ...lines.thanks, lines.late, ...lines.done, lines.harder], homeHost.voice, where);
+    addLines(allHomeLines(home), homeHost.voice, where);
   }
 
   // Grammar tips, read out by whoever teaches the unit.

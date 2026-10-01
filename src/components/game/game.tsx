@@ -21,7 +21,8 @@ import { Onboarding } from "./ui/onboarding";
 import { Overlays } from "./ui/overlays";
 import { TitleScreen } from "./ui/title-screen";
 import { useKeyboard } from "./world/actors";
-import { ShiftUI } from "./shift/shift-ui";
+import { ShiftUI } from "./jobs/cafe-ui";
+import { HomeUI } from "./jobs/home-ui";
 import { Scene } from "./world/scene";
 import { WorldLabels } from "./world-labels";
 
@@ -75,6 +76,7 @@ function IslandGame() {
   const { code, course, villagers, placement, ui, host } = useIsland();
   const phase = useGame((s) => s.phase);
   const talkingTo = useGame((s) => s.talkingTo);
+  const job = useGame((s) => s.job);
   const discovered = useGame((s) => s.save.discovered);
   const name = useGame((s) => s.save.name);
   const introDone = useGame((s) => s.save.introDone);
@@ -176,9 +178,9 @@ function IslandGame() {
         goal={phase === "title" ? null : introDone ? progress.goal : host}
         unlocked={unlocked}
         quality={quality}
-        shift={phase === "shift"}
+        job={phase === "job" ? job : null}
       />
-      {phase === "shift" ? <ShiftUI /> : <WorldLabels unlocked={unlocked} />}
+      {phase !== "job" ? <WorldLabels unlocked={unlocked} /> : job === "cafe" ? <ShiftUI /> : job === "home" ? <HomeUI /> : null}
       <Hud progress={progress} />
       {phase === "dialogue" && talkingTo ? <Dialogue key={talkingTo} id={talkingTo} progress={progress} liveAvailable={liveAvailable} /> : null}
       <Toasts />
