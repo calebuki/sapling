@@ -3,6 +3,7 @@ import type { ClinicConfig } from "@/lib/game/clinic";
 import type { ClockConfig } from "@/lib/game/clock";
 import type { Discovery } from "@/lib/game/discoveries";
 import type { FerryConfig } from "@/lib/game/ferry";
+import type { ForestConfig } from "@/lib/game/forest";
 import type { MarketConfig } from "@/lib/game/market";
 import type { Glossary } from "@/lib/game/glossary";
 import type { HomeConfig } from "@/lib/game/home";
@@ -65,6 +66,8 @@ export type IslandPack = {
   ferry?: FerryConfig;
   // Selling at the market stall, if the island has it.
   market?: MarketConfig;
+  // The forester's wildlife survey, if the island has it.
+  forest?: ForestConfig;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

@@ -11,7 +11,7 @@ import { box, Box, cone, cyl, sphere } from "../world/parts";
 import { ShiftProjector } from "./anchors";
 import { BASKET_X, COUNTER, COUNTER_SPOT, crateX, hangerX, HOST_SPOT, RAIL, TILL_X, VIEWS } from "./market-layout";
 import { addProduce, anythingElse, currentCustomer, getMarket, hoverCrate, marketRuntime, marketSetup, takeFromRail, takePayment, tellPrice, tickMarket, useMarket, type MarketSetup } from "./market-store";
-import { click, emoteOf, JobCamera, JobPlayer, useHover } from "./job-scene";
+import { click, emoteOf, JobCamera, JobPlayer, OutdoorSun, useHover } from "./job-scene";
 
 // Marie's stall on a sunny market morning: a striped awning over crates of
 // fruit and vegetables, the basket and till at the end of the counter, and a
@@ -36,7 +36,7 @@ export function MarketRoom() {
       <fog attach="fog" args={["#d8ecf2", 30, 80]} />
       <group>
         <hemisphereLight args={["#d6e8f5", "#6f6248", 0.7]} />
-        <directionalLight position={[6, 14, 9]} intensity={1.9} color="#fff1d6" castShadow />
+        <OutdoorSun position={[6, 14, 9]} intensity={1.9} color="#fff1d6" />
         <Square />
         <Stall setup={setup} />
         <Rail />

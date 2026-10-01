@@ -3,6 +3,7 @@ import { allClinicLines } from "@/lib/game/clinic";
 import { allClockLines } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
 import { allMarketLines } from "@/lib/game/market";
+import { allForestLines } from "@/lib/game/forest";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
@@ -84,6 +85,11 @@ export function coreText(pack: IslandPack) {
     for (const value of Object.values(market.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
     texts.push(...allMarketLines(market).map((l) => l.t));
     texts.push(...[...market.produce, ...market.clothes, ...market.colours].map((p) => p.name.t));
+  }
+  if (pack.forest) {
+    const { forest } = pack;
+    for (const value of Object.values(forest.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
+    texts.push(...allForestLines(forest).map((l) => l.t), ...forest.animals.map((a) => a.name.t), ...forest.places.map((p) => p.at.t));
   }
   return texts;
 }

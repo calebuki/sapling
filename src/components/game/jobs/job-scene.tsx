@@ -93,6 +93,28 @@ export function JobPlayer({ children }: { children?: ReactNode }) {
   );
 }
 
+// The sun for jobs played outdoors, which bring their own light instead of
+// the island's time of day; its shadows cover the whole scene.
+export function OutdoorSun({ position, intensity, color }: { position: [number, number, number]; intensity: number; color: string }) {
+  return (
+    <directionalLight
+      position={position}
+      intensity={intensity}
+      color={color}
+      castShadow
+      shadow-mapSize={[2048, 2048]}
+      shadow-bias={-0.0006}
+      shadow-normalBias={0.05}
+      shadow-camera-left={-22}
+      shadow-camera-right={22}
+      shadow-camera-top={22}
+      shadow-camera-bottom={-22}
+      shadow-camera-near={1}
+      shadow-camera-far={70}
+    />
+  );
+}
+
 // A fixed diorama view that swoops in from above when the room opens.
 export function JobCamera({ position, target }: { position: THREE.Vector3; target: THREE.Vector3 }) {
   const { camera } = useThree();

@@ -184,6 +184,16 @@ and take cash or card as they ask. From the third level some want clothes in
 a colour ("Ich suche einen roten Pullover."), and later what you hand over is
 "zu klein" or "zu groß" and you swap the size.
 
+The seventh is **Sepp's wildlife survey** (German only): from the lookout
+over a clearing, the forester whispers which animal to photograph ("Schau,
+das Reh im Wald! Mach schnell ein Foto!", the place only when two of a kind
+are out), asks how many of a herd there are (written in words), and as the
+weather turns (rain, snow, fog, wind, a storm) has you write it in the
+logbook ("Es regnet."). Later a hiker stops to ask "Was machst du gern?".
+
+Outdoor jobs (ferry, market, forest) bring their own sky and sun
+(`OutdoorSun`), so the island's daylight cycle is left out while they're open.
+
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
 which room is open.

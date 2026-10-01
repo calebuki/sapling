@@ -33,7 +33,7 @@ import {
   useFerry,
   type FerrySetup,
 } from "./ferry-store";
-import { emoteOf, JobCamera, JobPlayer } from "./job-scene";
+import { emoteOf, JobCamera, JobPlayer, OutdoorSun } from "./job-scene";
 
 // Greta's landing stage at morning, midday or evening: the pier across the
 // lake, the paddle steamer waiting behind it and the hills beyond.
@@ -63,12 +63,7 @@ export function FerryRoom() {
       <fog attach="fog" args={[sky.fog, 30, 90]} />
       <group>
         <hemisphereLight args={[sky.fill, sky.ground, 0.9]} />
-        <directionalLight
-          position={sky.sunAt}
-          intensity={sky.intensity}
-          color={sky.sun}
-          castShadow
-        />
+        <OutdoorSun position={sky.sunAt} intensity={sky.intensity} color={sky.sun} />
         <Lake />
         <Shore />
         <Pier />

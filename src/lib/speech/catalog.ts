@@ -9,6 +9,7 @@ import { allOrders, orderVoice } from "@/lib/game/rush";
 import { allTimes, customerGender, requestVariant } from "@/lib/game/clock";
 import { allFerryLines } from "@/lib/game/ferry";
 import { allPrices, clothesGender, type Payment } from "@/lib/game/market";
+import { allForestLines } from "@/lib/game/forest";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -281,6 +282,18 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     for (const voice of [passerVoices.woman, passerVoices.man]) addLines(customers, voice, { ...where, speaker: "customer" });
     for (const item of market.clothes) for (const colour of market.colours) add(market.ask(item, colour), passerVoices[clothesGender(item, colour)], { ...where, speaker: "customer" });
     addLines([lines.anythingElse, ...allPrices(market).map((c) => market.price(c))], playerVoice, { ...where, speaker: "player" });
+  }
+
+  // The wildlife survey: the forester whispers everything; one hiker passes by.
+  const forest = island.forest;
+  const forester = forest ? villagers.get(forest.host) : undefined;
+  if (forest && forester) {
+    const where = { source: "forest job", unit: firstUnitOf(forester.id) };
+    const { lines } = forest;
+    addLines([...lines.intro, ...lines.nice, lines.weatherAsk, lines.weatherWrong, lines.weatherRight, lines.words, lines.late, ...lines.done, lines.harder], forester.voice, where);
+    addLines(allForestLines(forest).filter((l) => !forest.weathers.some((w) => w.say.t === l.t)), forester.voice, where);
+    addLines([lines.hikerHello, lines.hikerAsk, lines.hikerReply, lines.hikerHuh], passerVoices.man, { ...where, speaker: "hiker" });
+    addLines(forest.weathers.map((w) => w.say), playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

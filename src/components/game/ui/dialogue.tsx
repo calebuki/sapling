@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, ChefHat, Clock3, GraduationCap, House, Ship, Stethoscope, Store, Volume2 } from "lucide-react";
+import { BookOpen, Camera, ChefHat, Clock3, GraduationCap, House, Ship, Stethoscope, Store, Volume2 } from "lucide-react";
 import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
 import { praiseFor } from "@/content/wardrobe";
 import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
@@ -20,6 +20,7 @@ import { useClinicStarter } from "../jobs/clinic-ui";
 import { useClockStarter } from "../jobs/clock-ui";
 import { useFerryStarter } from "../jobs/ferry-ui";
 import { useMarketStarter } from "../jobs/market-ui";
+import { useForestStarter } from "../jobs/forest-ui";
 import { useHomeStarter } from "../jobs/home-ui";
 import { CafeRound } from "./cafe-round";
 import { SceneRound } from "./scene-round";
@@ -65,7 +66,8 @@ export function Dialogue({ id, progress }: { id: VillagerId; progress: GameProgr
   const clockJob = useClockStarter(villager);
   const ferryJob = useFerryStarter(villager);
   const marketJob = useMarketStarter(villager);
-  const shift = cafeJob ?? homeJob ?? clinicJob ?? clockJob ?? ferryJob ?? marketJob;
+  const forestJob = useForestStarter(villager);
+  const shift = cafeJob ?? homeJob ?? clinicJob ?? clockJob ?? ferryJob ?? marketJob ?? forestJob;
 
   const finishRound = (result: RoundSummary) => {
     setSummary(result);
@@ -211,7 +213,7 @@ export function Dialogue({ id, progress }: { id: VillagerId; progress: GameProgr
                   shift.start();
                 }}
               >
-                {homeJob ? <House size={18} /> : clinicJob ? <Stethoscope size={18} /> : clockJob ? <Clock3 size={18} /> : ferryJob ? <Ship size={18} /> : marketJob ? <Store size={18} /> : <ChefHat size={18} />} <GlossedLine line={shift.invite} />
+                {homeJob ? <House size={18} /> : clinicJob ? <Stethoscope size={18} /> : clockJob ? <Clock3 size={18} /> : ferryJob ? <Ship size={18} /> : marketJob ? <Store size={18} /> : forestJob ? <Camera size={18} /> : <ChefHat size={18} />} <GlossedLine line={shift.invite} />
               </button>
             ) : null}
             <button className="btn btn-quiet" onClick={() => say([pick(villager.goodbye)], endDialogue)}>
