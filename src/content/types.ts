@@ -1,4 +1,5 @@
 import type { CafeConfig } from "@/lib/game/cafe";
+import type { ClinicConfig } from "@/lib/game/clinic";
 import type { Discovery } from "@/lib/game/discoveries";
 import type { Glossary } from "@/lib/game/glossary";
 import type { HomeConfig } from "@/lib/game/home";
@@ -53,6 +54,8 @@ export type IslandPack = {
   cafe: CafeConfig | null;
   // Helping a villager find their things at home, if the island has it.
   home?: HomeConfig;
+  // Helping the doctor through surgery hours, if the island has it.
+  clinic?: ClinicConfig;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

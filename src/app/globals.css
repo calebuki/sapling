@@ -4763,3 +4763,53 @@ button:disabled {
   font-weight: 600;
   color: var(--ink-soft);
 }
+
+/* ---------- Aylin's surgery ---------- */
+
+.clinic-pot-items {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.clinic-pot-chip {
+  display: inline-flex;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #f3ead6;
+}
+
+.clinic-pot-chip i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+}
+
+.clinic-pot-chip.is-hot {
+  background: #fde3d5;
+}
+
+.clinic-pot-chip.is-cold {
+  background: #dff2fb;
+}
+
+.clinic-note {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.clinic-note-icon {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border-radius: 18px;
+  background: #eaf6f6;
+  color: var(--ink);
+  box-shadow: 0 3px 0 #c6e3e3;
+}

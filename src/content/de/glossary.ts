@@ -31,4 +31,5 @@ wiener=Viennese|dabei=with (me)|offen=open|steil=steep|mitte=middle|zentrum=cent
 hätte=would have (ich hätte gern = I'd like)|spazieren=to stroll (spazieren gehen = go for a walk)|dauert=lasts / takes|bedeutet=means|hin=there (hin und zurück = return)|viertel=quarter|problem=problem|sonst=otherwise / else|fehlt=is missing (was fehlt dir = what's wrong)|beginnt=begins|vorbei=over / past|grammatik=grammar|schmeckt=tastes|verlaufen=got lost (sich verlaufen)|blühen=bloom|vorsicht=careful|berühmt=famous|räume=tidy (aufräumen)|ordnung=order (in Ordnung = all right)|notizen=notes
 schicht=shift (at work)|gast=guest|gäste=guests|sachen=things|theke=counter|paar=few (ein paar = a few)|kasse=till / checkout|trinkgeld=tip(s)|profi=pro|puh=phew|geschafft=done it / made it|sofort=right away|lieber=rather (doch lieber = … instead)
 wunderbar=wonderful|schatz=treasure / darling
+kräuter=herbs|kräutern=herbs|trank=potion|sprechstunde=surgery hours|kessel=cauldron / kettle|trink=drink|patient=patient|patienten=patients|kopfschmerzen=headache|halsschmerzen=sore throat
 `;

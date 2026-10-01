@@ -1,6 +1,7 @@
 import { createGlossary } from "@/lib/game/glossary";
 import type { IslandPack } from "../types";
 import { cafe } from "./cafe";
+import { clinic } from "./clinic";
 import { course, courseGlosses } from "./course";
 import { discoveries } from "./discoveries";
 import { entries } from "./glossary";
@@ -42,6 +43,7 @@ export const island: IslandPack = {
   glossary: createGlossary("de", entries, courseGlosses),
   cafe,
   home,
+  clinic,
   discoveries,
   world,
   scenery: "tannenau",

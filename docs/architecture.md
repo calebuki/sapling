@@ -152,14 +152,22 @@ learner says where, and she looks exactly there. It uses the dative the
 course teaches for *where* something is, not the accusative of putting it
 somewhere.
 
+The third is **Aylin's surgery** (Karin's on Lilla Ö): a patient says what
+hurts and you click that spot on them, with the camera close in; you brew
+their remedy from the doctor's recipe (so many spoons of which colour of
+herbs, hot or cold water, sugar or not); later you also answer how they feel
+("Keine Sorge!") and tell them what to do from a picture ("Du musst im Bett
+bleiben."). "Du musst …" is only credited when the learner used it.
+
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
 which room is open.
 
 A job splits like the rest of the game. The rules live in `src/lib/game`
-(`rush.ts` for the café, `home.ts` for the farmhouse) and are tested without
+(`rush.ts` for the café, `home.ts` for the farmhouse, `clinic.ts` for the
+surgery) and are tested without
 a browser. Each language pack supplies the words (`cafe.rush` in
-`src/content/<code>/cafe.ts`, `home` in `src/content/<code>/home.ts`). Orders only use menu
+`src/content/<code>/cafe.ts`, `home` and `clinic` in their own files). Orders only use menu
 words the learner has met, weak words come up more often, and every shift
 records evidence through the same `recordObservation` path as lessons:
 orders understood by ear count as audio recognition, orders read off the

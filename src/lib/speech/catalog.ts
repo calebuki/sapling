@@ -3,6 +3,7 @@ import { expectedFor } from "@/lib/game/lesson";
 import type { Line } from "@/lib/game/line";
 import type { SceneBeat } from "@/lib/game/scenes";
 import type { Villager } from "@/lib/game/villagers";
+import { allRecipeLines } from "@/lib/game/clinic";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
@@ -208,6 +209,20 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     const { lines } = home;
     addLines([...lines.intro, lines.tellIntro, lines.tell, lines.repeat, ...lines.thanks, lines.late, ...lines.done, lines.harder], homeHost.voice, where);
     addLines(allHomeLines(home), homeHost.voice, where);
+  }
+
+  // Surgery hours: the doctor reads recipes; patients (a man's or a woman's voice) say what's wrong.
+  const clinic = island.clinic;
+  const doctor = clinic ? villagers.get(clinic.host) : undefined;
+  if (clinic && doctor) {
+    const where = { source: "clinic job", unit: firstUnitOf(doctor.id) };
+    const { lines } = clinic;
+    addLines([...lines.intro, lines.brewWrong, lines.brewRight, lines.replyWrong, lines.late, ...lines.done, lines.harder], doctor.voice, where);
+    const patients = [...clinic.parts.flatMap((p) => [clinic.complaint(p, 0), clinic.complaint(p, 1)]), ...clinic.feelings.map((f) => f.line), lines.adviceAsk, lines.adviceWrong, ...lines.thanks];
+    for (const part of clinic.parts) for (const other of clinic.parts) if (other.slug !== part.slug) patients.push(clinic.wrongPart(part, other));
+    for (const voice of [passerVoices.woman, passerVoices.man]) addLines(patients, voice, { ...where, speaker: "patient" });
+    addLines(allRecipeLines(clinic), doctor.voice, where);
+    addLines([lines.drink, ...Object.values(clinic.replies).map((r) => r.line), ...Object.values(clinic.advice).map((a) => a!.say)], playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

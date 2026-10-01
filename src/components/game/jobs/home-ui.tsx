@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, Ear, Home as HomeIcon, Search, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Ear, Home as HomeIcon, Search, Volume2 } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { HOME_LEVELS, homeStars, type Spot } from "@/lib/game/home";
 import { conceptStrength } from "@/lib/game/progression";
@@ -15,7 +15,7 @@ import { useShiftAnchor } from "./anchors";
 import { FURNITURE } from "./home-layout";
 import { hostHead, SPOT_LABEL_HEIGHT } from "./home-room";
 import { beginHome, currentTask, homeRuntime, homeSetup, leaveHome, pardon, sayTask, startHome, tell, useHome, type HomeSetup } from "./home-store";
-import { JobBar, JobIntro, JobLabel, JobSummary, useWordLabel } from "./job-ui";
+import { JobBar, JobClock, JobIntro, JobLabel, JobSummary, useWordLabel } from "./job-ui";
 
 // ---------- Starting ----------
 
@@ -79,33 +79,13 @@ export function HomeUI() {
 function HomeTop({ setup }: { setup: HomeSetup }) {
   const { levelIndex, found, tasks } = useHome((s) => s);
   const { lines } = setup.home;
-  const bar = useRef<HTMLSpanElement>(null);
-  // The family's clock runs down outside React.
-  useEffect(() => {
-    let frame = 0;
-    const tick = () => {
-      const left = homeRuntime.seconds / homeRuntime.total;
-      if (bar.current) {
-        bar.current.style.width = `${(left * 100).toFixed(1)}%`;
-        bar.current.dataset.low = left < 0.25 ? "1" : "";
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, []);
   return (
     <JobBar icon={<HomeIcon size={22} />} title={lines.title} levelIndex={levelIndex} levels={HOME_LEVELS.length} onClose={leaveHome}>
       <span>
         <Search size={18} /> <strong>{found}</strong>
         <span className="shift-of">/ {tasks.length}</span>
       </span>
-      <span className="home-clock" title={lines.clock.en}>
-        <AlarmClock size={18} /> <GlossedLine line={lines.clock} />
-        <span className="home-clock-track">
-          <span ref={bar} className="home-clock-fill" />
-        </span>
-      </span>
+      <JobClock label={lines.clock} left={() => homeRuntime.seconds / homeRuntime.total} />
     </JobBar>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, Star, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { AlarmClock, ArrowRight, Star, X } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import type { Line } from "@/lib/game/line";
 import { aria } from "@/lib/game/ui-text";
@@ -47,6 +47,36 @@ export function JobBar({
         <X size={20} />
       </button>
     </div>
+  );
+}
+
+// A clock that runs down outside React; `left` is 0..1.
+export function JobClock({ label, left }: { label: Line; left: () => number }) {
+  const bar = useRef<HTMLSpanElement>(null);
+  const read = useRef(left);
+  useEffect(() => {
+    read.current = left;
+  });
+  useEffect(() => {
+    let frame = 0;
+    const tick = () => {
+      const value = read.current();
+      if (bar.current) {
+        bar.current.style.width = `${(value * 100).toFixed(1)}%`;
+        bar.current.dataset.low = value < 0.25 ? "1" : "";
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <span className="home-clock" title={label.en}>
+      <AlarmClock size={18} /> <GlossedLine line={label} />
+      <span className="home-clock-track">
+        <span ref={bar} className="home-clock-fill" />
+      </span>
+    </span>
   );
 }
 
