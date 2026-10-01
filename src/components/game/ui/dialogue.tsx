@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, ChefHat, Clock3, GraduationCap, House, Stethoscope, Volume2 } from "lucide-react";
+import { BookOpen, ChefHat, Clock3, GraduationCap, House, Ship, Stethoscope, Volume2 } from "lucide-react";
 import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
 import { praiseFor } from "@/content/wardrobe";
 import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
@@ -18,6 +18,7 @@ import { emote, getGame, updateSave, useGame } from "../store";
 import { useShiftStarter } from "../jobs/cafe-ui";
 import { useClinicStarter } from "../jobs/clinic-ui";
 import { useClockStarter } from "../jobs/clock-ui";
+import { useFerryStarter } from "../jobs/ferry-ui";
 import { useHomeStarter } from "../jobs/home-ui";
 import { CafeRound } from "./cafe-round";
 import { SceneRound } from "./scene-round";
@@ -61,7 +62,8 @@ export function Dialogue({ id, progress }: { id: VillagerId; progress: GameProgr
   const homeJob = useHomeStarter(villager);
   const clinicJob = useClinicStarter(villager);
   const clockJob = useClockStarter(villager);
-  const shift = cafeJob ?? homeJob ?? clinicJob ?? clockJob;
+  const ferryJob = useFerryStarter(villager);
+  const shift = cafeJob ?? homeJob ?? clinicJob ?? clockJob ?? ferryJob;
 
   const finishRound = (result: RoundSummary) => {
     setSummary(result);
@@ -207,7 +209,7 @@ export function Dialogue({ id, progress }: { id: VillagerId; progress: GameProgr
                   shift.start();
                 }}
               >
-                {homeJob ? <House size={18} /> : clinicJob ? <Stethoscope size={18} /> : clockJob ? <Clock3 size={18} /> : <ChefHat size={18} />} <GlossedLine line={shift.invite} />
+                {homeJob ? <House size={18} /> : clinicJob ? <Stethoscope size={18} /> : clockJob ? <Clock3 size={18} /> : ferryJob ? <Ship size={18} /> : <ChefHat size={18} />} <GlossedLine line={shift.invite} />
               </button>
             ) : null}
             <button className="btn btn-quiet" onClick={() => say([pick(villager.goodbye)], endDialogue)}>

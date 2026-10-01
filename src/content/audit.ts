@@ -1,6 +1,7 @@
 import { wordParts } from "@/lib/game/glossary";
 import { allClinicLines } from "@/lib/game/clinic";
 import { allClockLines } from "@/lib/game/clock";
+import { allFerryLines } from "@/lib/game/ferry";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
@@ -66,6 +67,16 @@ export function coreText(pack: IslandPack) {
     const { clock } = pack;
     for (const value of Object.values(clock.lines)) texts.push(...(Array.isArray(value) ? value : [value]).map((l: { t: string }) => l.t));
     texts.push(...allClockLines(clock).map((l) => l.t));
+  }
+  if (pack.ferry) {
+    const { ferry } = pack;
+    // Lines, lists of lines, and the list's field names.
+    for (const value of Object.values(ferry.lines) as Array<{ t: string } | Array<{ t: string }> | Record<string, { t: string }>>) {
+      texts.push(...(Array.isArray(value) ? value : "t" in value ? [value as { t: string }] : Object.values(value)).map((l) => l.t));
+    }
+    texts.push(...allFerryLines(ferry).map((l) => l.t), ...Object.values(ferry.times).map((l) => l.t));
+    for (const p of ferry.people) texts.push(p.name, ...p.decoys);
+    texts.push(...[...ferry.countries, ...ferry.cities, ...ferry.languages].map((p) => p.name.t));
   }
   return texts;
 }

@@ -7,6 +7,7 @@ import { allRecipeLines } from "@/lib/game/clinic";
 import { allHomeLines } from "@/lib/game/home";
 import { allOrders, orderVoice } from "@/lib/game/rush";
 import { allTimes, customerGender, requestVariant } from "@/lib/game/clock";
+import { allFerryLines } from "@/lib/game/ferry";
 import { passerVoices, playerVoice } from "@/lib/game/voices";
 import type { Cefr } from "@/lib/learning/course";
 import { clipText } from "@/lib/speech/clips";
@@ -245,6 +246,23 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     if (clock.appointments) for (const day of clock.appointments.days) for (const hour of [9, 10, 11, 2, 3, 4]) customers.push(clock.appointments.ask(day, hour));
     for (const voice of [passerVoices.woman, passerVoices.man]) addLines(customers, voice, { ...where, speaker: "customer" });
     if (clock.appointments) addLines([clock.appointments.yes.line, clock.appointments.no.line], playerVoice, { ...where, speaker: "player" });
+  }
+
+  // The ferry: passengers say who they are (each in their own voice), the
+  // ferry keeper runs the landing stage, you greet and ask.
+  const ferry = island.ferry;
+  const keeper = ferry ? villagers.get(ferry.host) : undefined;
+  if (ferry && keeper) {
+    const where = { source: "ferry job", unit: firstUnitOf(keeper.id) };
+    const { lines } = ferry;
+    addLines([...lines.intro, lines.registerIntro, lines.listWrong, lines.listRight, lines.late, ...lines.done, lines.harder], keeper.voice, where);
+    for (const person of ferry.people) {
+      addLines([ferry.introduce(person), ferry.spell(person), ferry.wrongRegister(person)], passerVoices[person.gender], { ...where, speaker: "passenger" });
+    }
+    const shared = allFerryLines(ferry).filter((l) => !ferry.people.some((p) => [ferry.introduce(p).t, ferry.spell(p).t, ferry.wrongRegister(p).t].includes(l.t)));
+    const own = new Set([ferry.askName.du.say.t, ferry.askName.Sie.say.t, ...Object.values(ferry.repairs).flatMap((r) => [r.say.du.t, r.say.Sie.t])]);
+    for (const voice of [passerVoices.woman, passerVoices.man]) addLines([...shared.filter((l) => !own.has(l.t)), lines.pardon], voice, { ...where, speaker: "passenger" });
+    addLines(shared.filter((l) => own.has(l.t)), playerVoice, { ...where, speaker: "player" });
   }
 
   // Grammar tips, read out by whoever teaches the unit.

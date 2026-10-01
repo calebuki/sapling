@@ -268,7 +268,8 @@ export function Character({
       boots: flat(look.boots ?? "#4a3a30"),
       bowtie: flat(look.bowtie ?? look.accent),
       backpack: flat(look.backpack ?? look.accent),
-      strap: flat(darker(look.backpack ?? look.accent)),
+      // Only a rucksack has straps; some looks (animals, props) carry no accent.
+      strap: flat(look.backpack ? darker(look.backpack) : "#5b3a24"),
       frame: flat("#2b2233"),
       button: flat("#f2c230"),
     }),

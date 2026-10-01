@@ -3,6 +3,7 @@ import type { IslandPack } from "../types";
 import { cafe } from "./cafe";
 import { clinic } from "./clinic";
 import { clock } from "./clock";
+import { ferry } from "./ferry";
 import { course, courseGlosses } from "./course";
 import { discoveries } from "./discoveries";
 import { entries } from "./glossary";
@@ -46,6 +47,7 @@ export const island: IslandPack = {
   home,
   clinic,
   clock,
+  ferry,
   discoveries,
   world,
   scenery: "tannenau",

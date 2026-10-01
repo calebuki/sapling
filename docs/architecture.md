@@ -167,6 +167,15 @@ clock and you say it in words (digits get "Sag es mit Wörtern!"); later
 some ask when they can collect it ("Passt es dir am Freitag um zwei Uhr?")
 and you answer from the week in the calendar.
 
+The fifth is **Greta's ferry** (German only): passengers queue on the
+landing stage and you check them aboard. You greet each one for the time of
+day the sky shows ("Guten Abend? Es ist doch noch Morgen!"), ask the name
+with du for children and Sie for adults, and fill in the passenger list from
+how they introduce themselves (name, where from, where they live, what they
+speak). "Wie bitte?", "Kannst du langsamer sprechen?" and "Wie schreibt man
+das?" are the buttons for hearing it again, slowly, or spelled; then a
+goodbye as they walk up the gangway.
+
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
 which room is open.

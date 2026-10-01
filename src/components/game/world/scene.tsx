@@ -10,6 +10,7 @@ import { island } from "../island";
 import { CafeRoom } from "../jobs/cafe-room";
 import { ClinicRoom } from "../jobs/clinic-room";
 import { ClockRoom } from "../jobs/clock-room";
+import { FerryRoom } from "../jobs/ferry-room";
 import { HomeRoom } from "../jobs/home-room";
 import type { JobId } from "../store";
 import { LabelProjector } from "../world-labels";
@@ -134,7 +135,7 @@ export function Scene({ treeStage, goal, unlocked, quality, job = null }: SceneP
       <fog attach="fog" args={[fog, FOG.near, FOG.far]} />
       <Suspense fallback={null}>
         <Lights />
-        {job === "cafe" ? <CafeRoom /> : job === "home" ? <HomeRoom /> : job === "clinic" ? <ClinicRoom /> : job === "clock" ? <ClockRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
+        {job === "cafe" ? <CafeRoom /> : job === "home" ? <HomeRoom /> : job === "clinic" ? <ClinicRoom /> : job === "clock" ? <ClockRoom /> : job === "ferry" ? <FerryRoom /> : <Island treeStage={treeStage} goal={goal} unlocked={unlocked} />}
       </Suspense>
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <PixelOutline />
