@@ -12,6 +12,9 @@ import { createLearningRepository } from "@/lib/repositories";
 import type { LearningOverview } from "@/lib/repositories/types";
 import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/client";
+import { PlayerPreview, WardrobeButton } from "@/components/wardrobe/hub-entry";
+import { loadWardrobe } from "@/components/wardrobe/store";
+import { Wardrobe } from "@/components/wardrobe/wardrobe";
 import { IslandArt } from "./island-art";
 import { SaplingMascot } from "./sapling-mascot";
 
@@ -36,6 +39,11 @@ type Status = { kind: "loading" } | { kind: "ready"; overview: LearningOverview 
 export function Hub({ learnerId }: { learnerId: string | null }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(learnerId ? { kind: "loading" } : { kind: "signed-out" });
+  const [wardrobeOpen, setWardrobeOpen] = useState(false);
+
+  useEffect(() => {
+    if (learnerId) void loadWardrobe(learnerId);
+  }, [learnerId]);
 
   useEffect(() => {
     if (!learnerId) return;
@@ -68,25 +76,29 @@ export function Hub({ learnerId }: { learnerId: string | null }) {
         <span className="hub-logo">
           <Sprout size={26} aria-hidden="true" /> Sapling
         </span>
-        {learnerId && hasSupabase ? (
-          <button
-            className="btn btn-quiet hub-account"
-            onClick={async () => {
-              await createClient().auth.signOut();
-              router.replace("/login");
-              router.refresh();
-            }}
-          >
-            <LogOut size={17} /> Sign out
-          </button>
-        ) : !learnerId ? (
-          <Link className="btn hub-account" href="/login">
-            <LogIn size={17} /> Sign in
-          </Link>
-        ) : null}
+        <div className="hub-top-actions">
+          {learnerId ? <WardrobeButton onOpen={() => setWardrobeOpen(true)} /> : null}
+          {learnerId && hasSupabase ? (
+            <button
+              className="btn btn-quiet hub-account"
+              onClick={async () => {
+                await createClient().auth.signOut();
+                router.replace("/login");
+                router.refresh();
+              }}
+            >
+              <LogOut size={17} /> Sign out
+            </button>
+          ) : !learnerId ? (
+            <Link className="btn hub-account" href="/login">
+              <LogIn size={17} /> Sign in
+            </Link>
+          ) : null}
+        </div>
       </header>
 
       <section className="hub-hero">
+        {learnerId ? <PlayerPreview onOpen={() => setWardrobeOpen(true)} paused={wardrobeOpen} /> : null}
         <SaplingMascot greeting={`${HELLO[last ?? "sv"]}${name ? `, ${name}` : ""}!`} lang={last ?? "sv"} />
         <h1>{name ? `Welcome back, ${name}.` : "Learn a language on an island."}</h1>
         <p>
@@ -129,6 +141,10 @@ export function Hub({ learnerId }: { learnerId: string | null }) {
         <p className="hub-error" role="alert">
           Your progress couldn&apos;t be loaded just now. The islands still work; try refreshing in a moment.
         </p>
+      ) : null}
+
+      {wardrobeOpen && learnerId ? (
+        <Wardrobe learnerId={learnerId} language={last ?? "sv"} onClose={() => setWardrobeOpen(false)} />
       ) : null}
 
       <footer className="hub-foot">

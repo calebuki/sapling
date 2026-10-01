@@ -25,6 +25,7 @@ const g = {
   sphere: new THREE.SphereGeometry(1, 8, 6),
   cone: new THREE.ConeGeometry(1, 1, 12),
   face: new THREE.PlaneGeometry(1, 1),
+  ring: new THREE.TorusGeometry(1, 0.16, 6, 14),
 };
 
 const flat = (color: string) => toon(color, { surface: null });
@@ -39,13 +40,20 @@ type Frame = (typeof FRAMES)[number];
 const ink = "#2b2233";
 const shine = "#ffffff";
 const blush = "#f39a9a";
+const freckle = "#b0704f";
 const lip = "#7a3030";
 const tongue = "#e0707a";
 
-let sheet: HTMLCanvasElement | null = null;
-function faceSheet() {
+type FaceStyle = NonNullable<CharacterLook["face"]>;
+const plainFace: FaceStyle = { eyes: "round", cheeks: "blush" };
+
+const sheets = new Map<string, HTMLCanvasElement>();
+function faceSheet({ eyes, cheeks }: FaceStyle) {
+  const key = `${eyes}-${cheeks}`;
+  let sheet = sheets.get(key);
   if (sheet) return sheet;
   sheet = document.createElement("canvas");
+  sheets.set(key, sheet);
   sheet.width = FACE_W * FRAMES.length;
   sheet.height = FACE_H;
   const ctx = sheet.getContext("2d")!;
@@ -55,11 +63,20 @@ function faceSheet() {
       ctx.fillRect(i * FACE_W + x, y, 1, 1);
     };
     const eye = (x: number, lift = 0) => {
+      if (eyes === "sleepy") {
+        // Heavy lids: a flat line with the eye peeking out underneath.
+        for (const dx of [-1, 0, 1, 2]) px(x + dx, 5 - lift, ink);
+        px(x, 6 - lift, ink);
+        px(x + 1, 6 - lift, ink);
+        return;
+      }
       for (let y = 4 - lift; y <= 6 - lift; y++) {
         px(x, y, ink);
         px(x + 1, y, ink);
       }
       px(x + 1, 4 - lift, shine);
+      // A lash flicking up from the outer corner.
+      if (eyes === "lashes") px(x < 8 ? x - 1 : x + 2, 3 - lift, ink);
     };
     const closed = (x: number) => {
       px(x - 1, 6, ink);
@@ -73,8 +90,9 @@ function faceSheet() {
       px(x + 1, 5, ink);
       px(x + 2, 6, ink);
     };
-    // Rosy cheeks on every face.
-    for (const x of [1, 2, 13, 14]) px(x, 8, blush);
+    if (cheeks === "blush") for (const x of [1, 2, 13, 14]) px(x, 8, blush);
+    else if (cheeks === "freckles")
+      for (const [x, y] of [[2, 8], [1, 9], [3, 9], [13, 8], [12, 9], [14, 9]]) px(x, y, freckle);
     if (frame === "blink") [3, 11].forEach(closed);
     else if (frame === "happy") [3, 11].forEach(arch);
     else if (frame === "think") [3, 11].forEach((x) => eye(x, 1));
@@ -100,16 +118,17 @@ function faceSheet() {
   return sheet;
 }
 
-function useFace() {
+function useFace(style: FaceStyle) {
+  const { eyes, cheeks } = style;
   const texture = useMemo(() => {
-    const t = new THREE.CanvasTexture(faceSheet());
+    const t = new THREE.CanvasTexture(faceSheet({ eyes, cheeks }));
     t.colorSpace = THREE.SRGBColorSpace;
     t.magFilter = THREE.NearestFilter;
     t.minFilter = THREE.NearestFilter;
     t.generateMipmaps = false;
     t.repeat.set(1 / FRAMES.length, 1);
     return t;
-  }, []);
+  }, [eyes, cheeks]);
   const material = useMemo(
     () => new THREE.MeshToonMaterial({ map: texture, gradientMap: toonRamp(), alphaTest: 0.5, transparent: false }),
     [texture],
@@ -127,6 +146,83 @@ function useFace() {
 function showFrame(mesh: THREE.Mesh | null, frame: Frame) {
   const map = (mesh?.material as THREE.MeshToonMaterial | undefined)?.map;
   if (map) map.offset.x = FRAMES.indexOf(frame) / FRAMES.length;
+}
+
+// ---- Cloth patterns --------------------------------------------------------
+
+// Stripes and knits are a 16px mask that mixes in a second colour, projected
+// along each face's main axis like the island's surface textures, so a sleeve
+// and a torso get the same stripe width.
+const PATTERN_TILE = 0.32;
+type Pattern = "stripes" | "knit";
+
+function patternMask(kind: Pattern) {
+  const data = new Uint8Array(16 * 16 * 4);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      let on = false;
+      let rib = 1;
+      if (kind === "stripes") on = Math.floor(y / 4) % 2 === 1;
+      else {
+        // A band of dots, diamonds and dots, like a Nordic yoke, on a ribbed knit.
+        const m = x % 4;
+        on = ((y === 4 || y === 10) && m === 1) || ((y === 6 || y === 8) && m === 3) || (y === 7 && m % 2 === 0);
+        rib = x % 2 ? 0.94 : 1.04;
+      }
+      const i = (y * 16 + x) * 4;
+      data[i] = on ? 255 : 0;
+      data[i + 1] = Math.round((rib / 1.1) * 255);
+      data[i + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data, 16, 16, THREE.RGBAFormat);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestMipmapNearestFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const masks = new Map<Pattern, THREE.DataTexture>();
+const cloths = new Map<string, THREE.Material>();
+
+function cloth(color: string, kind: CharacterLook["top"]) {
+  if (!kind || kind === "tee") return flat(color);
+  const key = `${kind}|${color}`;
+  const cached = cloths.get(key);
+  if (cached) return cached;
+  let mask = masks.get(kind);
+  if (!mask) masks.set(kind, (mask = patternMask(kind)));
+  const base = new THREE.Color(color);
+  // Cream on dark cloth, navy on light.
+  const second = new THREE.Color(base.getHSL({ h: 0, s: 0, l: 0 }).l > 0.62 ? "#2c3e50" : "#f4efe6");
+  const material = new THREE.MeshToonMaterial({ color, gradientMap: toonRamp() });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uMask = { value: mask };
+    shader.uniforms.uSecond = { value: second };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vClothPos;\nvarying vec3 vClothNormal;")
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        vClothPos = position * vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));
+        vClothNormal = normal;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vClothPos;\nvarying vec3 vClothNormal;\nuniform sampler2D uMask;\nuniform vec3 uSecond;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        vec3 clothAxis = abs(vClothNormal);
+        vec2 clothUv = clothAxis.x >= clothAxis.y && clothAxis.x >= clothAxis.z ? vClothPos.zy : (clothAxis.y >= clothAxis.z ? vClothPos.xz : vClothPos.xy);
+        vec4 clothMask = texture2D(uMask, clothUv / ${PATTERN_TILE.toFixed(3)});
+        diffuseColor.rgb = mix(diffuseColor.rgb, uSecond, clothMask.r) * clothMask.g * 1.1;`,
+      );
+  };
+  material.customProgramCacheKey = () => `cloth-${kind}`;
+  cloths.set(key, material);
+  return material;
 }
 
 // ---- Body ------------------------------------------------------------------
@@ -150,18 +246,22 @@ export function Character({
   const walkPhase = useRef(seed * 3.1);
   const blinkAt = useRef(2 + seed);
   const temp = useMemo(() => ({ v: new THREE.Vector3(), q: new THREE.Quaternion(), e: new THREE.Euler() }), []);
-  const faceMaterial = useFace();
+  const faceMaterial = useFace(look.face ?? plainFace);
   const face = useRef<THREE.Mesh>(null);
 
   const m = useMemo(
     () => ({
       skin: flat(look.skin),
       hair: flat(look.hair),
-      shirt: flat(look.shirt),
+      shirt: cloth(look.shirt, look.top),
       pants: flat(look.pants),
       accent: flat(look.accent),
+      collar: flat(look.collar ?? look.accent),
       shoe: flat("#4a3a30"),
       apron: flat(look.apron ?? look.accent),
+      scarf: flat(look.scarf ?? look.accent),
+      frame: flat("#2b2233"),
+      button: flat("#f2c230"),
     }),
     [look],
   );
@@ -246,14 +346,28 @@ export function Character({
           [legR, 0.12],
         ].map(([ref, x], i) => (
           <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 0.34, 0]}>
-            <mesh geometry={g.box} material={m.pants} position={[0, -0.13, 0]} scale={[0.16, 0.26, 0.18]} castShadow />
+            {look.bottom === "shorts" ? (
+              <>
+                <mesh geometry={g.box} material={m.pants} position={[0, -0.05, 0]} scale={[0.17, 0.11, 0.19]} castShadow />
+                <mesh geometry={g.box} material={m.skin} position={[0, -0.17, 0]} scale={[0.13, 0.15, 0.14]} castShadow />
+              </>
+            ) : (
+              <mesh geometry={g.box} material={m.pants} position={[0, -0.13, 0]} scale={[0.16, 0.26, 0.18]} castShadow />
+            )}
             <mesh geometry={g.round} material={m.shoe} position={[0, -0.29, 0.03]} scale={[0.19, 0.1, 0.27]} castShadow />
           </group>
         ))}
         {/* Torso */}
         <mesh geometry={g.round} material={m.shirt} position={[0, 0.55, 0]} scale={[0.52, 0.46, 0.38]} castShadow />
         {look.apron ? <mesh geometry={g.box} material={m.apron} position={[0, 0.5, 0.19]} scale={[0.42, 0.36, 0.02]} /> : null}
-        <mesh geometry={g.round} material={m.accent} position={[0, 0.78, 0]} scale={[0.46, 0.1, 0.36]} />
+        {look.bottom === "overalls" ? <Overalls pants={m.pants} button={m.button} /> : null}
+        <mesh geometry={g.round} material={m.collar} position={[0, 0.78, 0]} scale={[0.46, 0.1, 0.36]} />
+        {look.scarf ? (
+          <group>
+            <mesh geometry={g.round} material={m.scarf} position={[0, 0.8, 0]} scale={[0.5, 0.14, 0.42]} castShadow />
+            <mesh geometry={g.round} material={m.scarf} position={[0.13, 0.62, 0.2]} rotation-z={0.12} scale={[0.12, 0.28, 0.05]} castShadow />
+          </group>
+        ) : null}
         {/* Arms */}
         {[
           [armL, -0.32],
@@ -270,11 +384,45 @@ export function Character({
             <mesh geometry={g.round} material={m.skin} position={[0, 0.38, 0]} scale={[0.78, 0.72, 0.68]} castShadow />
             <mesh ref={face} geometry={g.face} material={faceMaterial} position={[0, 0.34, 0.343]} scale={[0.62, 0.5, 1]} />
             {look.beard ? <mesh geometry={g.round} material={m.hair} position={[0, 0.1, 0.33]} scale={[0.52, 0.16, 0.12]} /> : null}
+            {look.glasses ? <Glasses frame={m.frame} /> : null}
             <Hair look={look} hair={m.hair} accent={m.accent} />
             <Hat look={look} />
           </group>
         </group>
       </group>
+    </group>
+  );
+}
+
+// Bib, straps and a waistband over whatever top is on.
+function Overalls({ pants, button }: { pants: THREE.Material; button: THREE.Material }) {
+  return (
+    <group>
+      <mesh geometry={g.round} material={pants} position={[0, 0.38, 0]} scale={[0.53, 0.13, 0.39]} />
+      <mesh geometry={g.box} material={pants} position={[0, 0.52, 0.19]} scale={[0.32, 0.26, 0.02]} />
+      {[-0.12, 0.12].map((x) => (
+        <group key={x}>
+          <mesh geometry={g.box} material={pants} position={[x, 0.72, 0.17]} scale={[0.06, 0.16, 0.03]} />
+          <mesh geometry={g.box} material={pants} position={[x, 0.6, -0.195]} scale={[0.06, 0.4, 0.02]} />
+          <mesh geometry={g.box} material={button} position={[x, 0.63, 0.205]} scale={0.035} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// Round frames over the pixel eyes, with arms back to the ears.
+function Glasses({ frame }: { frame: THREE.Material }) {
+  return (
+    <group position={[0, 0.378, 0.37]}>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh geometry={g.ring} material={frame} position={[side * 0.155, 0, 0]} scale={0.09} />
+          <mesh geometry={g.box} material={frame} position={[side * 0.4, 0.01, -0.2]} scale={[0.02, 0.02, 0.4]} />
+          <mesh geometry={g.box} material={frame} position={[side * 0.32, 0.01, 0]} scale={[0.16, 0.018, 0.018]} />
+        </group>
+      ))}
+      <mesh geometry={g.box} material={frame} position={[0, 0.01, 0]} scale={[0.07, 0.018, 0.018]} />
     </group>
   );
 }
@@ -291,11 +439,14 @@ function Hair({ look, hair, accent }: { look: CharacterLook; hair: THREE.Materia
       <mesh geometry={g.box} material={hair} position={[0.28, 0.57, 0.32]} scale={[0.16, 0.18, 0.08]} />
     </>
   );
+  // A beanie sits where the top of the hair would be.
+  const covered = look.hat === "beanie";
+  const top = covered ? null : cap;
   switch (look.hairStyle) {
     case "braid":
       return (
         <group>
-          {cap}
+          {top}
           {back}
           {sides}
           {[0, 1, 2, 3].map((i) => (
@@ -307,7 +458,7 @@ function Hair({ look, hair, accent }: { look: CharacterLook; hair: THREE.Materia
     case "bob":
       return (
         <group>
-          {cap}
+          {top}
           <mesh geometry={g.round} material={hair} position={[0, 0.34, -0.18]} scale={[0.9, 0.62, 0.44]} castShadow />
           {[-0.43, 0.43].map((x) => (
             <mesh key={x} geometry={g.round} material={hair} position={[x, 0.36, 0.08]} scale={[0.1, 0.6, 0.46]} />
@@ -317,10 +468,10 @@ function Hair({ look, hair, accent }: { look: CharacterLook; hair: THREE.Materia
     case "bun":
       return (
         <group>
-          {cap}
+          {top}
           {back}
           {sides}
-          <mesh geometry={g.round} material={hair} position={[0, 0.86, -0.2]} scale={0.3} castShadow />
+          {covered ? null : <mesh geometry={g.round} material={hair} position={[0, 0.86, -0.2]} scale={0.3} castShadow />}
         </group>
       );
     case "beanie":
@@ -333,13 +484,15 @@ function Hair({ look, hair, accent }: { look: CharacterLook; hair: THREE.Materia
     default:
       return (
         <group>
-          {cap}
+          {top}
           {back}
           {sides}
         </group>
       );
   }
 }
+
+const crownFlowers = ["#ffffff", "#f39ac0", "#f7d94c", "#7fb2e8", "#ffffff", "#f39ac0", "#c99ae8"];
 
 function Hat({ look }: { look: CharacterLook }) {
   switch (look.hat) {
@@ -409,6 +562,30 @@ function Hat({ look }: { look: CharacterLook }) {
           <mesh geometry={g.cone} material={flat("#ead9a2")} position={[0, 0.22, 0]} scale={[0.82, 0.44, 0.82]} castShadow />
           <mesh geometry={g.cylinder} material={flat("#c9b26e")} position={[0, 0.005, 0]} scale={[0.83, 0.02, 0.83]} />
           <mesh geometry={g.cylinder} material={flat("#c9b26e")} position={[0, 0.16, 0]} scale={[0.53, 0.015, 0.53]} />
+        </group>
+      );
+    // A midsummer flower crown: leaves and little flowers all the way round.
+    case "crown":
+      return (
+        <group position={[0, 0.8, -0.02]} rotation-x={-0.08}>
+          {Array.from({ length: 14 }, (_, i) => {
+            const a = (i / 14) * Math.PI * 2;
+            const flower = i % 2 === 0;
+            return (
+              <mesh
+                key={i}
+                geometry={g.round}
+                material={flat(flower ? crownFlowers[i / 2] : "#4f8f3f")}
+                position={[Math.sin(a) * 0.45, flower ? 0.03 : 0, Math.cos(a) * 0.41]}
+                rotation-y={a}
+                scale={flower ? [0.13, 0.11, 0.1] : [0.12, 0.05, 0.08]}
+                castShadow
+              />
+            );
+          })}
+          {[-0.1, 0.1].map((x) => (
+            <mesh key={x} geometry={g.round} material={flat("#f7d94c")} position={[x, 0.07, 0.42]} scale={0.06} />
+          ))}
         </group>
       );
     // The mũ cối, the pith helmet older men in the North still wear.

@@ -12,10 +12,18 @@ export type CharacterLook = {
   shirt: string;
   pants: string;
   accent: string;
-  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut" | "nonla" | "pith";
+  hat?: "conductor" | "sunhat" | "chef" | "beanie" | "cap" | "bollenhut" | "nonla" | "pith" | "crown";
   beard?: boolean;
   apron?: string;
   scale?: number;
+  // Wardrobe pieces; villagers leave these out and get the defaults.
+  face?: { eyes: "round" | "lashes" | "sleepy"; cheeks: "blush" | "freckles" | "none" };
+  top?: "tee" | "stripes" | "knit";
+  bottom?: "trousers" | "shorts" | "overalls";
+  glasses?: boolean;
+  scarf?: string;
+  // The band at the neck; defaults to the accent.
+  collar?: string;
 };
 
 export type Villager = {

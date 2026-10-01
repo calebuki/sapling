@@ -12,6 +12,7 @@ import type {
 } from "@/types/learning";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import type { Observation } from "@/lib/learning/adaptive";
+import type { WardrobeRecord } from "@/lib/game/wardrobe";
 import type {
   CompletePracticeSessionInput,
   PracticeSnapshot,
@@ -33,6 +34,9 @@ export interface LearningRepository {
   setTargetLanguage(languageCode: TargetLanguageCode): Promise<void>;
   loadSnapshot(languageCode: TargetLanguageCode): Promise<LearningSnapshot>;
   loadOverview(): Promise<LearningOverview>;
+  // The wardrobe as stored, unchecked; read it with readRecord().
+  loadWardrobe(): Promise<unknown>;
+  saveWardrobe(record: WardrobeRecord): Promise<void>;
   startSession(input: LearningSessionPlanInput): Promise<LearningSessionPlan>;
   completeSession(sessionId: string | null): Promise<void>;
   recordRetrievalAttempt(

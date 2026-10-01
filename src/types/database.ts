@@ -55,6 +55,7 @@ export interface Database {
           native_language_code: string;
           target_language_code: string;
           time_zone: string;
+          wardrobe: Json;
           created_at: string;
           updated_at: string;
         };
@@ -64,6 +65,7 @@ export interface Database {
           native_language_code?: string;
           target_language_code?: string;
           time_zone?: string;
+          wardrobe?: Json;
           created_at?: string;
           updated_at?: string;
         };

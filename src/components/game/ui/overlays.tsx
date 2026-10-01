@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, Languages, Lock, LogOut, Volume2, X } from "lucide-react";
+import { GraduationCap, Languages, Lock, LogOut, Shirt, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { Wardrobe } from "@/components/wardrobe/wardrobe";
 import type { GrammarTip } from "@/lib/game/grammar";
 import { conceptStage, type GameProgress } from "@/lib/game/progression";
 import { aria } from "@/lib/game/ui-text";
@@ -13,7 +14,6 @@ import { sound } from "../audio/sfx";
 import { speak } from "../audio/speech";
 import { island, villagerById, useIsland } from "../island";
 import { setGame, updateSave, useGame } from "../store";
-import { outfits } from "../world/actors";
 import { GrammarTipModal } from "./grammar-tip";
 import { StageIcon } from "./stage-icon";
 import { Glossed, GlossedLine } from "./glossed";
@@ -25,8 +25,10 @@ function close() {
 
 export function Overlays({ progress }: { progress: GameProgress }) {
   const overlay = useGame((s) => s.overlay);
-  const { ui } = useIsland();
+  const { ui, code } = useIsland();
+  const { learnerId } = useLearningModel();
   if (!overlay) return null;
+  if (overlay === "wardrobe") return <Wardrobe learnerId={learnerId} language={code} onClose={close} />;
   return (
     <div className="overlay" onClick={close}>
       <div className={`overlay-card overlay-${overlay}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
@@ -159,7 +161,6 @@ function Ordbok({ progress }: { progress: GameProgress }) {
 }
 
 function GameMenu() {
-  const outfit = useGame((s) => s.save.outfit);
   const english = useGame((s) => s.save.english);
   const { ui } = useIsland();
   const englishLabel = { auto: ui.englishAuto, on: ui.englishOn, off: ui.englishOff }[english];
@@ -178,23 +179,15 @@ function GameMenu() {
       >
         <Languages size={18} /> <GlossedLine line={englishLabel} />
       </button>
-      <div className="outfit-picker">
-        <GlossedLine line={ui.yourStyle} />
-        <div>
-          {outfits.map((o, i) => (
-            <button
-              key={i}
-              aria-label={`${ui.style.t} ${i + 1} (style ${i + 1})`}
-              aria-pressed={outfit === i}
-              style={{ background: o.shirt }}
-              onClick={() => {
-                sound.play("pop");
-                updateSave({ outfit: i });
-              }}
-            />
-          ))}
-        </div>
-      </div>
+      <button
+        className="btn"
+        onClick={() => {
+          sound.play("open");
+          setGame({ overlay: "wardrobe" });
+        }}
+      >
+        <Shirt size={18} /> <GlossedLine line={ui.yourStyle} />
+      </button>
       <div className="controls-help">
         <GlossedLine line={ui.controls} as="strong" />
         <GlossedLine line={ui.controlsMove} as="p" />

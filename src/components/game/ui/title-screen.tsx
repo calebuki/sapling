@@ -2,16 +2,12 @@
 
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, LoaderCircle } from "lucide-react";
-import { aria } from "@/lib/game/ui-text";
-import { sound } from "../audio/sfx";
 import { useIsland } from "../island";
-import { updateSave, useGame } from "../store";
-import { outfits } from "../world/actors";
+import { useGame } from "../store";
 import { GlossedLine } from "./glossed";
 
 export function TitleScreen({ ready, onPlay }: { ready: boolean; onPlay: () => void }) {
   const phase = useGame((s) => s.phase);
-  const outfit = useGame((s) => s.save.outfit);
   const name = useGame((s) => s.save.name);
   const { ui } = useIsland();
   if (phase !== "title") return null;
@@ -23,20 +19,6 @@ export function TitleScreen({ ready, onPlay }: { ready: boolean; onPlay: () => v
           <GlossedLine line={ui.title} />
         </h1>
         <GlossedLine line={ui.tagline} as="p" className="title-tagline" />
-        <div className="title-outfits" aria-label={aria(ui.yourStyle)}>
-          {outfits.map((o, i) => (
-            <button
-              key={i}
-              aria-pressed={outfit === i}
-              aria-label={`${ui.style.t} ${i + 1} (style ${i + 1})`}
-              style={{ background: o.shirt }}
-              onClick={() => {
-                sound.play("pop");
-                updateSave({ outfit: i });
-              }}
-            />
-          ))}
-        </div>
         <button className="btn btn-primary btn-big" disabled={!ready} onClick={onPlay} autoFocus>
           {ready ? (
             <>

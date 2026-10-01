@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, GraduationCap, MessageCircle, Phone, Volume2 } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { getWardrobe, outfitOf } from "@/components/wardrobe/store";
+import { praiseFor } from "@/content/wardrobe";
 import { choosePracticeScenario } from "@/lib/practice/planner";
 import { getPracticeScenario } from "@/lib/practice/scenarios";
 import { pendingTip, type GrammarTip } from "@/lib/game/grammar";
@@ -10,11 +12,12 @@ import { pick, type Line } from "@/lib/game/line";
 import { teachableSlugs, type GameProgress } from "@/lib/game/progression";
 import { aria } from "@/lib/game/ui-text";
 import type { VillagerId } from "@/lib/game/villagers";
+import { noticeable } from "@/lib/game/wardrobe";
 import { endDialogue } from "../actions";
 import { sound } from "../audio/sfx";
 import { prefetchSpeech, speak, stopSpeaking } from "../audio/speech";
 import { island, villagerById, useIsland } from "../island";
-import { emote, updateSave, useGame } from "../store";
+import { emote, getGame, updateSave, useGame } from "../store";
 import { CafeRound } from "./cafe-round";
 import { Chat } from "./chat";
 import { SceneRound } from "./scene-round";
@@ -33,13 +36,15 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
   const save = useGame((s) => s.save);
   const standing = progress.villagers[id];
   // The opening script depends only on who this is and how far along we are.
-  const [opening] = useState(() =>
-    id === host && !save.introDone
-      ? { lines: script.intro, then: "name" as const }
-      : !standing.unlocked
-        ? { lines: [villager.locked], then: "end" as const }
-        : { lines: [pick(villager.greetings)], then: "menu" as const },
-  );
+  // Friends notice something new you've earned and say so after hello.
+  const [opening] = useState(() => {
+    if (id === host && !save.introDone) return { lines: script.intro, then: "name" as const, noticed: null };
+    if (!standing.unlocked) return { lines: [villager.locked], then: "end" as const, noticed: null };
+    const item = noticeable(outfitOf(getWardrobe().record), save.noticed);
+    const praise = item && praiseFor(item, code);
+    const hello = pick(villager.greetings);
+    return praise ? { lines: [hello, praise], then: "menu" as const, noticed: item } : { lines: [hello], then: "menu" as const, noticed: null };
+  });
   const [mode, setMode] = useState<Mode>("lines");
   const [lines, setLines] = useState<Line[]>(opening.lines);
   const [index, setIndex] = useState(0);
@@ -80,6 +85,10 @@ export function Dialogue({ id, progress, liveAvailable }: { id: VillagerId; prog
     emote(id, "wave", 1400);
     return () => stopSpeaking();
   }, [id]);
+
+  useEffect(() => {
+    if (opening.noticed) updateSave({ noticed: [...getGame().save.noticed, opening.noticed] });
+  }, [opening.noticed]);
 
   // Fetch the voice for the line on screen so "listen" plays without a wait.
   const shownLine = mode === "lines" ? lines[index]?.t : undefined;

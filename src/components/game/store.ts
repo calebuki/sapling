@@ -8,15 +8,18 @@ import type { TargetLanguageCode } from "@/lib/learning/languages";
 
 export type Interactable = { kind: "villager"; id: VillagerId } | { kind: "discovery"; id: string };
 export type Phase = "title" | "arrival" | "explore" | "dialogue";
-export type Overlay = null | "ordbok" | "menu";
-export type Toast = { id: number; kind: "word" | "level" | "info" | "friend"; line: Line; detail?: Line };
+export type Overlay = null | "ordbok" | "menu" | "wardrobe";
+export type Toast = { id: number; kind: "word" | "level" | "info" | "friend" | "gift"; line: Line; detail?: Line };
 
 export type SaveData = {
   v: 3;
   name: string | null;
   introDone: boolean;
   discovered: string[];
+  // The look before the wardrobe; kept so older saves still read. See wardrobe/store.
   outfit: number;
+  // Earned wardrobe pieces a villager here has already complimented.
+  noticed: string[];
   // Onboarding: what the learner told us, and where the placement check put them.
   experience: Experience | null;
   placedBand: number;
@@ -44,6 +47,7 @@ const emptySave: SaveData = {
   introDone: false,
   discovered: [],
   outfit: 0,
+  noticed: [],
   experience: null,
   placedBand: 0,
   grammarSeen: [],
@@ -125,6 +129,7 @@ export function readSave(learnerId: string, code: TargetLanguageCode): SaveData 
       v: 3,
       discovered: Array.isArray(parsed.discovered) ? parsed.discovered : [],
       grammarSeen: Array.isArray(parsed.grammarSeen) ? parsed.grammarSeen : [],
+      noticed: Array.isArray(parsed.noticed) ? parsed.noticed.filter((id): id is string => typeof id === "string") : [],
       // Saves from before onboarding existed already met the host; don't quiz them again.
       experience: parsed.experience ?? (parsed.introDone ? "little" : null),
     };

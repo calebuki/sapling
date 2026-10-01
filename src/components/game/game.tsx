@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
+import { loadWardrobe, recordProgress, useWardrobe } from "@/components/wardrobe/store";
 import { loadIsland } from "@/content/islands";
+import { itemName, wardrobeNews } from "@/content/wardrobe";
 import type { IslandPack } from "@/content/types";
 import { openThrough } from "@/lib/game/placement";
 import { computeProgress } from "@/lib/game/progression";
 import type { VillagerId } from "@/lib/game/villagers";
+import { giftsFor, giverOf } from "@/lib/game/wardrobe";
 import type { TargetLanguageCode } from "@/lib/learning/languages";
 import { sound } from "./audio/sfx";
 import { island, IslandContext, setIsland, useIsland, villagerById } from "./island";
@@ -81,6 +84,7 @@ function IslandGame() {
 
   useEffect(() => {
     loadSave(model.learnerId, code);
+    void loadWardrobe(model.learnerId);
   }, [model.learnerId, code]);
 
   useEffect(() => {
@@ -138,6 +142,26 @@ function IslandGame() {
       }
     }
   }, [progress, ready, villagers, ui]);
+
+  // The wardrobe remembers the best level reached here and any gifts given,
+  // and says so when that brings something new to wear. It waits for the
+  // title screen to go, so the news lands in the world.
+  const wardrobeReady = useWardrobe((s) => s.ready);
+  const playing = phase !== "title";
+  useEffect(() => {
+    if (!ready || !wardrobeReady || !playing) return;
+    const done = progress.units.filter((u) => u.ready).map((u) => u.unit.id);
+    const fresh = recordProgress(code, progress.level, giftsFor(code, done));
+    if (!fresh.length) return;
+    const news = wardrobeNews[code];
+    const giver = giverOf(fresh[0]);
+    // After any level-up toast, so the two don't land at once.
+    window.setTimeout(() => {
+      sound.play("sparkle");
+      if (fresh.length > 1) toast("gift", news.newItems(fresh.length), undefined, 5200);
+      else toast("gift", giver ? news.giftFrom(giver) : news.newItem, itemName(fresh[0], code), 5200);
+    }, 2200);
+  }, [progress, ready, wardrobeReady, playing, code]);
 
   const unlocked = useMemo(
     () => Object.fromEntries(villagers.map((v) => [v.id, progress.villagers[v.id].unlocked])) as Record<VillagerId, boolean>,

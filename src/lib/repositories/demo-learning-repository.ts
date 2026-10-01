@@ -32,6 +32,7 @@ import type {
 } from "@/types/practice";
 
 const targetLanguageStorageKey = "sapling.demo.target-language.v1";
+const wardrobeStorageKey = "sapling.demo.wardrobe.v1";
 
 function stateStorageKey(languageCode: TargetLanguageCode) {
   return languageCode === "da"
@@ -231,6 +232,12 @@ export function createDemoLearningRepository(): LearningRepository {
     },
     async setTargetLanguage(languageCode: TargetLanguageCode) {
       window.localStorage.setItem(targetLanguageStorageKey, languageCode);
+    },
+    async loadWardrobe() {
+      return JSON.parse(window.localStorage.getItem(wardrobeStorageKey) ?? "null");
+    },
+    async saveWardrobe(record) {
+      window.localStorage.setItem(wardrobeStorageKey, JSON.stringify(record));
     },
     async loadSnapshot(languageCode: TargetLanguageCode) {
       return {

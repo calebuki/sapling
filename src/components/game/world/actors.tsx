@@ -3,21 +3,16 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import type { CharacterLook, Villager, VillagerId } from "@/lib/game/villagers";
+import { lookOf } from "@/lib/game/wardrobe";
+import type { Villager, VillagerId } from "@/lib/game/villagers";
 import type { Collider } from "@/lib/game/world";
 import { interact } from "../actions";
 import { sound } from "../audio/sfx";
 import { island, villagerById } from "../island";
+import { outfitOf, useWardrobe } from "@/components/wardrobe/store";
 import { getGame, runtime, setCameraSnap, setGame, useGame, type Interactable } from "../store";
 import { Character, type CharacterAnim } from "./character";
 import { glow } from "./materials";
-
-export const outfits: CharacterLook[] = [
-  { skin: "#f1c7a5", hair: "#5b3a24", hairStyle: "beanie", shirt: "#3f7fd1", pants: "#2c3e50", accent: "#ff6b6b", hat: "beanie" },
-  { skin: "#c68a62", hair: "#2b1d14", hairStyle: "beanie", shirt: "#27ae60", pants: "#34495e", accent: "#f7c948", hat: "beanie" },
-  { skin: "#8a5a3c", hair: "#1c1410", hairStyle: "beanie", shirt: "#e67e22", pants: "#2c3e50", accent: "#6c5ce7", hat: "beanie" },
-  { skin: "#f6d7c0", hair: "#c0392b", hairStyle: "beanie", shirt: "#9b59b6", pants: "#3d3d3d", accent: "#00b894", hat: "beanie" },
-];
 
 const lookTarget = new THREE.Vector3();
 
@@ -27,11 +22,11 @@ function emoteFor(who: VillagerId | "player") {
 }
 
 export function Player() {
-  const outfit = useGame((s) => s.save.outfit);
+  const wardrobe = useWardrobe((s) => s.record);
+  const look = useMemo(() => lookOf(outfitOf(wardrobe)), [wardrobe]);
   const group = useRef<THREE.Group>(null);
   const velocity = useRef(new THREE.Vector2());
   const stepDistance = useRef(0);
-  const look = outfits[outfit % outfits.length];
   const { world, villagers } = island();
   const { spawn, groundAt, resolveMove } = world;
   const villagerColliders = useMemo<Collider[]>(() => villagers.map((v) => ({ x: v.position[0], z: v.position[1], r: 0.5 })), [villagers]);
