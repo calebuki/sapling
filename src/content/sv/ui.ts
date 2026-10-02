@@ -107,6 +107,8 @@ export const ui: UiText = {
   tryIt: { t: "Testa!", en: "Try it!" },
   nowYouCanSay: { t: "Nu kan du säga…", en: "Now you can say…" },
   letsGo: { t: "Då kör vi!", en: "Let's go!" },
+  hide: { t: "Dölj", en: "Hide" },
+  show: { t: "Visa", en: "Show" },
   presents: { t: "Sapling presenterar", en: "Sapling presents" },
   welcomeTitle: { t: "Välkommen till Lilla Ö", en: "Welcome to Little Island" },
   learnedBefore: { t: "Har du lärt dig svenska förut?", en: "Have you learned Swedish before?" },

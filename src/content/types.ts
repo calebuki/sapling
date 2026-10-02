@@ -8,6 +8,7 @@ import type { StationConfig } from "@/lib/game/station";
 import type { MarketConfig } from "@/lib/game/market";
 import type { Glossary } from "@/lib/game/glossary";
 import type { HomeConfig } from "@/lib/game/home";
+import type { JobLessons } from "@/lib/game/job-lesson";
 import type { GrammarTip } from "@/lib/game/grammar";
 import type { Line } from "@/lib/game/line";
 import type { PlacementConfig } from "@/lib/game/placement";
@@ -71,6 +72,8 @@ export type IslandPack = {
   forest?: ForestConfig;
   // Tickets and directions at the station, if the island has it.
   station?: StationConfig;
+  // The little lesson before each job, if the island has written them.
+  jobLessons?: JobLessons;
   discoveries: Discovery[];
   world: World;
   scenery: "lilla-o" | "tannenau" | "cat-ba";

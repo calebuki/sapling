@@ -4620,6 +4620,76 @@ button:disabled {
   width: min(620px, calc(100vw - 24px));
 }
 
+/* The answer box slides down to its tab and back up. */
+.job-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(620px, calc(100vw - 24px));
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  transition: transform 360ms cubic-bezier(0.3, 1.2, 0.4, 1);
+  animation: job-panel-in 420ms cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+@keyframes job-panel-in {
+  from {
+    transform: translate(-50%, 100%);
+  }
+}
+
+.job-panel.is-closed {
+  transform: translate(-50%, calc(100% - 50px - env(safe-area-inset-bottom)));
+}
+
+.job-panel-tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  height: 44px;
+  margin: 0 0 -12px 20px;
+  padding: 0 14px 6px 6px;
+  border: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  box-shadow: 0 -4px 14px rgba(20, 30, 50, 0.16);
+  cursor: pointer;
+}
+
+.job-panel-name {
+  padding: 4px 14px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.job-panel-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-panel-body {
+  align-self: stretch;
+  max-height: min(48vh, 420px);
+  padding: 22px 24px 20px;
+}
+
+.job-panel.is-closed .job-panel-body {
+  box-shadow: 0 -4px 14px rgba(20, 30, 50, 0.16);
+}
+
 .shift-hatch-line {
   display: flex;
   align-items: center;
@@ -5168,4 +5238,152 @@ button:disabled {
 
 .shift-pip:hover {
   outline: 2px solid var(--yellow-edge);
+}
+
+/* ---------- Sepp's mountain rescue ---------- */
+
+/* The radio card: beside the map on wide screens, along the bottom on narrow ones. */
+.forest-radio {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  display: grid;
+  gap: 10px;
+  width: 290px;
+  padding: 14px 16px 14px;
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 0 5px 0 var(--edge), var(--shadow);
+  transform: translateY(-50%);
+  animation: forest-radio-in 420ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes forest-radio-in {
+  from {
+    opacity: 0;
+    transform: translate(-30px, -50%);
+  }
+}
+
+.forest-radio-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+}
+
+.forest-radio-head svg {
+  color: #c0392b;
+}
+
+.forest-radio-head strong {
+  color: var(--ink);
+}
+
+.forest-radio-line {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+
+.forest-radio-line.is-heard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.5rem;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 759px) {
+  .forest-radio {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    width: auto;
+    transform: none;
+  }
+
+  @keyframes forest-radio-in {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+  }
+}
+
+/* ---------- The little lesson before a job ---------- */
+
+.job-lesson-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.job-lesson-steps li {
+  position: relative;
+  padding: 10px 14px 10px 46px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 0 var(--edge);
+  line-height: 1.45;
+  counter-increment: step;
+}
+
+.job-lesson-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.job-lesson-words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.job-lesson-words li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 0 var(--edge);
+}
+
+.job-lesson-words .grammar-example-en {
+  flex-basis: 100%;
+  padding-left: 42px;
+  margin-top: -4px;
+}
+
+.job-lesson-new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: 0 2px 0 var(--yellow-edge);
+  font-size: 0.85rem;
+  vertical-align: middle;
 }

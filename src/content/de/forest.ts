@@ -1,31 +1,42 @@
-import type { ForestAnimal, ForestConfig, ForestPlace, Hobby, WeatherWord } from "@/lib/game/forest";
+import type { Caller, ForestAnimal, ForestConfig, ForestPlace, Tile, Weather, WeatherWord } from "@/lib/game/forest";
 import { spoken } from "@/lib/game/line";
-import { normalizeText } from "@/lib/learning/text";
 
-// Sepp's wildlife survey from the lookout over the clearing. Where an animal
-// is takes the dative again (im Wald, auf der Wiese, am See, auf dem Baum),
-// and the weather goes in the logbook in the words the course teaches.
+// Sepp's mountain rescue. Where someone is takes the dative (im Wald, am See,
+// auf dem Berg), what they can see the accusative (Ich sehe einen Fuchs), and
+// the weather goes after "hier" with the verb second (Hier regnet es).
 
 type Gender = "m" | "f" | "n";
 
-const animals: Array<ForestAnimal & { gender: Gender; one: string; many: string }> = [
-  { slug: "das-reh", model: "deer", name: { t: "das Reh", en: "deer" }, habitats: ["meadow", "forest"], herd: false, gender: "n", one: "Reh", many: "Rehe" },
-  { slug: "der-fuchs", model: "fox", name: { t: "der Fuchs", en: "fox" }, habitats: ["forest", "meadow"], herd: false, gender: "m", one: "Fuchs", many: "Füchse" },
-  { slug: "der-igel", model: "hedgehog", name: { t: "der Igel", en: "hedgehog" }, habitats: ["meadow", "forest"], herd: false, gender: "m", one: "Igel", many: "Igel" },
-  { slug: "das-eichhoernchen", model: "squirrel", name: { t: "das Eichhörnchen", en: "squirrel" }, habitats: ["tree", "forest"], herd: false, gender: "n", one: "Eichhörnchen", many: "Eichhörnchen" },
-  { slug: "das-pferd", model: "horse", name: { t: "das Pferd", en: "horse" }, habitats: ["meadow"], herd: false, gender: "n", one: "Pferd", many: "Pferde" },
-  { slug: "der-vogel", model: "bird", name: { t: "der Vogel", en: "bird" }, habitats: ["tree"], herd: true, gender: "m", one: "Vogel", many: "Vögel" },
-  { slug: "die-ente", model: "duck", name: { t: "die Ente", en: "duck" }, habitats: ["lake"], herd: true, gender: "f", one: "Ente", many: "Enten" },
-  { slug: "die-kuh", model: "cow", name: { t: "die Kuh", en: "cow" }, habitats: ["meadow"], herd: true, gender: "f", one: "Kuh", many: "Kühe" },
-  { slug: "das-schaf", model: "sheep", name: { t: "das Schaf", en: "sheep" }, habitats: ["meadow"], herd: true, gender: "n", one: "Schaf", many: "Schafe" },
+const animals: Array<ForestAnimal & { gender: Gender; noun: string }> = [
+  { slug: "das-reh", model: "deer", name: { t: "das Reh", en: "deer" }, terrains: ["forest", "meadow", "river"], gender: "n", noun: "Reh" },
+  { slug: "der-fuchs", model: "fox", name: { t: "der Fuchs", en: "fox" }, terrains: ["forest", "meadow", "river"], gender: "m", noun: "Fuchs" },
+  { slug: "der-igel", model: "hedgehog", name: { t: "der Igel", en: "hedgehog" }, terrains: ["meadow", "forest"], gender: "m", noun: "Igel" },
+  { slug: "das-eichhoernchen", model: "squirrel", name: { t: "das Eichhörnchen", en: "squirrel" }, terrains: ["forest"], gender: "n", noun: "Eichhörnchen" },
+  { slug: "das-pferd", model: "horse", name: { t: "das Pferd", en: "horse" }, terrains: ["meadow"], gender: "n", noun: "Pferd" },
+  { slug: "der-vogel", model: "bird", name: { t: "der Vogel", en: "bird" }, terrains: ["lake", "forest", "mountain"], gender: "m", noun: "Vogel" },
+  { slug: "die-ente", model: "duck", name: { t: "die Ente", en: "duck" }, terrains: ["lake", "river"], gender: "f", noun: "Ente" },
+  { slug: "die-kuh", model: "cow", name: { t: "die Kuh", en: "cow" }, terrains: ["meadow", "mountain"], gender: "f", noun: "Kuh" },
+  { slug: "das-schaf", model: "sheep", name: { t: "das Schaf", en: "sheep" }, terrains: ["meadow", "mountain"], gender: "n", noun: "Schaf" },
 ];
 
 const places: ForestPlace[] = [
-  { id: "lake", concept: "der-see", at: { t: "am See", en: "by the lake" } },
-  { id: "meadow", concept: "die-wiese", at: { t: "auf der Wiese", en: "in the meadow" } },
-  { id: "forest", concept: "der-wald", at: { t: "im Wald", en: "in the forest" } },
-  { id: "tree", concept: "der-baum", at: { t: "auf dem Baum", en: "in the tree" } },
+  { id: "lake", concept: "der-see", name: { t: "der See", en: "the lake" }, at: { t: "am See", en: "by the lake" }, to: { t: "zum See", en: "to the lake" } },
+  { id: "meadow", concept: "die-wiese", name: { t: "die Wiese", en: "the meadow" }, at: { t: "auf der Wiese", en: "in the meadow" }, to: { t: "zur Wiese", en: "to the meadow" } },
+  { id: "forest", concept: "der-wald", name: { t: "der Wald", en: "the forest" }, at: { t: "im Wald", en: "in the forest" }, to: { t: "in den Wald", en: "into the forest" } },
+  { id: "mountain", concept: "der-berg", name: { t: "der Berg", en: "the mountain" }, at: { t: "auf dem Berg", en: "on the mountain" }, to: { t: "auf den Berg", en: "up the mountain" } },
+  { id: "river", concept: "der-fluss", name: { t: "der Fluss", en: "the river" }, at: { t: "am Fluss", en: "by the river" }, to: { t: "zum Fluss", en: "to the river" } },
 ];
+
+// The weather after "hier", "da" or "bei ihr": the verb comes second.
+const after: Record<Weather, { t: string; en: string }> = {
+  sun: { t: "ist es sonnig", en: "it's sunny" },
+  clouds: { t: "ist es bewölkt", en: "it's cloudy" },
+  rain: { t: "regnet es", en: "it's raining" },
+  snow: { t: "schneit es", en: "it's snowing" },
+  fog: { t: "ist es neblig", en: "it's foggy" },
+  wind: { t: "ist es windig", en: "it's windy" },
+  storm: { t: "gibt es ein Gewitter", en: "there's a thunderstorm" },
+};
 
 const weathers: WeatherWord[] = [
   { id: "sun", concepts: ["sonnig", "die-sonne"], accept: [String.raw`\bsonnig\b`, String.raw`\bsonne\b`], say: { t: "Es ist sonnig.", en: "It's sunny." } },
@@ -38,112 +49,103 @@ const weathers: WeatherWord[] = [
   { id: "storm", concepts: ["das-gewitter"], accept: [String.raw`\bgewitter\b`], say: { t: "Es gibt ein Gewitter.", en: "There's a thunderstorm." }, alsoOk: ["rain"] },
 ];
 
-const hobbies: Hobby[] = [
-  { concept: "wandern", accept: [String.raw`\bwander(e|n)\b`] },
-  { concept: "schwimmen", accept: [String.raw`\bschwimme?n?\b`] },
-  { concept: "rad-fahren", accept: [String.raw`\b(fahre|fahren)( ich)? (gern |am liebsten )?rad\b`, String.raw`\brad fahren\b`] },
-  { concept: "singen", accept: [String.raw`\bsinge\b`] },
-  { concept: "tanzen", accept: [String.raw`\btanze\b`] },
-  { concept: "malen", accept: [String.raw`\bmale\b`] },
-  { concept: "fotografieren", accept: [String.raw`\bfotografiere\b`] },
-  { concept: "fussball", accept: [String.raw`\bfußball\b`] },
-  { concept: "tennis", accept: [String.raw`\btennis\b`] },
-  { concept: "die-musik", accept: [String.raw`\bmusik\b`] },
-  { concept: "lesen", accept: [String.raw`\blese\b`] },
-  { concept: "spazieren-gehen", accept: [String.raw`\bspazieren\b`] },
+const callers: Caller[] = [
+  { name: "Emma", gender: "woman" },
+  { name: "Finn", gender: "man" },
+  { name: "Lea", gender: "woman" },
+  { name: "Jan", gender: "man" },
+  { name: "Sophie", gender: "woman" },
+  { name: "Felix", gender: "man" },
+  { name: "Klara", gender: "woman" },
+  { name: "Ben", gender: "man" },
 ];
 
 const animalOf = (a: ForestAnimal) => animals.find((x) => x.slug === a.slug)!;
-const the = (a: ForestAnimal) => {
-  const x = animalOf(a);
-  return x.herd ? `die ${x.many}` : `${{ m: "der", f: "die", n: "das" }[x.gender]} ${x.one}`;
-};
-const a = (x: ForestAnimal) => {
-  const y = animalOf(x);
-  return `${y.gender === "f" ? "eine" : "ein"} ${y.one}`;
-};
-const accTheEn = (x: ForestAnimal) => (animalOf(x).herd ? `the ${animalOf(x).name.en}${x.model === "sheep" ? "" : "s"}` : `the ${x.name.en}`);
-
-const words = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn", "elf", "zwölf"];
-const english = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
-const fold = (w: string) => w.replace(/ä|ae/g, "a").replace(/ö|oe/g, "o").replace(/ü|ue/g, "u").replace(/ß/g, "ss");
-const values: Record<string, number> = Object.fromEntries([...words.map((w, i) => [fold(w), i] as const), ["ein", 1] as const, ["eine", 1] as const]);
-
-// "Es sind drei Enten." is said both when you're right and when you're not.
-const thereAre = (x: ForestAnimal, n: number) => ({ t: `Es sind ${words[n]} ${animalOf(x).many}.`, en: `There are ${english[n]} ${x.model === "sheep" ? "sheep" : `${x.name.en}s`}.` });
+const placeOf = (t: Tile) => places.find((p) => p.id === t.terrain)!;
+// "ein Reh" (who's there), "einen Fuchs" (what you see).
+const nom = (a: ForestAnimal) => `${animalOf(a).gender === "f" ? "eine" : "ein"} ${animalOf(a).noun}`;
+const acc = (a: ForestAnimal) => `${{ m: "einen", f: "eine", n: "ein" }[animalOf(a).gender]} ${animalOf(a).noun}`;
+const anEn = (a: ForestAnimal) => `a ${a.name.en}`;
+const capital = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const forest: ForestConfig = {
   host: "sepp",
   animals,
   places,
   weathers,
-  numbers: { 1: "eins", 2: "zwei", 3: "drei", 4: "vier", 5: "fuenf", 6: "sechs", 7: "sieben", 8: "acht", 9: "neun", 10: "zehn", 11: "elf", 12: "zwoelf" },
-  hobbies,
-  likeFrame: { concept: "ich-spiele-gern", pattern: String.raw`\bich \p{L}+( \p{L}+)? (gern|am liebsten)\b|\bam liebsten\b` },
-  photo(animal, place, variant) {
-    const what = place ? `${the(animal)} ${place.at.t}` : the(animal);
-    const en = place ? `${accTheEn(animal)} ${place.at.en}` : accTheEn(animal);
-    // Variant 1 points it out first, as two clips: "Schau, das Reh im Wald! Mach schnell ein Foto!"
-    return variant === 0 ? { t: `Fotografier ${what}!`, en: `Take a photo of ${en}!` } : spoken([`Schau, ${what}!`, "Mach schnell ein Foto!"], `Look, ${en}! Quick, take a photo!`);
+  callers,
+  call(caller, tile, place, clues) {
+    const parts = [{ t: `Hilfe, hier ist ${caller.name}!`, en: `Help, this is ${caller.name}!` }];
+    if (clues.includes("place")) parts.push({ t: `Ich bin ${place.at.t}.`, en: `I'm ${place.at.en}.` });
+    if (clues.includes("weather")) parts.push({ t: `Hier ${after[tile.weather].t}.`, en: `${capital(after[tile.weather].en)} here.` });
+    if (clues.includes("animal") && tile.animal) parts.push({ t: `Ich sehe ${acc(tile.animal)}.`, en: `I can see ${anEn(tile.animal)}.` });
+    return spoken(
+      parts.map((p) => p.t),
+      parts.map((p) => p.en).join(" "),
+    );
   },
-  count(animal, place) {
-    const x = animalOf(animal);
-    return { t: `Wie viele ${x.many} sind ${place.at.t}?`, en: `How many ${x.model === "sheep" ? "sheep" : `${x.name.en}s`} are there ${place.at.en}?` };
+  wrong(caller, want, got, clue) {
+    const she = caller.gender === "woman" ? { t: "Sie", en: "She", dat: "ihr", dEn: "her" } : { t: "Er", en: "He", dat: "ihm", dEn: "him" };
+    if (clue === "place") {
+      return spoken([`Nein, das ist ${placeOf(got).name.t}.`, `${she.t} ist ${placeOf(want).at.t}!`], `No, that's ${placeOf(got).name.en}. ${she.en}'s ${placeOf(want).at.en}!`);
+    }
+    if (clue === "weather") {
+      return spoken([`Nein, da ${after[got.weather].t}.`, `Bei ${she.dat} ${after[want.weather].t}!`], `No, ${after[got.weather].en} there. Where ${she.en.toLowerCase()} is, ${after[want.weather].en}!`);
+    }
+    const seen = want.animal!;
+    const there = got.animal;
+    return spoken(
+      [there ? `Nein, da ist ${nom(there)}.` : "Nein, da ist kein Tier.", `${she.t} sieht ${acc(seen)}!`],
+      `No, there's ${there ? anEn(there) : "no animal"} there. ${she.en} can see ${anEn(seen)}!`,
+    );
   },
-  counted(animal, n) {
-    const there = thereAre(animal, n);
-    return spoken(["Genau!", there.t], `Exactly! ${there.en}`);
+  askWeather(place) {
+    return spoken([`Ich fahre ${place.to.t}.`, `Wie ist das Wetter ${place.at.t}?`], `I'm driving ${place.to.en}. What's the weather like ${place.at.en}?`);
   },
-  miscounted(animal, n) {
-    const there = thereAre(animal, n);
-    return spoken(["Hmm, nein.", there.t], `Hmm, no. ${there.en}`);
-  },
-  wrongAnimal(got) {
-    return { t: `Nein, das ist ${a(got)}!`, en: `No, that's a ${got.name.en}!` };
-  },
-  wrongPlace(want) {
-    return { t: `Nein, das andere, ${want.at.t}!`, en: `No, the other one, ${want.at.en}!` };
-  },
-  parseNumber(text, code) {
-    const said = normalizeText(text, code).split(" ").filter(Boolean);
-    if (said.some((w) => /\d/.test(w))) return "digits";
-    const n = said.map((w) => values[fold(w)]).find((v) => v !== undefined);
-    return n ?? null;
+  gear(weather) {
+    switch (weather) {
+      case "sun":
+        return { t: "Super, dann brauche ich keine Jacke!", en: "Great, then I don't need a jacket!" };
+      case "clouds":
+      case "wind":
+        return { t: "Danke! Dann nehme ich eine Jacke mit.", en: "Thanks! Then I'll take a jacket." };
+      case "rain":
+        return { t: "Danke! Dann nehme ich den Regenschirm mit.", en: "Thanks! Then I'll take the umbrella." };
+      case "snow":
+        return { t: "Brr! Dann nehme ich die Mütze und den Schal mit.", en: "Brr! Then I'll take my hat and scarf." };
+      case "fog":
+      case "storm":
+        return { t: "Oje! Dann fahre ich ganz langsam.", en: "Oh dear! Then I'll drive very slowly." };
+    }
   },
   lines: {
     invite: { t: "Kann ich dir helfen?", en: "Can I help you?" },
-    notYet: { t: "Lern zuerst ein paar Tiere!", en: "First learn a few animals!" },
+    notYet: { t: "Lern zuerst ein paar Orte in der Natur!", en: "First learn a few places out in nature!" },
     intro: [
-      { t: "Servus! Heute zählen wir die Tiere im Wald.", en: "Hi! Today we're counting the animals in the forest." },
-      { t: "Ich sage dir, welches Tier du fotografieren sollst.", en: "I'll tell you which animal to photograph." },
-      { t: "Aber leise! Die Tiere sind scheu.", en: "But quietly! The animals are shy." },
+      { t: "Servus! Gut, dass du da bist.", en: "Hi! Good that you're here." },
+      { t: "Heute sind viele Wanderer unterwegs, und manche haben sich verlaufen.", en: "Lots of hikers are out today, and some have got lost." },
+      { t: "Sie rufen mit dem Funkgerät an. Hör gut zu und zeig mir auf der Karte, wo sie sind!", en: "They call on the radio. Listen carefully and show me on the map where they are!" },
     ],
-    title: { t: "Die Tierzählung", en: "The animal count" },
+    weatherIntro: { t: "Und manchmal frage ich: Wie ist das Wetter dort? Dann schau auf die Karte und sag es mir!", en: "And sometimes I ask: what's the weather like there? Then look at the map and tell me!" },
+    title: { t: "Die Bergwacht", en: "Mountain rescue" },
     clock: { t: "Es wird dunkel", en: "It's getting dark" },
-    nice: [
-      { t: "Super Foto!", en: "Great photo!" },
-      { t: "Schön! Das kommt ins Logbuch.", en: "Lovely! That goes in the logbook." },
-      { t: "Toll, das ist ein gutes Foto!", en: "Great, that's a good photo!" },
+    radio: { t: "Funkgerät", en: "Radio" },
+    howTo: { t: "Hör zu und klick auf der Karte, wo die Person ist.", en: "Listen, and click the place on the map where the person is." },
+    found: [
+      { t: "Gefunden! Ich fahre sofort los.", en: "Found them! I'm setting off right away." },
+      { t: "Super, da ist jemand! Ich komme!", en: "Great, there's someone there! I'm coming!" },
+      { t: "Gut gemacht! Ich fahre hin.", en: "Well done! I'm driving there." },
     ],
-    weatherAsk: { t: "Oh, das Wetter ist anders! Wie ist das Wetter jetzt?", en: "Oh, the weather's changed! What's the weather like now?" },
-    weatherWrong: { t: "Hmm, schau noch mal zum Himmel!", en: "Hmm, look at the sky again!" },
-    weatherRight: { t: "Genau, das schreibe ich auf.", en: "Exactly, I'll write that down." },
-    countHow: { t: "Zähl genau und schreib die Zahl!", en: "Count carefully and write the number!" },
-    words: { t: "Mit Wörtern, bitte!", en: "In words, please!" },
-    hikerHello: { t: "Hallo! Ich wandere heute zum Berg.", en: "Hi! I'm hiking up the mountain today." },
-    hikerAsk: { t: "Und du? Was machst du gern?", en: "And you? What do you like doing?" },
-    hikerReply: { t: "Toll! Ich wandere am liebsten.", en: "Great! I like hiking most of all." },
-    hikerHuh: { t: "Wie bitte? Was machst du gern?", en: "Pardon? What do you like doing?" },
-    hobbyHint: { t: "Ich fotografiere gern.", en: "I like taking photos." },
-    logbook: { t: "Das Logbuch", en: "The logbook" },
+    weatherWrong: { t: "Hmm, schau noch mal auf die Karte!", en: "Hmm, look at the map again!" },
+    tellWeather: { t: "Sag Sepp, wie das Wetter dort ist!", en: "Tell Sepp what the weather is like there!" },
     repeat: { t: "Wie bitte?", en: "Pardon?" },
-    late: { t: "Oh, es ist schon dunkel. Die Tiere schlafen jetzt.", en: "Oh, it's dark already. The animals are asleep now." },
+    late: { t: "Oh, es ist schon dunkel! Morgen suchen wir weiter.", en: "Oh, it's dark already! We'll keep looking tomorrow." },
     done: [
-      { t: "Alle Tiere im Logbuch! Du bist ein echter Förster!", en: "Every animal in the logbook! You're a real forester!" },
-      { t: "Gut gemacht! Fast alle Tiere sind im Logbuch.", en: "Well done! Almost every animal is in the logbook." },
-      { t: "Hmm, das Logbuch ist noch leer. Morgen wieder!", en: "Hmm, the logbook is still empty. Again tomorrow!" },
+      { t: "Alle Wanderer sind wieder da! Danke, du bist super!", en: "All the hikers are back! Thanks, you're great!" },
+      { t: "Gut gemacht! Fast alle sind wieder da.", en: "Well done! Almost everyone is back." },
+      { t: "Hmm, viele sind noch draußen. Morgen wieder!", en: "Hmm, lots are still out there. Again tomorrow!" },
     ],
-    harder: { t: "Morgen gehen wir tiefer in den Wald!", en: "Tomorrow we'll go deeper into the forest!" },
+    harder: { t: "Morgen sind noch mehr Wanderer unterwegs!", en: "Tomorrow there'll be even more hikers out!" },
     again: { t: "Noch einmal!", en: "Once more!" },
     back: { t: "Zurück ins Dorf", en: "Back to the village" },
   },

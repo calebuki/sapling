@@ -12,6 +12,7 @@ import { discoveries } from "./discoveries";
 import { entries } from "./glossary";
 import { grammarTips } from "./grammar";
 import { home } from "./home";
+import { jobLessons } from "./job-lessons";
 import { placement } from "./placement";
 import { scenarios } from "./scenarios";
 import { drills, sceneExtras, scenes } from "./scenes";
@@ -54,6 +55,7 @@ export const island: IslandPack = {
   market,
   forest,
   station,
+  jobLessons,
   discoveries,
   world,
   scenery: "tannenau",

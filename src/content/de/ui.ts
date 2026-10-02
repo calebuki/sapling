@@ -107,6 +107,8 @@ export const ui: UiText = {
   tryIt: { t: "Probier's!", en: "Try it!" },
   nowYouCanSay: { t: "Jetzt kannst du sagen …", en: "Now you can say …" },
   letsGo: { t: "Los geht's!", en: "Let's go!" },
+  hide: { t: "Ausblenden", en: "Hide" },
+  show: { t: "Zeigen", en: "Show" },
   presents: { t: "Sapling präsentiert", en: "Sapling presents" },
   welcomeTitle: { t: "Willkommen in Tannenau", en: "Welcome to Tannenau" },
   learnedBefore: { t: "Hast du schon mal Deutsch gelernt?", en: "Have you learned German before?" },

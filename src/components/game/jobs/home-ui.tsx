@@ -16,7 +16,7 @@ import { useShiftAnchor } from "./anchors";
 import { FURNITURE } from "./home-layout";
 import { hostHead, SPOT_LABEL_HEIGHT } from "./home-room";
 import { beginHome, currentTask, homeRuntime, homeSetup, leaveHome, pardon, sayTask, startHome, tell, useHome, type HomeSetup } from "./home-store";
-import { JobBar, JobClock, JobIntro, JobLabel, JobSummary, useWordLabel } from "./job-ui";
+import { JobBar, JobClock, JobIntro, JobLabel, JobPanel, JobSummary, useWordLabel } from "./job-ui";
 
 // ---------- Starting ----------
 
@@ -161,30 +161,21 @@ function TellPanel({ setup }: { setup: HomeSetup }) {
   const [round, setRound] = useState(0);
   if (!task || task.kind !== "tell" || searching) return null;
   const hint = home.where(task.target.spot, task.target.anchor).t;
+  // Slides down out of the way to look at the room, and back up to answer.
   return (
-    <div className="dialogue shift-hatch" role="dialog" aria-label={host.name}>
-      <div className="dialogue-plate">
-        <span className="dialogue-name" style={{ background: host.look.accent }}>
-          {host.name}
-        </span>
-      </div>
-      <div className="dialogue-body">
-        <p className="shift-hatch-line">
-          <GlossedLine line={home.lines.tell} />
-        </p>
-        <FreeAnswer
-          key={`${index}:${round}`}
-          busy={busy}
-          hint={hint}
-          onSubmit={async (answer, via, hinted) => {
-            setBusy(true);
-            tell(answer, via, hinted);
-            setBusy(false);
-            setRound((r) => r + 1);
-          }}
-        />
-      </div>
-    </div>
+    <JobPanel key={index} host={host} label={home.lines.tell}>
+      <FreeAnswer
+        key={`${index}:${round}`}
+        busy={busy}
+        hint={hint}
+        onSubmit={async (answer, via, hinted) => {
+          setBusy(true);
+          tell(answer, via, hinted);
+          setBusy(false);
+          setRound((r) => r + 1);
+        }}
+      />
+    </JobPanel>
   );
 }
 

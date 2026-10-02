@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { lessonFor, lessonOpensFor, type JobLesson } from "../src/lib/game/job-lesson";
 import { afterRun, mergeShifts, readJobs, readShifts, sameShifts } from "../src/lib/game/jobs";
 import { jobGiftOf, jobGiftsFor, items } from "../src/lib/game/wardrobe";
 
@@ -34,4 +35,26 @@ test("work clothes come with two stars on the third level of a job", () => {
   // Every German host with a job has one piece, and nobody else gives any.
   const givers = items.flatMap((item) => (item.unlock.kind === "job" ? [item.unlock.villager] : []));
   assert.equal(new Set(givers).size, givers.length);
+});
+
+test("a job's lesson opens the first time you help, and when a level brings something new", () => {
+  const lesson: JobLesson = {
+    cards: [
+      { kind: "how", title: { t: "So geht's", en: "How it works" }, steps: ["Click things."] },
+      { kind: "how", from: 2, title: { t: "Neu", en: "New" }, steps: ["Now say things."] },
+    ],
+    checks: [
+      { question: "First?", options: ["a", "b"], answer: "a", why: "" },
+      { from: 2, question: "Later?", options: ["c", "d"], answer: "c", why: "" },
+    ],
+  };
+  assert.equal(lessonOpensFor(lesson, 0, undefined), "all");
+  assert.equal(lessonOpensFor(lesson, 0, [2]), null, "played this level before");
+  assert.equal(lessonOpensFor(lesson, 1, [2]), null, "nothing new at level 2");
+  assert.equal(lessonOpensFor(lesson, 2, [3, 2]), "new");
+  assert.equal(lessonOpensFor(undefined, 0, undefined), null);
+  assert.deepEqual(lessonFor(lesson, 2, true).cards.map((c) => c.title.t), ["Neu"]);
+  assert.equal(lessonFor(lesson, 2).cards.length, 2);
+  assert.equal(lessonFor(lesson, 2).check?.question, "Later?");
+  assert.equal(lessonFor(lesson, 1).check?.question, "First?");
 });

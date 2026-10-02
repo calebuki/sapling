@@ -115,6 +115,75 @@ export function OutdoorSun({ position, intensity, color }: { position: [number, 
   );
 }
 
+// Where to put the camera so the whole of `box` shows on this screen, looking
+// along `direction`, clear of the top bar and anything else along the edges
+// (margins in pixels).
+export type ViewMargins = { top: number; bottom: number; left: number; right: number };
+
+export function fitView(box: THREE.Box3, direction: THREE.Vector3, screen: { width: number; height: number; fov: number }, margin: ViewMargins) {
+  const dir = direction.clone().normalize();
+  const forward = dir.clone().negate();
+  const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+  const up = new THREE.Vector3().crossVectors(right, forward);
+  const center = box.getCenter(new THREE.Vector3());
+  const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+  const tanY = Math.tan(THREE.MathUtils.degToRad(screen.fov) / 2);
+  const tanX = tanY * (screen.width / screen.height);
+  // The part of the screen (-1..1 each way) the box may use.
+  const top = 1 - (2 * margin.top) / screen.height;
+  const bottom = -1 + (2 * margin.bottom) / screen.height;
+  const left = -1 + (2 * margin.left) / screen.width;
+  const rightEdge = 1 - (2 * margin.right) / screen.width;
+  // Where the corners land on screen from distance d, the view slid by (sx, sy).
+  const project = (d: number, sx: number, sy: number) => {
+    const camera = center.clone().addScaledVector(right, sx).addScaledVector(up, sy).addScaledVector(dir, d);
+    const p = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+    for (const c of corners) {
+      const v = c.clone().sub(camera);
+      const z = Math.max(0.01, v.dot(forward));
+      const x = v.dot(right) / (z * tanX);
+      const y = v.dot(up) / (z * tanY);
+      p.x0 = Math.min(p.x0, x);
+      p.x1 = Math.max(p.x1, x);
+      p.y0 = Math.min(p.y0, y);
+      p.y1 = Math.max(p.y1, y);
+    }
+    return p;
+  };
+  let distance = 20;
+  let sx = 0;
+  let sy = 0;
+  // Find the nearest distance that fits, then slide the view so it sits
+  // between the margins; a few rounds settle both.
+  for (let round = 0; round < 4; round++) {
+    let near = 1;
+    let far = 200;
+    for (let i = 0; i < 30; i++) {
+      const mid = (near + far) / 2;
+      const p = project(mid, sx, sy);
+      if (p.x1 - p.x0 <= rightEdge - left && p.y1 - p.y0 <= top - bottom) far = mid;
+      else near = mid;
+    }
+    distance = far;
+    const p = project(distance, sx, sy);
+    sx += ((p.x0 + p.x1) / 2 - (left + rightEdge) / 2) * distance * tanX;
+    sy += ((p.y0 + p.y1) / 2 - (top + bottom) / 2) * distance * tanY;
+  }
+  const target = center.clone().addScaledVector(right, sx).addScaledVector(up, sy);
+  return { position: target.clone().addScaledVector(dir, distance), target };
+}
+
+// A diorama camera that keeps the whole of `box` in view on any screen.
+export function FitCamera({ box, direction, top = 84, bottom = 36, left = 20, right = 20 }: { box: THREE.Box3; direction: THREE.Vector3 } & Partial<ViewMargins>) {
+  const { size, camera } = useThree();
+  const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 42;
+  const view = useMemo(
+    () => fitView(box, direction, { width: size.width, height: size.height, fov }, { top, bottom, left, right }),
+    [box, direction, size.width, size.height, fov, top, bottom, left, right],
+  );
+  return <JobCamera position={view.position} target={view.target} />;
+}
+
 // A fixed diorama view that swoops in from above when the room opens.
 export function JobCamera({ position, target }: { position: THREE.Vector3; target: THREE.Vector3 }) {
   const { camera } = useThree();

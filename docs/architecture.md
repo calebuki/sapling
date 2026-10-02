@@ -184,12 +184,17 @@ and take cash or card as they ask. From the third level some want clothes in
 a colour ("Ich suche einen roten Pullover."), and later what you hand over is
 "zu klein" or "zu groß" and you swap the size.
 
-The seventh is **Sepp's wildlife survey** (German only): from the lookout
-over a clearing, the forester whispers which animal to photograph ("Schau,
-das Reh im Wald! Mach schnell ein Foto!", the place only when two of a kind
-are out), asks how many of a herd there are (written in words), and as the
-weather turns (rain, snow, fog, wind, a storm) has you write it in the
-logbook ("Es regnet."). Later a hiker stops to ask "Was machst du gern?".
+The seventh is **Sepp's mountain rescue** (German only): a map of little
+landscapes lies on the table (lake, meadow, forest, mountain, river), each
+under its own weather (rain falling from its own cloud, snow, bands of fog,
+gusts, a storm) and with an animal about. Lost hikers radio in ("Hilfe, hier
+ist Emma! Ich bin im Wald. Hier schneit es. Ich sehe einen Fuchs.") and you
+click where they are. Later maps have two of a place, differing in just the
+weather or just the animal, so that clue decides; a wrong click gets the
+first thing that doesn't fit ("Nein, da ist es sonnig. Bei ihr regnet es!").
+Sepp also asks what the weather is like where he's driving ("Wie ist das
+Wetter am See?") and you tell him. It replaced a wildlife survey from a
+lookout, whose fog hid the whole clearing.
 
 The eighth is **Lena's station** (German only): travellers at the kiosk ask
 for a ticket ("Eine Fahrkarte nach Titisee, bitte."); you ask "Einfach oder
@@ -206,7 +211,16 @@ Outdoor jobs (ferry, market, forest, station) bring their own sky and sun
 
 Jobs share their walking, camera, player, top bar, intro and summary
 (`src/components/game/jobs`); the game phase is `job`, with `job` naming
-which room is open.
+which room is open. `FitCamera` frames a room's box whole on any screen,
+clear of the top bar and side cards, and `JobPanel` is the answer box along
+the bottom, which slides down to its tab so you can see what it covers.
+
+Before a job, a **mini lesson** (`jobLessons` in a pack,
+`src/lib/game/job-lesson.ts`) shows how it plays, its words to listen to
+(only those already met), the grammar it leans on, and a quick check. It
+opens by itself the first time you help and the first time at a level whose
+cards are marked `from` that level; otherwise it's a button in the host's
+intro. Only Tannenau has them so far.
 
 A job splits like the rest of the game. The rules live in `src/lib/game`
 (`rush.ts` for the café, `home.ts` for the farmhouse, `clinic.ts` for the

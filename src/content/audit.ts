@@ -6,6 +6,7 @@ import { allMarketLines } from "@/lib/game/market";
 import { allForestLines } from "@/lib/game/forest";
 import { allStationLines } from "@/lib/game/station";
 import { allHomeLines } from "@/lib/game/home";
+import { allLessonLines } from "@/lib/game/job-lesson";
 import { allOrders } from "@/lib/game/rush";
 import type { IslandPack } from "./types";
 
@@ -90,7 +91,9 @@ export function coreText(pack: IslandPack) {
   if (pack.forest) {
     const { forest } = pack;
     for (const value of Object.values(forest.lines) as Array<{ t: string } | Array<{ t: string }>>) texts.push(...(Array.isArray(value) ? value : [value]).map((l) => l.t));
-    texts.push(...allForestLines(forest).map((l) => l.t), ...forest.animals.map((a) => a.name.t), ...forest.places.map((p) => p.at.t));
+    const said = allForestLines(forest);
+    texts.push(...said.host.map((l) => l.t), ...[...said.callers.values()].flat().map((l) => l.t));
+    texts.push(...forest.animals.map((a) => a.name.t), ...forest.places.flatMap((p) => [p.name.t, p.at.t, p.to.t]));
   }
   if (pack.station) {
     const { station } = pack;
@@ -117,6 +120,10 @@ export function extraText(pack: IslandPack) {
   texts.push(...Object.values(extras.whenSentences).flatMap((s) => s.map((x) => x.t)), ...extras.calendar.map((c) => c.line.t));
   for (const tip of pack.grammar) {
     texts.push(tip.title.t, ...tip.cards.flatMap((c) => [c.title.t, ...c.examples.map((e) => e.t)]), ...tip.check.options);
+  }
+  if (pack.jobLessons) {
+    texts.push(...allLessonLines(pack.jobLessons).map((l) => l.t));
+    for (const lesson of Object.values(pack.jobLessons.jobs)) texts.push(...(lesson?.checks ?? []).flatMap((c) => c.options));
   }
   return texts;
 }

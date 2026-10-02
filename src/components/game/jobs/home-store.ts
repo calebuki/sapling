@@ -308,6 +308,13 @@ export function tell(text: string, via: "text" | "speech", hinted: boolean) {
   };
 }
 
+// Developer checks: skip straight to one of the shift's tasks.
+export function jumpToTask(index: number) {
+  if (state.status !== "running" || !state.tasks[index]) return;
+  const done = state.tasks.slice(0, index).map((t) => t.target);
+  set((s) => ({ index, room: s.room.filter((p) => !done.includes(p)), carrying: null, said: null, searching: false, missed: false }));
+}
+
 // ---------- Evidence ----------
 
 function observe(

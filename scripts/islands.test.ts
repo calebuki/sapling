@@ -7,6 +7,7 @@ import { island as sv } from "../src/content/sv";
 import { island as vi } from "../src/content/vi";
 import type { IslandPack } from "../src/content/types";
 import { gatedSlugs, pendingTip } from "../src/lib/game/grammar";
+import { lessonFor } from "../src/lib/game/job-lesson";
 import { itemsIn, mixUp } from "../src/lib/game/cafe";
 import { checkAnswer } from "../src/lib/game/lesson";
 import { openThrough } from "../src/lib/game/placement";
@@ -38,6 +39,15 @@ for (const pack of islands) {
   test(`${code}: every word the island shows has an English gloss`, () => {
     assert.deepEqual(missingGlosses(pack, coreText(pack)).map(([word]) => word), []);
     assert.deepEqual(missingGlosses(pack, extraText(pack)).map(([word]) => word), []);
+  });
+
+  test(`${code}: job lessons show course words and check what they teach`, () => {
+    const taught = new Set(course.concepts.map((c) => c.slug));
+    for (const [job, lesson] of Object.entries(pack.jobLessons?.jobs ?? {})) {
+      for (const card of lesson?.cards ?? []) if (card.kind === "words") for (const slug of card.slugs) assert.ok(taught.has(slug), `${job}: ${slug}`);
+      for (const check of lesson?.checks ?? []) assert.ok(check.options.includes(check.answer), `${job}: ${check.question}`);
+      assert.ok(lessonFor(lesson!, 0).cards.length, `${job} has a lesson for its first level`);
+    }
   });
 
   test(`${code}: conversations only practise phrases the course teaches`, () => {

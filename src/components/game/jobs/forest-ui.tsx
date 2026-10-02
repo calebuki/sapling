@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { Camera, Ear, NotebookPen, Volume2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Ear, LifeBuoy, Radio, Volume2 } from "lucide-react";
 import { useDevMode } from "@/components/dev-mode";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
-import { FOREST_LEVELS, forestStars, type Habitat, type Weather } from "@/lib/game/forest";
+import { FOREST_LEVELS, forestStars, type Terrain, type Weather } from "@/lib/game/forest";
 import { conceptStrength } from "@/lib/game/progression";
 import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
@@ -13,13 +13,13 @@ import { getGame, useGame } from "../store";
 import { Glossed, GlossedLine } from "../ui/glossed";
 import { FreeAnswer } from "../ui/lesson-round";
 import { useShiftAnchor } from "./anchors";
-import { animalHead, hikerHead, hostHeadForest } from "./forest-room";
-import { answer, beginForest, currentTask, forestRuntime, forestSetup, leaveForest, pardon, sayTask, startForest, taskLine, useForest, type ForestSetup } from "./forest-store";
-import { JobBar, JobClock, JobIntro, JobLabel, JobSummary, useWordLabel } from "./job-ui";
+import { hostHeadForest, tileTop } from "./forest-room";
+import { answer, beginForest, currentTask, forestRuntime, forestSetup, leaveForest, pardon, sayTask, startForest, tileOf, useForest, type ForestSetup } from "./forest-store";
+import { JobBar, JobClock, JobIntro, JobLabel, JobPanel, JobSummary, useWordLabel } from "./job-ui";
 
 // ---------- Starting ----------
 
-// The forester can use a hand once you know a few animals.
+// The forester can use a hand once you know a few places out in nature.
 export function useForestStarter(villager: Villager) {
   const model = useLearningModel();
   const dev = useDevMode();
@@ -39,18 +39,14 @@ export function useForestStarter(villager: Villager) {
       code: pack.code,
       host: villager,
       forest,
-      animals: forest.animals.filter((a) => met(a.slug)).map((a) => a.slug),
-      places: forest.places.filter((p) => met(p.concept)).map((p) => p.id) as Habitat[],
+      places: forest.places.filter((p) => met(p.concept)).map((p) => p.id) as Terrain[],
       weathers: forest.weathers.filter((w) => met(w.concepts[0])).map((w) => w.id) as Weather[],
-      numbers: Object.entries(forest.numbers)
-        .filter(([, slug]) => met(slug))
-        .map(([n]) => Number(n)),
-      hobbies: met(forest.likeFrame.concept) && forest.hobbies.filter((h) => met(h.concept)).length >= 2,
+      animals: forest.animals.filter((a) => met(a.slug)).map((a) => a.slug),
       weight: (slug) => 1.5 - conceptStrength(stateOf(slug)),
       conceptId: (slug) => concept(slug)?.id ?? null,
       record: model.recordObservation,
     };
-    const ready = setup.animals.length >= 3;
+    const ready = setup.places.length >= 3;
     return { ready, start: (level = save?.level ?? 0) => startForest(setup, level), invite: forest.lines.invite, notYet: forest.lines.notYet };
   }, [model.concepts, model.states, model.recordObservation, pack, villager, save, dev]);
 }
@@ -66,11 +62,12 @@ export function ForestUI() {
   return (
     <div className="shift">
       <ForestTop setup={setup} />
+      {status === "running" || status === "intro" ? <Labels setup={setup} /> : null}
       {status === "running" ? (
         <>
-          <AnimalName setup={setup} />
-          <Bubble setup={setup} />
-          {task && task.kind !== "photo" ? <Logbook key={index} setup={setup} /> : null}
+          <RadioCard setup={setup} />
+          <HostBubble setup={setup} />
+          {task?.kind === "weather" ? <WeatherPanel key={index} setup={setup} /> : <HowTo setup={setup} />}
         </>
       ) : null}
       {status === "intro" ? <Intro setup={setup} /> : null}
@@ -86,9 +83,9 @@ function ForestTop({ setup }: { setup: ForestSetup }) {
   const { levelIndex, done, tasks } = useForest((s) => s);
   const { lines } = setup.forest;
   return (
-    <JobBar icon={<Camera size={22} />} title={lines.title} levelIndex={levelIndex} levels={FOREST_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveForest}>
+    <JobBar icon={<LifeBuoy size={22} />} title={lines.title} levelIndex={levelIndex} levels={FOREST_LEVELS.length} onPick={dev ? (level) => starter?.start(level) : undefined} onClose={leaveForest}>
       <span>
-        <NotebookPen size={18} /> <strong>{done}</strong>
+        <LifeBuoy size={18} /> <strong>{done}</strong>
         <span className="shift-of">/ {tasks.length}</span>
       </span>
       <JobClock label={lines.clock} left={() => forestRuntime.seconds / forestRuntime.total} />
@@ -96,107 +93,121 @@ function ForestTop({ setup }: { setup: ForestSetup }) {
   );
 }
 
-// While the survey is new, an animal says its name when you point at it.
-function AnimalName({ setup }: { setup: ForestSetup }) {
-  const heard = useForest((s) => s.level.heard);
-  const sighting = useForest((s) => s.sightings.find((x) => x.id === s.hover) ?? null);
-  if (heard || !sighting) return null;
-  const name = setup.forest.animals.find((a) => a.slug === sighting.animal.slug)!.name;
-  return <JobLabel id="animal-name" at={animalHead(sighting)} text={name.t} en={name.en} />;
+// Each place's name floats over it while the map is new.
+function Labels({ setup }: { setup: ForestSetup }) {
+  const labels = useForest((s) => s.level.labels);
+  const tiles = useForest((s) => s.tiles);
+  if (!labels) return null;
+  return (
+    <>
+      {tiles.map((tile) => {
+        const place = setup.forest.places.find((p) => p.id === tile.terrain)!;
+        return <JobLabel key={tile.id} id={`tile:${tile.id}`} at={tileTop(tile.id, tiles.length)} text={place.name.t} en={place.name.en} />;
+      })}
+    </>
+  );
 }
 
-// The forester whispering, or the hiker asking.
-function Bubble({ setup }: { setup: ForestSetup }) {
-  const { said, revealed, index } = useForest((s) => s);
+// The hiker on the radio, in a card beside the map: what they said, or an
+// ear until you ask "pardon?".
+function RadioCard({ setup }: { setup: ForestSetup }) {
+  const { revealed, index } = useForest((s) => s);
   const task = useForest(() => currentTask());
-  const current = useMemo(() => taskLine(task), [task]);
-  const by = said?.by === "hiker" || (!said && current?.by === "hiker") ? "hiker" : "host";
-  const where = useCallback(() => (by === "hiker" ? hikerHead() : hostHeadForest()), [by]);
-  const ref = useShiftAnchor("forest-bubble", where, undefined, "side");
-  if (!current && !said) return <div ref={ref} className="world-anchor" />;
-  const name = by === "host" ? setup.host.name : null;
-  const showLine = current && !said?.repeats && current.by === by;
+  if (task?.kind !== "call") return null;
+  const { lines } = setup.forest;
+  return (
+    <div key={index} className="forest-radio" role="status">
+      <span className="forest-radio-head">
+        <Radio size={16} /> <GlossedLine line={lines.radio} /> · <strong>{task.caller.name}</strong>
+      </span>
+      {revealed ? (
+        <p className="forest-radio-line">
+          <Glossed text={task.line.t} en={task.line.en} />
+        </p>
+      ) : (
+        <p className="forest-radio-line is-heard">
+          <Ear size={20} /> …
+        </p>
+      )}
+      <div className="shift-bubble-tools">
+        <button className="icon-button" aria-label={aria(lines.repeat)} onClick={() => sayTask()}>
+          <Volume2 size={16} />
+        </button>
+        <button className="shift-pardon" onClick={pardon}>
+          <GlossedLine line={lines.repeat} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The forester: how it went, or his question about the weather.
+function HostBubble({ setup }: { setup: ForestSetup }) {
+  const { said, tiles } = useForest((s) => s);
+  const n = tiles.length;
+  const where = useCallback(() => hostHeadForest(n), [n]);
+  const ref = useShiftAnchor("forest-host", where);
+  if (!said) return <div ref={ref} className="world-anchor" />;
   return (
     <div ref={ref} className="world-anchor">
-      <div key={`${index}:${by}`} className={`shift-bubble ${said?.by === "player" ? "is-player" : ""}`}>
-        {name ? <span className="home-bubble-name">{name}</span> : null}
-        {said ? (
-          <p className="shift-said">
-            <Glossed text={said.line.t} en={said.line.en} />
-          </p>
-        ) : null}
-        {showLine ? (
-          revealed ? (
-            <p className={said ? "shift-order is-small" : "shift-order"}>
-              <Glossed text={current.line.t} en={current.line.en} />
-            </p>
-          ) : (
-            <p className="shift-order is-heard">
-              <Ear size={18} /> …
-            </p>
-          )
-        ) : null}
-        {current ? (
-          <div className="shift-bubble-tools">
-            <button className="icon-button" aria-label={aria(setup.forest.lines.repeat)} onClick={() => sayTask()}>
-              <Volume2 size={16} />
-            </button>
-            <button className="shift-pardon" onClick={pardon}>
-              <GlossedLine line={setup.forest.lines.repeat} />
-            </button>
-          </div>
-        ) : null}
+      <div key={said.t} className="shift-bubble">
+        <span className="home-bubble-name">{setup.host.name}</span>
+        <p className="shift-said">
+          <Glossed text={said.t} en={said.en} />
+        </p>
       </div>
     </div>
   );
 }
 
-// Counts, the weather and answers to the hiker, written in the logbook.
-function Logbook({ setup }: { setup: ForestSetup }) {
+// "Wie ist das Wetter am See?": you look at the map and tell him.
+function WeatherPanel({ setup }: { setup: ForestSetup }) {
   const [round, setRound] = useState(0);
   const task = useForest(() => currentTask());
-  const weather = useForest((s) => s.weather);
-  if (!task || task.kind === "photo") return null;
-  const { forest } = setup;
-  // The hint is the model answer: "Es sind drei Enten.", "Es regnet.", or a hobby sentence.
-  const hint =
-    task.kind === "count"
-      ? (forest.counted(task.target.animal, task.target.count).parts?.[1] ?? "")
-      : task.kind === "weather"
-        ? forest.weathers.find((w) => w.id === weather)!.say.t
-        : forest.lines.hobbyHint.t;
+  if (task?.kind !== "weather") return null;
+  const tile = tileOf(task.tile);
+  const hint = setup.forest.weathers.find((w) => w.id === tile?.weather)?.say.t ?? "";
   return (
-    <div className="dialogue shift-hatch" role="dialog">
-      <div className="dialogue-body">
-        <p className="shift-hatch-line">
-          <NotebookPen size={18} /> <GlossedLine line={forest.lines.logbook} />
-          {task.kind === "count" ? (
-            <>
-              {" · "}
-              <GlossedLine line={forest.lines.countHow} />
-            </>
-          ) : null}
-        </p>
-        <FreeAnswer
-          key={round}
-          busy={false}
-          hint={hint}
-          onSubmit={async (text, via, hinted) => {
-            answer(text, via, hinted);
-            setRound((r) => r + 1);
-          }}
-        />
-      </div>
-    </div>
+    <JobPanel host={setup.host} label={setup.forest.lines.tellWeather}>
+      <FreeAnswer
+        key={round}
+        busy={false}
+        hint={hint}
+        onSubmit={async (text, via, hinted) => {
+          answer(text, via, hinted);
+          setRound((r) => r + 1);
+        }}
+      />
+    </JobPanel>
   );
+}
+
+function HowTo({ setup }: { setup: ForestSetup }) {
+  const levelIndex = useForest((s) => s.levelIndex);
+  const [show, setShow] = useState(levelIndex === 0);
+  useEffect(() => {
+    if (!show) return;
+    const timer = window.setTimeout(() => setShow(false), 14000);
+    return () => window.clearTimeout(timer);
+  }, [show]);
+  return show ? (
+    <p className="shift-how">
+      <GlossedLine line={setup.forest.lines.howTo} />
+    </p>
+  ) : null;
 }
 
 function Intro({ setup }: { setup: ForestSetup }) {
   const { host, forest } = setup;
   const levelIndex = useForest((s) => s.levelIndex);
   const [lines] = useState(() => {
-    const firstTime = !(getGame().save.shifts[host.id]?.stars.length ?? 0);
-    return firstTime ? forest.lines.intro : [forest.lines.intro[forest.lines.intro.length - 1]];
+    const record = getGame().save.shifts[host.id];
+    const firstTime = !(record?.stars.length ?? 0);
+    const base = firstTime ? forest.lines.intro : [forest.lines.intro[forest.lines.intro.length - 1]];
+    // The first shift with weather questions explains them.
+    const asksNow = FOREST_LEVELS[levelIndex].weather > 0;
+    const askedBefore = (record?.stars ?? []).some((_, i) => FOREST_LEVELS[i]?.weather > 0);
+    return asksNow && !askedBefore ? [...base, forest.lines.weatherIntro] : base;
   });
   return <JobIntro host={host} lines={lines} levelIndex={levelIndex} levels={FOREST_LEVELS.length} onDone={beginForest} />;
 }
@@ -215,7 +226,7 @@ function Summary({ setup }: { setup: ForestSetup }) {
       line={late ? lines.late : lines.done[stars >= 3 ? 0 : stars >= 2 ? 1 : 2]}
       stats={
         <span>
-          <NotebookPen size={18} /> {done} / {tasks.length}
+          <LifeBuoy size={18} /> {done} / {tasks.length}
         </span>
       }
       words={words}

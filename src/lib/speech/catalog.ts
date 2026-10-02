@@ -285,16 +285,17 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
     addLines([lines.anythingElse, ...allPrices(market).map((c) => market.price(c))], playerVoice, { ...where, speaker: "player" });
   }
 
-  // The wildlife survey: the forester whispers everything; one hiker passes by.
+  // The mountain rescue: hikers call in on the radio, each in their own
+  // voice; the forester explains mix-ups and asks about the weather.
   const forest = island.forest;
   const forester = forest ? villagers.get(forest.host) : undefined;
   if (forest && forester) {
     const where = { source: "forest job", unit: firstUnitOf(forester.id) };
     const { lines } = forest;
-    addLines([...lines.intro, ...lines.nice, lines.weatherAsk, lines.weatherWrong, lines.weatherRight, lines.words, lines.late, ...lines.done, lines.harder], forester.voice, where);
-    addLines(allForestLines(forest).filter((l) => !forest.weathers.some((w) => w.say.t === l.t)), forester.voice, where);
-    addLines([lines.hikerHello, lines.hikerAsk, lines.hikerReply, lines.hikerHuh], passerVoices.man, { ...where, speaker: "hiker" });
-    addLines(forest.weathers.map((w) => w.say), playerVoice, { ...where, speaker: "player" });
+    const said = allForestLines(forest);
+    addLines([...lines.intro, lines.weatherIntro, ...lines.found, lines.weatherWrong, lines.late, ...lines.done, lines.harder], forester.voice, where);
+    addLines(said.host, forester.voice, where);
+    for (const [caller, calls] of said.callers) addLines(calls, passerVoices[caller.gender], { ...where, speaker: "hiker" });
   }
 
   // The station: travellers ask (either voice), the station master gives
@@ -331,6 +332,31 @@ export function collectLines(island: IslandPack, { withSlow = true } = {}): Cata
       card.examples.forEach((e) => add({ t: e.t.replace("→", ","), en: e.en }, teacher.voice, { source: "grammar", unit: tip.unit })),
     );
     add(tip.check.answer, teacher.voice, { source: "grammar", unit: tip.unit });
+  }
+
+  // The little lessons before jobs, read out by the job's host.
+  if (island.jobLessons) {
+    const hosts: Record<string, string | undefined> = {
+      cafe: island.villagers.find((v) => v.round === "cafe")?.id,
+      home: island.home?.host,
+      clinic: island.clinic?.host,
+      clock: island.clock?.host,
+      ferry: island.ferry?.host,
+      market: island.market?.host,
+      forest: island.forest?.host,
+      station: island.station?.host,
+    };
+    for (const [job, lesson] of Object.entries(island.jobLessons.jobs)) {
+      const host = villagers.get(hosts[job] ?? "");
+      if (!host || !lesson) continue;
+      const where = { source: "job lesson", unit: firstUnitOf(host.id) };
+      for (const card of lesson.cards) {
+        if (card.kind === "grammar") addLines(card.examples, host.voice, where);
+        if (card.kind === "words") for (const slug of card.slugs) add(island.course.concepts.find((c) => c.slug === slug)?.canonicalForm, host.voice, { ...where, unit: unitOfSlug(slug)?.id });
+      }
+      // Answers that are only digits (a clock time) are read off the clock, not said.
+      for (const check of lesson.checks) if (/\p{L}/u.test(check.answer)) add(check.answer, host.voice, where);
+    }
   }
 
   // Things you find: you say them, the phrase book repeats them.

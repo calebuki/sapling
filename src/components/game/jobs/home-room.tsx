@@ -10,20 +10,21 @@ import { glow, palette, toon } from "../world/materials";
 import { box, Box, cone, cyl, FlowerBox, sphere, torus } from "../world/parts";
 import { ShiftProjector } from "./anchors";
 import { FURNITURE, ROOM, spotPosition } from "./home-layout";
-import { getHome, homeRuntime, homeSetup, take, tell, tickHome, useHome, type HomeSetup } from "./home-store";
-import { click, emoteOf, JobCamera, JobPlayer, useHover } from "./job-scene";
+import { getHome, homeRuntime, homeSetup, jumpToTask, take, tell, tickHome, useHome, type HomeSetup } from "./home-store";
+import { click, emoteOf, FitCamera, JobPlayer, useHover } from "./job-scene";
 
 // The host's parlour as a cutaway diorama: no front wall, no ceiling. Wood
 // panelling, a tiled stove in the kitchen corner, a red-checked tablecloth
 // and things lying everywhere they shouldn't.
 
 const wood = { floor: "#a9784e", dark: "#5b3a24", mid: "#8a5a36", light: "#c49a6c", wall: "#f3ead8" };
-const VIEW = { position: new THREE.Vector3(0.2, 8.6, 8.4), target: new THREE.Vector3(0, 0.5, -0.4) };
+// The floor, and the furniture tops things lie on, framed whole on any screen.
+const VIEW = { box: new THREE.Box3(new THREE.Vector3(-7.1, 0, -4.7), new THREE.Vector3(7.1, 2.6, 4.0)), direction: new THREE.Vector3(0.02, 1, 1.05) };
 
 export function HomeRoom() {
   const setup = homeSetup();
   useFrame((_, delta) => {
-    if (process.env.NODE_ENV !== "production") (window as unknown as { __home: unknown }).__home = { getHome, take, tell };
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __home: unknown }).__home = { getHome, take, tell, jumpToTask };
     tickHome(Math.min(delta, 0.05));
   });
   if (!setup) return null;
@@ -40,7 +41,7 @@ export function HomeRoom() {
       <JobPlayer>
         <Carried />
       </JobPlayer>
-      <JobCamera position={VIEW.position} target={VIEW.target} />
+      <FitCamera box={VIEW.box} direction={VIEW.direction} />
       <ShiftProjector />
     </group>
   );
@@ -162,11 +163,16 @@ function FurnitureModelView({ model }: { model: FurnitureModel }) {
       );
     case "cupboard":
       return (
+        // Hollow, with its doors swung open, so you can see what's on the shelf.
         <group>
-          <Box p={[0, 1.1, 0]} s={[1.6, 2.2, 0.8]} c={wood.mid} t="planks" />
-          {/* open doors, so you can see in */}
-          <Box p={[0, 1.1, 0.36]} s={[1.4, 2.0, 0.06]} c="#3b2616" shadow={false} />
-          <Box p={[0, 0.98, 0.3]} s={[1.4, 0.06, 0.2]} c={wood.light} shadow={false} />
+          <Box p={[0, 1.1, -0.37]} s={[1.6, 2.2, 0.06]} c={wood.mid} t="planks" />
+          <Box p={[0, 1.1, -0.33]} s={[1.44, 2.0, 0.02]} c={wood.light} t="planks" shadow={false} />
+          {[-1, 1].map((side) => (
+            <Box key={side} p={[side * 0.77, 1.1, 0]} s={[0.06, 2.2, 0.8]} c={wood.mid} t="planks" />
+          ))}
+          <Box p={[0, 2.17, 0]} s={[1.6, 0.06, 0.8]} c={wood.mid} t="planks" />
+          <Box p={[0, 0.1, 0]} s={[1.6, 0.2, 0.8]} c={wood.mid} t="planks" />
+          <Box p={[0, 0.98, 0.02]} s={[1.48, 0.05, 0.74]} c={wood.light} shadow={false} />
           {[-1, 1].map((side) => (
             <Box key={side} p={[side * 1.05, 1.1, 0.75]} s={[0.06, 2.0, 0.7]} r={[0, side * -0.5, 0]} c="#8b3a2e" t="planks" />
           ))}
@@ -185,11 +191,16 @@ function FurnitureModelView({ model }: { model: FurnitureModel }) {
       );
     case "fridge":
       return (
+        // Hollow too, door ajar, a shelf inside.
         <group>
-          <Box p={[0, 0.85, 0]} s={[1.0, 1.7, 0.8]} c="#efe6cf" t="grain" />
-          {/* door ajar, shelf inside */}
-          <Box p={[0, 0.85, 0.36]} s={[0.8, 1.5, 0.06]} c="#cfe6ee" shadow={false} />
-          <Box p={[0, 0.93, 0.3]} s={[0.8, 0.05, 0.2]} c="#ffffff" shadow={false} />
+          <Box p={[0, 0.85, -0.37]} s={[1.0, 1.7, 0.06]} c="#efe6cf" t="grain" />
+          <Box p={[0, 0.9, -0.33]} s={[0.88, 1.5, 0.02]} c="#cfe6ee" shadow={false} />
+          {[-1, 1].map((side) => (
+            <Box key={side} p={[side * 0.47, 0.85, 0]} s={[0.06, 1.7, 0.8]} c="#efe6cf" t="grain" />
+          ))}
+          <Box p={[0, 1.67, 0]} s={[1.0, 0.06, 0.8]} c="#efe6cf" t="grain" />
+          <Box p={[0, 0.08, 0]} s={[1.0, 0.16, 0.8]} c="#efe6cf" t="grain" />
+          <Box p={[0, 0.93, 0.02]} s={[0.88, 0.04, 0.74]} c="#ffffff" shadow={false} />
           <Box p={[0.75, 0.85, 0.65]} s={[0.06, 1.6, 0.7]} r={[0, -0.6, 0]} c="#efe6cf" t="grain" />
           <Box p={[0, 1.72, 0]} s={[1.05, 0.06, 0.85]} c="#d8d0b8" />
         </group>
@@ -244,22 +255,37 @@ function Thing({ placement }: { placement: Placement }) {
   const { hover, handlers } = useHover();
   const group = useRef<THREE.Group>(null);
   const seed = placement.id * 1.7;
+  const ring = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     // Cats and dogs breathe; everything else stays put.
     if (group.current && (placement.thing.model === "cat" || placement.thing.model === "dog")) group.current.scale.y = 1 + Math.sin(clock.elapsedTime * 2 + seed) * 0.04;
+    // The ring breathes gently, so your eye finds the things in the room.
+    if (ring.current) ring.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 2.4 + seed) * 0.08);
   });
+  const scale = THING_SCALE * (SMALL[placement.thing.model] ?? 1);
   return (
     <group position={[x, y, z]} rotation-y={(seed % 1.2) - 0.6} onClick={click(() => take(placement))} {...handlers}>
-      <group ref={group} scale={hover ? THING_SCALE * 1.15 : THING_SCALE}>
+      <group ref={group} scale={hover ? scale * 1.15 : scale}>
         <ThingView model={placement.thing.model} />
       </group>
-      {hover ? <mesh geometry={cyl} material={glow("#ffe9a8", 1.2)} position={[0, 0.01, 0]} scale={[0.55, 0.01, 0.55]} /> : null}
+      {/* a soft glowing ring under every thing, so it stands out from the wood */}
+      <mesh geometry={cyl} material={hover ? glow("#ffe9a8", 1.2) : halo} position={[0, 0.012, 0]} scale={hover ? [0.7, 0.01, 0.7] : [0.58, 0.01, 0.58]} renderOrder={1} />
+      <mesh ref={ring} rotation-x={-Math.PI / 2} position={[0, 0.02, 0]} material={ringMaterial} renderOrder={2}>
+        <ringGeometry args={[0.56, 0.66, 32]} />
+      </mesh>
+      {/* a bigger, invisible target so small things are easy to click */}
+      <mesh geometry={box} position={[0, 0.3, 0]} scale={[0.75, 0.6, 0.75]} material={hitbox} />
     </group>
   );
 }
 
-// Things are drawn a little larger than life so they read from the camera.
-const THING_SCALE = 1.35;
+// Things are drawn larger than life so they read from the camera; the
+// smallest ones more so.
+const THING_SCALE = 1.75;
+const SMALL: Partial<Record<ThingModel, number>> = { key: 1.6, cup: 1.2, book: 1.2, clock: 1.15, flower: 1.1 };
+const halo = new THREE.MeshBasicMaterial({ color: "#fff6d8", transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false });
+const ringMaterial = new THREE.MeshBasicMaterial({ color: "#fffbe8", transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+const hitbox = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 
 export function ThingView({ model }: { model: ThingModel }) {
   switch (model) {

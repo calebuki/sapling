@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AlarmClock, ArrowRight, Star, X } from "lucide-react";
+import { AlarmClock, ArrowRight, ChevronDown, ChevronUp, Star, X } from "lucide-react";
 import { useLearningModel } from "@/components/providers/learning-model-provider";
 import { ItemIcon } from "@/components/wardrobe/icons";
 import { itemName, wardrobeNews } from "@/content/wardrobe";
+import { lessonOpensFor } from "@/lib/game/job-lesson";
 import type { Line } from "@/lib/game/line";
 import { aria } from "@/lib/game/ui-text";
 import type { Villager } from "@/lib/game/villagers";
@@ -12,8 +13,10 @@ import type { ItemId } from "@/lib/game/wardrobe";
 import { sound } from "../audio/sfx";
 import { speak } from "../audio/speech";
 import { useIsland } from "../island";
+import { getGame, useGame } from "../store";
 import { Glossed, GlossedLine } from "../ui/glossed";
 import { useShiftAnchor } from "./anchors";
+import { JobLessonButton, JobLessonModal } from "./job-lesson";
 
 // The screens every job shares: the bar along the top, names floating over
 // the room, the host's opening words and the end-of-shift card.
@@ -104,10 +107,70 @@ export function JobLabel({ id, at, text, en }: { id: string; at: [number, number
   );
 }
 
-// The host explains, one line at a time; returning helpers only hear the last.
-export function JobIntro({ host, lines, levelIndex, levels, onDone }: { host: Villager; lines: Line[]; levelIndex: number; levels: number; onDone: () => void }) {
+// The answer box along the bottom. It slides down out of the way (leaving its
+// tab) so you can see what it covers in the room, and back up to answer.
+export function JobPanel({ host, label, children }: { host?: Villager; label: Line; children: ReactNode }) {
   const { ui } = useIsland();
+  const [open, setOpen] = useState(true);
+  const toggle = () => {
+    sound.play("pop");
+    setOpen(!open);
+  };
+  return (
+    <div className={`job-panel ${open ? "is-open" : "is-closed"}`} role="dialog" aria-label={host?.name ?? label.en}>
+      <button className="job-panel-tab" aria-expanded={open} aria-label={aria(open ? ui.hide : ui.show)} onClick={toggle}>
+        {host ? (
+          <span className="job-panel-name" style={{ background: host.look.accent }}>
+            {host.name}
+          </span>
+        ) : null}
+        <span className="job-panel-label">
+          <GlossedLine line={label} />
+        </span>
+        {open ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+      </button>
+      <div className="dialogue-body job-panel-body" inert={!open}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// The host explains, one line at a time; returning helpers only hear the last.
+// The job's little lesson comes first the first time you help, and the first
+// time at a level that brings something new; it can be opened again from here.
+export function JobIntro({ host, lines, levelIndex, levels, onDone }: { host: Villager; lines: Line[]; levelIndex: number; levels: number; onDone: () => void }) {
+  const { jobLessons } = useIsland();
+  const job = useGame((s) => s.job);
+  const lesson = job ? jobLessons?.jobs[job] : undefined;
+  const [lessonOpen, setLessonOpen] = useState<"all" | "new" | null>(() => lessonOpensFor(lesson, levelIndex, getGame().save.shifts[host.id]?.stars));
   const [index, setIndex] = useState(0);
+  if (lesson && lessonOpen) {
+    return <JobLessonModal host={host} lesson={lesson} levelIndex={levelIndex} onlyNew={lessonOpen === "new"} onDone={() => setLessonOpen(null)} />;
+  }
+  return <IntroLines host={host} lines={lines} index={index} setIndex={setIndex} levelIndex={levelIndex} levels={levels} onDone={onDone} onLesson={lesson ? () => setLessonOpen("all") : null} />;
+}
+
+function IntroLines({
+  host,
+  lines,
+  index,
+  setIndex,
+  levelIndex,
+  levels,
+  onDone,
+  onLesson,
+}: {
+  host: Villager;
+  lines: Line[];
+  index: number;
+  setIndex: (index: number) => void;
+  levelIndex: number;
+  levels: number;
+  onDone: () => void;
+  onLesson: (() => void) | null;
+}) {
+  const { ui } = useIsland();
   const line = lines[index];
   useEffect(() => {
     void speak(line.t, { who: host.id, pitch: host.voicePitch });
@@ -139,6 +202,7 @@ export function JobIntro({ host, lines, levelIndex, levels, onDone }: { host: Vi
           >
             <GlossedLine line={last ? ui.letsGo : ui.next} /> <ArrowRight size={18} />
           </button>
+          {onLesson ? <JobLessonButton onOpen={onLesson} /> : null}
         </div>
       </div>
     </div>

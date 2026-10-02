@@ -107,6 +107,8 @@ export const ui: UiText = {
   tryIt: { t: "Thử đi!", en: "Try it!" },
   nowYouCanSay: { t: "Bây giờ bạn có thể nói …", en: "Now you can say …" },
   letsGo: { t: "Đi thôi!", en: "Let's go!" },
+  hide: { t: "Ẩn", en: "Hide" },
+  show: { t: "Hiện", en: "Show" },
   presents: { t: "Sapling giới thiệu", en: "Sapling presents" },
   welcomeTitle: { t: "Chào mừng đến Cát Bà", en: "Welcome to Cát Bà" },
   learnedBefore: { t: "Bạn đã học tiếng Việt chưa?", en: "Have you learned Vietnamese before?" },

@@ -18,7 +18,7 @@ type Lines =
   | "englishAuto" | "englishOn" | "englishOff" | "skip" | "tryIt" | "nowYouCanSay" | "letsGo" | "presents"
   | "welcomeTitle" | "learnedBefore" | "quickCheck" | "done" | "startFromTop" | "replyIfYouLike"
   | "askForBill" | "fillTray" | "ready" | "option" | "yourTray" | "flowers" | "units" | "locked"
-  | "notes" | "conversation" | "situation";
+  | "notes" | "conversation" | "situation" | "hide" | "show";
 
 export type UiText = Record<Lines, Line> & {
   talkTo(name: string): Line;
